@@ -73,3 +73,12 @@ app.*.map.json
 *.bmp
 *.webp
 *.glb
+analysis.txt
+build_error.txt
+build_log_2.txt
+build_log_final.txt
+build_log_fix.txt
+build_log.txt
+analysis_2.txt
+analysis_3.txt
+analysis_final.txt
