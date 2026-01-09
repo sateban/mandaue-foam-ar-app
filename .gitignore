@@ -64,3 +64,12 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# images
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.bmp
+*.webp
+*.glb
