@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../data/dummy_data.dart';
+import 'filter_modal.dart';
 
 class NewArrivalsScreen extends StatefulWidget {
   const NewArrivalsScreen({super.key});
@@ -10,14 +11,21 @@ class NewArrivalsScreen extends StatefulWidget {
 
 class _NewArrivalsScreenState extends State<NewArrivalsScreen> {
   late List<Map<String, dynamic>> _products;
+  late List<Map<String, dynamic>> _filteredProducts;
   int _itemsToShow = 4;
   final int _itemsPerLoad = 4;
   final ScrollController _scrollController = ScrollController();
+  List<String> _selectedCategories = [];
+  double _minPrice = 0;
+  double _maxPrice = 500;
+  List<String> _selectedMaterials = [];
+  List<String> _selectedColors = [];
 
   @override
   void initState() {
     super.initState();
     _products = List.from(dummyProducts);
+    _filteredProducts = List.from(dummyProducts);
     _scrollController.addListener(_onScroll);
   }
 
@@ -29,15 +37,43 @@ class _NewArrivalsScreenState extends State<NewArrivalsScreen> {
 
   void _onScroll() {
     if (_scrollController.position.pixels == _scrollController.position.maxScrollExtent) {
-      if (_itemsToShow < _products.length) {
+      if (_itemsToShow < _filteredProducts.length) {
         _loadMoreItems();
       }
     }
   }
 
+  void _applyFilters(List<String> categories, double minPrice, double maxPrice,
+      List<String> materials, List<String> colors) {
+    setState(() {
+      _selectedCategories = categories;
+      _minPrice = minPrice;
+      _maxPrice = maxPrice;
+      _selectedMaterials = materials;
+      _selectedColors = colors;
+      _filterProducts();
+      _itemsToShow = 4; // Reset to initial items when filtering
+    });
+  }
+
+  void _filterProducts() {
+    _filteredProducts = _products.where((product) {
+      bool categoryMatch = _selectedCategories.isEmpty ||
+          _selectedCategories.contains(product['category']);
+      bool priceMatch =
+          product['price'] >= _minPrice && product['price'] <= _maxPrice;
+      bool materialMatch = _selectedMaterials.isEmpty ||
+          _selectedMaterials.contains(product['material']);
+      bool colorMatch =
+          _selectedColors.isEmpty || _selectedColors.contains(product['color']);
+
+      return categoryMatch && priceMatch && materialMatch && colorMatch;
+    }).toList();
+  }
+
   void _loadMoreItems() {
     setState(() {
-      _itemsToShow = (_itemsToShow + _itemsPerLoad).clamp(0, _products.length);
+      _itemsToShow = (_itemsToShow + _itemsPerLoad).clamp(0, _filteredProducts.length);
     });
   }
 
@@ -61,18 +97,38 @@ class _NewArrivalsScreenState extends State<NewArrivalsScreen> {
           icon: const Icon(Icons.arrow_back, color: Color(0xFF1E3A8A)),
           onPressed: () => Navigator.pop(context),
         ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.tune, color: Color(0xFFFDB022), size: 24),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => FilterModal(
+                    selectedCategories: _selectedCategories,
+                    minPrice: _minPrice,
+                    maxPrice: _maxPrice,
+                    selectedMaterials: _selectedMaterials,
+                    selectedColors: _selectedColors,
+                    onApply: _applyFilters,
+                  ),
+                ),
+              );
+            },
+          ),
+        ],
       ),
       body: ListView.builder(
         controller: _scrollController,
         padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
-        itemCount: _itemsToShow + (_itemsToShow < _products.length ? 1 : 0),
+        itemCount: _itemsToShow + (_itemsToShow < _filteredProducts.length ? 1 : 0),
         itemBuilder: (context, index) {
           if (index == _itemsToShow) {
             // Loading indicator
             return Padding(
               padding: const EdgeInsets.all(16.0),
               child: Center(
-                child: _itemsToShow < _products.length
+                child: _itemsToShow < _filteredProducts.length
                     ? const CircularProgressIndicator(
                         valueColor: AlwaysStoppedAnimation(Color(0xFFFDB022)),
                       )
@@ -86,7 +142,7 @@ class _NewArrivalsScreenState extends State<NewArrivalsScreen> {
               ),
             );
           }
-          return _buildNewArrivalItem(_products[index]);
+          return _buildNewArrivalItem(_filteredProducts[index]);
         },
       ),
     );

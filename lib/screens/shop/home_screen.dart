@@ -349,17 +349,40 @@ class _HomeScreenState extends State<HomeScreen> {
                         fontWeight: FontWeight.w600,
                       ),
                     ),
-                    TextButton(
-                      onPressed: () {
-                        Navigator.pushNamed(context, '/popular-products');
-                      },
-                      child: const Text(
-                        'View all',
-                        style: TextStyle(
-                          color: Color(0xFF1E3A8A),
-                          fontWeight: FontWeight.w600,
+                    Row(
+                      children: [
+                        // IconButton(
+                        //   icon: const Icon(Icons.tune,
+                        //       color: Color(0xFFFDB022), size: 24),
+                        //   onPressed: () {
+                        //     Navigator.push(
+                        //       context,
+                        //       MaterialPageRoute(
+                        //         builder: (context) => FilterModal(
+                        //           selectedCategories: _selectedCategories,
+                        //           minPrice: _minPrice,
+                        //           maxPrice: _maxPrice,
+                        //           selectedMaterials: _selectedMaterials,
+                        //           selectedColors: _selectedColors,
+                        //           onApply: _applyFilters,
+                        //         ),
+                        //       ),
+                        //     );
+                        //   },
+                        // ),
+                        TextButton(
+                          onPressed: () {
+                            Navigator.pushNamed(context, '/popular-products');
+                          },
+                          child: const Text(
+                            'View all',
+                            style: TextStyle(
+                              color: Color(0xFF1E3A8A),
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
                         ),
-                      ),
+                      ],
                     ),
                   ],
                 ),
@@ -399,17 +422,40 @@ class _HomeScreenState extends State<HomeScreen> {
                         fontWeight: FontWeight.w600,
                       ),
                     ),
-                    TextButton(
-                      onPressed: () {
-                        Navigator.pushNamed(context, '/new-arrivals');
-                      },
-                      child: const Text(
-                        'View all',
-                        style: TextStyle(
-                          color: Color(0xFF1E3A8A),
-                          fontWeight: FontWeight.w600,
+                    Row(
+                      children: [
+                        // IconButton(
+                        //   icon: const Icon(Icons.tune,
+                        //       color: Color(0xFFFDB022), size: 24),
+                        //   onPressed: () {
+                        //     Navigator.push(
+                        //       context,
+                        //       MaterialPageRoute(
+                        //         builder: (context) => FilterModal(
+                        //           selectedCategories: _selectedCategories,
+                        //           minPrice: _minPrice,
+                        //           maxPrice: _maxPrice,
+                        //           selectedMaterials: _selectedMaterials,
+                        //           selectedColors: _selectedColors,
+                        //           onApply: _applyFilters,
+                        //         ),
+                        //       ),
+                        //     );
+                        //   },
+                        // ),
+                        TextButton(
+                          onPressed: () {
+                            Navigator.pushNamed(context, '/new-arrivals');
+                          },
+                          child: const Text(
+                            'View all',
+                            style: TextStyle(
+                              color: Color(0xFF1E3A8A),
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
                         ),
-                      ),
+                      ],
                     ),
                   ],
                 ),
@@ -535,25 +581,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
       ),
-      floatingActionButton: FloatingActionButton(
-        backgroundColor: const Color(0xFFFDB022),
-        onPressed: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => FilterModal(
-                selectedCategories: _selectedCategories,
-                minPrice: _minPrice,
-                maxPrice: _maxPrice,
-                selectedMaterials: _selectedMaterials,
-                selectedColors: _selectedColors,
-                onApply: _applyFilters,
-              ),
-            ),
-          );
-        },
-        child: const Icon(Icons.tune, color: Colors.white),
-      ),
+      floatingActionButton: null,
     );
   }
 

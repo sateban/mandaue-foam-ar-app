@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../data/dummy_data.dart';
+import 'filter_modal.dart';
 
 class PopularProductsScreen extends StatefulWidget {
   const PopularProductsScreen({super.key});
@@ -10,18 +11,52 @@ class PopularProductsScreen extends StatefulWidget {
 
 class _PopularProductsScreenState extends State<PopularProductsScreen> {
   late List<Map<String, dynamic>> _products;
+  late List<Map<String, dynamic>> _filteredProducts;
   int _itemsToShow = 4;
   final int _itemsPerLoad = 4;
+  List<String> _selectedCategories = [];
+  double _minPrice = 0;
+  double _maxPrice = 500;
+  List<String> _selectedMaterials = [];
+  List<String> _selectedColors = [];
 
   @override
   void initState() {
     super.initState();
     _products = List.from(dummyProducts);
+    _filteredProducts = List.from(dummyProducts);
+  }
+
+  void _applyFilters(List<String> categories, double minPrice, double maxPrice,
+      List<String> materials, List<String> colors) {
+    setState(() {
+      _selectedCategories = categories;
+      _minPrice = minPrice;
+      _maxPrice = maxPrice;
+      _selectedMaterials = materials;
+      _selectedColors = colors;
+      _filterProducts();
+    });
+  }
+
+  void _filterProducts() {
+    _filteredProducts = _products.where((product) {
+      bool categoryMatch = _selectedCategories.isEmpty ||
+          _selectedCategories.contains(product['category']);
+      bool priceMatch =
+          product['price'] >= _minPrice && product['price'] <= _maxPrice;
+      bool materialMatch = _selectedMaterials.isEmpty ||
+          _selectedMaterials.contains(product['material']);
+      bool colorMatch =
+          _selectedColors.isEmpty || _selectedColors.contains(product['color']);
+
+      return categoryMatch && priceMatch && materialMatch && colorMatch;
+    }).toList();
   }
 
   void _loadMoreItems() {
     setState(() {
-      _itemsToShow = (_itemsToShow + _itemsPerLoad).clamp(0, _products.length);
+      _itemsToShow = (_itemsToShow + _itemsPerLoad).clamp(0, _filteredProducts.length);
     });
   }
 
@@ -45,6 +80,26 @@ class _PopularProductsScreenState extends State<PopularProductsScreen> {
           icon: const Icon(Icons.arrow_back, color: Color(0xFF1E3A8A)),
           onPressed: () => Navigator.pop(context),
         ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.tune, color: Color(0xFFFDB022), size: 24),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => FilterModal(
+                    selectedCategories: _selectedCategories,
+                    minPrice: _minPrice,
+                    maxPrice: _maxPrice,
+                    selectedMaterials: _selectedMaterials,
+                    selectedColors: _selectedColors,
+                    onApply: _applyFilters,
+                  ),
+                ),
+              );
+            },
+          ),
+        ],
       ),
       body: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 16.0),
@@ -59,7 +114,7 @@ class _PopularProductsScreenState extends State<PopularProductsScreen> {
           itemBuilder: (context, index) {
             if (index == _itemsToShow) {
               // Load more button
-              if (_itemsToShow < _products.length) {
+              if (_itemsToShow < _filteredProducts.length) {
                 return GestureDetector(
                   onTap: _loadMoreItems,
                   child: Container(
@@ -97,7 +152,7 @@ class _PopularProductsScreenState extends State<PopularProductsScreen> {
               }
               return const SizedBox.shrink();
             }
-            return _buildProductCard(_products[index]);
+            return _buildProductCard(_filteredProducts[index]);
           },
         ),
       ),
