@@ -4,9 +4,12 @@ import '../../utils/slide_route.dart';
 import 'cart_screen.dart';
 import 'home_screen.dart';
 import 'orders_screen.dart';
+import 'shop_shell_scope.dart';
 
 class ProfileScreen extends StatefulWidget {
-  const ProfileScreen({super.key});
+  const ProfileScreen({this.showBottomNav = true, super.key});
+
+  final bool showBottomNav;
 
   @override
   State<ProfileScreen> createState() => _ProfileScreenState();
@@ -20,6 +23,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
+        automaticallyImplyLeading: false,
         title: const Text(
           'Profile',
           style: TextStyle(
@@ -29,10 +33,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
         ),
         centerTitle: false,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Color(0xFF1E3A8A)),
-          onPressed: () => Navigator.pop(context),
-        ),
       ),
       body: Center(
         child: Column(
@@ -62,7 +62,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ],
         ),
       ),
-      bottomNavigationBar: _buildBottomNavBar(),
+      bottomNavigationBar: widget.showBottomNav ? _buildBottomNavBar() : null,
     );
   }
 
@@ -85,6 +85,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
           children: [
             GestureDetector(
               onTap: () {
+                final shell = ShopShellScope.maybeOf(context);
+                if (shell != null && !widget.showBottomNav) {
+                  shell.setTab(0);
+                  return;
+                }
                 Navigator.of(context).pushAndRemoveUntil(
                   slideRoute(const HomeScreen(), begin: const Offset(-1.0, 0.0)),
                   (route) => false,
@@ -105,6 +110,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
             GestureDetector(
               onTap: () {
+                final shell = ShopShellScope.maybeOf(context);
+                if (shell != null && !widget.showBottomNav) {
+                  shell.setTab(1);
+                  return;
+                }
                 Navigator.of(context).push(
                   slideRoute(const CartScreen()),
                 );
@@ -124,6 +134,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
             GestureDetector(
               onTap: () {
+                final shell = ShopShellScope.maybeOf(context);
+                if (shell != null && !widget.showBottomNav) {
+                  shell.setTab(2);
+                  return;
+                }
                 Navigator.of(context).push(
                   slideRoute(const OrdersScreen()),
                 );

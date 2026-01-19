@@ -12,18 +12,14 @@ import 'package:ar_flutter_plugin_updated/models/ar_node.dart';
 import 'package:vector_math/vector_math_64.dart' as vector;
 import 'package:path_provider/path_provider.dart';
 import 'dart:io';
-import 'package:ar_flutter_plugin_updated/datatypes/hittest_result_types.dart';
 import 'package:ar_flutter_plugin_updated/models/ar_anchor.dart';
 import 'package:ar_flutter_plugin_updated/models/ar_hittest_result.dart';
 import 'screens/auth/sign_in_screen.dart';
-import 'screens/shop/home_screen.dart';
-import 'screens/shop/cart_screen.dart';
-import 'screens/shop/orders_screen.dart';
-import 'screens/shop/profile_screen.dart';
 import 'screens/shop/notifications_screen.dart';
 import 'screens/shop/popular_products_screen.dart';
 import 'screens/shop/new_arrivals_screen.dart';
 import 'screens/shop/categories_screen.dart';
+import 'screens/shop/shop_shell.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
 import 'services/firebase_service.dart'; // Add this import if not already present
@@ -58,10 +54,10 @@ class MyApp extends StatelessWidget {
       ),
       home: const SplashScreen(),
       routes: {
-        '/home': (context) => const HomeScreen(),
-        '/cart': (context) => const CartScreen(),
-        '/orders': (context) => const OrdersScreen(),
-        '/profile': (context) => const ProfileScreen(),
+        '/home': (context) => const ShopShell(),
+        '/cart': (context) => const ShopShell(initialIndex: 1),
+        '/orders': (context) => const ShopShell(initialIndex: 2),
+        '/profile': (context) => const ShopShell(initialIndex: 3),
         '/notifications': (context) => const NotificationsScreen(),
         '/popular-products': (context) => const PopularProductsScreen(),
         '/new-arrivals': (context) => const NewArrivalsScreen(),
@@ -78,6 +74,7 @@ class SplashScreen extends StatefulWidget {
   State<SplashScreen> createState() => _SplashScreenState();
 }
 
+// ignore: unused_element
 Future<void> _loadUserData() async {
   // Your Firebase calls
 }
@@ -452,9 +449,6 @@ class _ThreeDViewerDashboardState extends State<ThreeDViewerDashboard> {
     if (astronautNode != null) return;
 
     try {
-      final Directory docDir = await getApplicationDocumentsDirectory();
-      final String localPath = '${docDir.path}/Astronaut.glb';
-
       var newNode = ARNode(
         type: NodeType.fileSystemAppFolderGLB,
         uri: 'Astronaut.glb',

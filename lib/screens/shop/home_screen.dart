@@ -5,9 +5,12 @@ import '../../utils/slide_route.dart';
 import 'cart_screen.dart';
 import 'orders_screen.dart';
 import 'profile_screen.dart';
+import 'shop_shell_scope.dart';
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key});
+  const HomeScreen({this.showBottomNav = true, super.key});
+
+  final bool showBottomNav;
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -161,9 +164,12 @@ class _HomeScreenState extends State<HomeScreen> {
                           icon: const Icon(Icons.shopping_cart_outlined,
                               color: Color(0xFF1E3A8A)),
                           onPressed: () {
-                            Navigator.of(context).push(
-                              slideRoute(const CartScreen()),
-                            );
+                            final shell = ShopShellScope.maybeOf(context);
+                            if (shell != null && !widget.showBottomNav) {
+                              shell.setTab(1);
+                              return;
+                            }
+                            Navigator.of(context).push(slideRoute(const CartScreen()));
                           },
                         ),
                       ],
@@ -579,112 +585,122 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
       ),
-      bottomNavigationBar: Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.1),
-              blurRadius: 8,
-              offset: const Offset(0, -2),
-            ),
-          ],
-        ),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              // Home
-              GestureDetector(
-                onTap: () {
-                },
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFDB022),
-                    borderRadius: BorderRadius.circular(20),
+      bottomNavigationBar: widget.showBottomNav
+          ? Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.1),
+                    blurRadius: 8,
+                    offset: const Offset(0, -2),
                   ),
-                  child: Row(
-                    children: const [
-                      Icon(Icons.home, color: Color(0xFF1E3A8A), size: 24),
-                      SizedBox(width: 8),
-                      Text(
-                        'Home',
-                        style: TextStyle(
-                          color: Color(0xFF1E3A8A),
-                          fontWeight: FontWeight.w600,
-                          fontSize: 14,
+                ],
+              ),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: [
+                    // Home
+                    GestureDetector(
+                      onTap: () {},
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFDB022),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Row(
+                          children: const [
+                            Icon(Icons.home, color: Color(0xFF1E3A8A), size: 24),
+                            SizedBox(width: 8),
+                            Text(
+                              'Home',
+                              style: TextStyle(
+                                color: Color(0xFF1E3A8A),
+                                fontWeight: FontWeight.w600,
+                                fontSize: 14,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                    ],
-                  ),
+                    ),
+                    // Cart
+                    GestureDetector(
+                      onTap: () {
+                        final shell = ShopShellScope.maybeOf(context);
+                        if (shell != null && !widget.showBottomNav) {
+                          shell.setTab(1);
+                          return;
+                        }
+                        Navigator.of(context).push(slideRoute(const CartScreen()));
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.grey[100],
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.shopping_cart,
+                          color: Colors.grey,
+                          size: 24,
+                        ),
+                      ),
+                    ),
+                    // Orders
+                    GestureDetector(
+                      onTap: () {
+                        final shell = ShopShellScope.maybeOf(context);
+                        if (shell != null && !widget.showBottomNav) {
+                          shell.setTab(2);
+                          return;
+                        }
+                        Navigator.of(context).push(slideRoute(const OrdersScreen()));
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.grey[100],
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.shopping_bag,
+                          color: Colors.grey,
+                          size: 24,
+                        ),
+                      ),
+                    ),
+                    // Profile
+                    GestureDetector(
+                      onTap: () {
+                        final shell = ShopShellScope.maybeOf(context);
+                        if (shell != null && !widget.showBottomNav) {
+                          shell.setTab(3);
+                          return;
+                        }
+                        Navigator.of(context).push(slideRoute(const ProfileScreen()));
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.grey[100],
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.person,
+                          color: Colors.grey,
+                          size: 24,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              // Cart
-              GestureDetector(
-                onTap: () {
-                  Navigator.of(context).push(
-                    slideRoute(const CartScreen()),
-                  );
-                },
-                child: Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.grey[100],
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Icons.shopping_cart,
-                    color: Colors.grey,
-                    size: 24,
-                  ),
-                ),
-              ),
-              // Orders
-              GestureDetector(
-                onTap: () {
-                  Navigator.of(context).push(
-                    slideRoute(const OrdersScreen()),
-                  );
-                },
-                child: Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.grey[100],
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Icons.shopping_bag,
-                    color: Colors.grey,
-                    size: 24,
-                  ),
-                ),
-              ),
-              // Profile
-              GestureDetector(
-                onTap: () {
-                  Navigator.of(context).push(
-                    slideRoute(const ProfileScreen()),
-                  );
-                },
-                child: Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.grey[100],
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Icons.person,
-                    color: Colors.grey,
-                    size: 24,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
+            )
+          : null,
       floatingActionButton: null,
     );
   }

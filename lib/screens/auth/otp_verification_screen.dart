@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import '../shop/home_screen.dart';
 
 class OTPVerificationScreen extends StatefulWidget {
   final String email;
@@ -38,11 +37,9 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
   void _verifyOTP() {
     String otp = _otpControllers.map((c) => c.text).join();
     if (otp.length == 6) {
-      // Navigate to shop home screen after successful verification
-      Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(builder: (context) => const HomeScreen()),
-        (route) => false,
-      );
+      // Important: go through ShopShell so bottom navigation stays fixed
+      // and only the page content transitions between tabs.
+      Navigator.of(context).pushNamedAndRemoveUntil('/home', (route) => false);
     }
   }
 
