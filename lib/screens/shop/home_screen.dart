@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'dart:async';
 import '../../data/dummy_data.dart';
 import 'filter_modal.dart';
 
@@ -17,11 +18,51 @@ class _HomeScreenState extends State<HomeScreen> {
   List<String> _selectedMaterials = [];
   List<String> _selectedColors = [];
   int _currentNavIndex = 0;
+  // Hero carousel
+  late final PageController _heroPageController;
+  int _heroCurrentIndex = 0;
+  late List<String> _heroSlides;
+  late List<String> _heroNames;
+  Timer? _heroTimer;
 
   @override 
   void initState() {
     super.initState();
     _filteredProducts = List.from(dummyProducts);
+    // prepare hero slides (take up to 5 product images as slides)
+    _heroSlides = dummyProducts
+        .take(5)
+        .map<String>((p) => (p['imageUrl'] as String?) ?? '')
+        .toList();
+    _heroNames = dummyProducts
+        .take(5)
+        .map<String>((p) => (p['name'] as String?) ?? '')
+        .toList();
+    if (_heroSlides.isEmpty) {
+      _heroSlides = List.filled(5, '');
+      _heroNames = List.filled(5, 'Astra Wood\nChair');
+    } else if (_heroSlides.length < 5) {
+      // pad to 5 slides
+      _heroSlides = List.from(_heroSlides)..addAll(List.filled(5 - _heroSlides.length, ''));
+      _heroNames = List.from(_heroNames)..addAll(List.filled(5 - _heroNames.length, 'Astra Wood\nChair'));
+    }
+    _heroPageController = PageController();
+    _heroTimer = Timer.periodic(const Duration(seconds: 5), (timer) {
+      if (!_heroPageController.hasClients) return;
+      _heroCurrentIndex = (_heroCurrentIndex + 1) % _heroSlides.length;
+      _heroPageController.animateToPage(
+        _heroCurrentIndex,
+        duration: const Duration(milliseconds: 400),
+        curve: Curves.easeInOut,
+      );
+    });
+  }
+
+  @override
+  void dispose() {
+    _heroTimer?.cancel();
+    _heroPageController.dispose();
+    super.dispose();
   }
 
   void _applyFilters(List<String> categories, double minPrice, double maxPrice,
@@ -166,21 +207,21 @@ class _HomeScreenState extends State<HomeScreen> {
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Column(
+                      Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Astra Wood\nChair',
-                            style: TextStyle(
+                            _heroNames[_heroCurrentIndex],
+                            style: const TextStyle(
                               color: Colors.white,
                               fontSize: 24,
                               fontWeight: FontWeight.bold,
                             ),
                           ),
-                          SizedBox(height: 16),
+                          const SizedBox(height: 16),
                           ElevatedButton(
                             onPressed: null,
-                            style: ButtonStyle(
+                            style: const ButtonStyle(
                               backgroundColor:
                                   WidgetStatePropertyAll(Colors.white),
                               padding: WidgetStatePropertyAll(
@@ -190,7 +231,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                 ),
                               ),
                             ),
-                            child: Text(
+                            child: const Text(
                               'Buy Now',
                               style: TextStyle(
                                 color: Color(0xFF1E3A8A),
@@ -200,27 +241,82 @@ class _HomeScreenState extends State<HomeScreen> {
                           ),
                         ],
                       ),
-                        Image.asset(
-                          'images/shop/chair.png',
-                          width: 120,
-                          height: 120,
-                        fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) {
-                          return Container(
-                            width: 120,
-                            height: 120,
-                            decoration: BoxDecoration(
-                              color: Colors.white.withValues(alpha: 0.3),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: const Icon(
-                              Icons.image_not_supported,
-                              color: Colors.white,
-                              size: 40,
+                      SizedBox(
+                        width: 120,
+                        height: 120,
+                        child: Column(
+                          children: [
+                            Expanded(
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(12),
+                                child: PageView.builder(
+                                  controller: _heroPageController,
+                                  itemCount: _heroSlides.length,
+                                  onPageChanged: (i) => setState(() => _heroCurrentIndex = i),
+                                  itemBuilder: (context, index) {
+                                    final url = _heroSlides[index];
+                                    if (url.isEmpty) {
+                                      return Container(
+                                        color: Colors.white.withOpacity(0.12),
+                                        child: const Center(
+                                          child: Icon(
+                                            Icons.image_not_supported,
+                                            color: Colors.white,
+                                            size: 40,
+                                          ),
+                                        ),
+                                      );
+                                    }
+                                    return Image.network(
+                                      url,
+                                      width: 120,
+                                      height: 120,
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (context, error, stackTrace) {
+                                        return Container(
+                                          color: Colors.white.withOpacity(0.12),
+                                          child: const Center(
+                                            child: Icon(
+                                              Icons.image_not_supported,
+                                              color: Colors.white,
+                                              size: 40,
+                                            ),
+                                          ),
+                                        );
+                                      },
+                                      loadingBuilder: (context, child, loadingProgress) {
+                                        if (loadingProgress == null) return child;
+                                        return Center(
+                                          child: CircularProgressIndicator(
+                                            value: loadingProgress.expectedTotalBytes != null
+                                                ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
+                                                : null,
+                                          ),
+                                        );
+                                      },
+                                    );
+                                  },
+                                ),
                               ),
-                            );
-                          },
+                            ),
+                            const SizedBox(height: 8),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: List.generate(_heroSlides.length, (i) {
+                                return Container(
+                                  margin: const EdgeInsets.symmetric(horizontal: 2),
+                                  width: _heroCurrentIndex == i ? 10 : 6,
+                                  height: 6,
+                                  decoration: BoxDecoration(
+                                    color: _heroCurrentIndex == i ? Colors.white : Colors.white54,
+                                    borderRadius: BorderRadius.circular(3),
+                                  ),
+                                );
+                              }),
+                            ),
+                          ],
                         ),
+                      ),
                       ],
                     ),
                 ),
