@@ -901,3 +901,92 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 }
+
+Future<void> showNotificationPanel(BuildContext context) {
+  return showGeneralDialog(
+    context: context,
+    barrierDismissible: true,
+    barrierLabel: 'Notifications',
+    transitionDuration: const Duration(milliseconds: 180),
+    pageBuilder: (context, animation1, animation2) {
+      return SafeArea(
+        child: Align(
+          alignment: Alignment.topRight,
+          child: Material(
+            color: Colors.transparent,
+            child: Container(
+              width: MediaQuery.of(context).size.width * 0.9,
+              margin: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Theme.of(context).cardColor,
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.12),
+                    blurRadius: 12,
+                    offset: const Offset(0, 6),
+                  ),
+                ],
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    children: [
+                      const Expanded(
+                        child: Text(
+                          'Notifications',
+                          style: TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close),
+                        onPressed: () => Navigator.of(context).pop(),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Container(
+                    constraints: BoxConstraints(
+                      maxHeight: MediaQuery.of(context).size.height * 0.5,
+                    ),
+                    child: ListView.separated(
+                      shrinkWrap: true,
+                      itemCount: dummyNotifications.length,
+                      separatorBuilder: (_, __) => const Divider(height: 1),
+                      itemBuilder: (context, i) {
+                        final n = dummyNotifications[i];
+                        return ListTile(
+                          leading: const Icon(Icons.notifications_outlined),
+                          title: Text(n['title'] ?? ''),
+                          subtitle: Text(n['body'] ?? ''),
+                          trailing: Text(
+                            n['time'] ?? '',
+                            style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                          ),
+                          onTap: () {
+                            // Close overlay and optionally navigate to item
+                            Navigator.of(context).pop();
+                            // handle tap (mark read / open detail)
+                          },
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    },
+    transitionBuilder: (context, anim1, anim2, child) {
+      return SlideTransition(
+        position: Tween<Offset>(begin: const Offset(0, -0.05), end: Offset.zero)
+            .animate(CurvedAnimation(parent: anim1, curve: Curves.easeOut)),
+        child: FadeTransition(opacity: anim1, child: child),
+      );
+    },
+  );
+}

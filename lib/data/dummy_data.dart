@@ -148,3 +148,24 @@ final List<String> colors = [
   'Beige',
   'Black',
 ];
+
+final List<Map<String, String>> dummyNotifications = [
+  {
+    'id': 'n1',
+    'title': 'Order Shipped',
+    'body': 'Your order #1234 has been shipped.',
+    'time': '2h ago'
+  },
+  {
+    'id': 'n2',
+    'title': 'New Arrival',
+    'body': 'New Sofa models now available.',
+    'time': '1d ago'
+  },
+  {
+    'id': 'n3',
+    'title': 'Discount',
+    'body': 'Get 10% off selected items today.',
+    'time': '3d ago'
+  },
+];
