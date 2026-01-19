@@ -1,5 +1,10 @@
 import 'package:flutter/material.dart';
 
+import '../../utils/slide_route.dart';
+import 'cart_screen.dart';
+import 'home_screen.dart';
+import 'orders_screen.dart';
+
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
 
@@ -8,8 +13,6 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
-  int _currentNavIndex = 3;
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -82,7 +85,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
           children: [
             GestureDetector(
               onTap: () {
-                Navigator.pushNamedAndRemoveUntil(context, '/home', (route) => false);
+                Navigator.of(context).pushAndRemoveUntil(
+                  slideRoute(const HomeScreen(), begin: const Offset(-1.0, 0.0)),
+                  (route) => false,
+                );
               },
               child: Container(
                 padding: const EdgeInsets.all(12),
@@ -99,7 +105,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
             GestureDetector(
               onTap: () {
-                Navigator.pushNamed(context, '/cart');
+                Navigator.of(context).push(
+                  slideRoute(const CartScreen()),
+                );
               },
               child: Container(
                 padding: const EdgeInsets.all(12),
@@ -116,7 +124,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
             GestureDetector(
               onTap: () {
-                Navigator.pushNamed(context, '/orders');
+                Navigator.of(context).push(
+                  slideRoute(const OrdersScreen()),
+                );
               },
               child: Container(
                 padding: const EdgeInsets.all(12),
@@ -133,7 +143,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
             GestureDetector(
               onTap: () {
-                setState(() => _currentNavIndex = 3);
               },
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),

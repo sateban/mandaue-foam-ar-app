@@ -1,5 +1,10 @@
 import 'package:flutter/material.dart';
 
+import '../../utils/slide_route.dart';
+import 'home_screen.dart';
+import 'orders_screen.dart';
+import 'profile_screen.dart';
+
 class CartScreen extends StatefulWidget {
   const CartScreen({super.key});
 
@@ -8,8 +13,6 @@ class CartScreen extends StatefulWidget {
 }
 
 class _CartScreenState extends State<CartScreen> {
-  int _currentNavIndex = 1;
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -74,7 +77,10 @@ class _CartScreenState extends State<CartScreen> {
           children: [
             GestureDetector(
               onTap: () {
-                Navigator.pushNamedAndRemoveUntil(context, '/home', (route) => false);
+                Navigator.of(context).pushAndRemoveUntil(
+                  slideRoute(const HomeScreen(), begin: const Offset(-1.0, 0.0)),
+                  (route) => false,
+                );
               },
               child: Container(
                 padding: const EdgeInsets.all(12),
@@ -91,7 +97,6 @@ class _CartScreenState extends State<CartScreen> {
             ),
             GestureDetector(
               onTap: () {
-                setState(() => _currentNavIndex = 1);
               },
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
@@ -117,7 +122,9 @@ class _CartScreenState extends State<CartScreen> {
             ),
             GestureDetector(
               onTap: () {
-                Navigator.pushNamed(context, '/orders');
+                Navigator.of(context).push(
+                  slideRoute(const OrdersScreen()),
+                );
               },
               child: Container(
                 padding: const EdgeInsets.all(12),
@@ -134,7 +141,9 @@ class _CartScreenState extends State<CartScreen> {
             ),
             GestureDetector(
               onTap: () {
-                Navigator.pushNamed(context, '/profile');
+                Navigator.of(context).push(
+                  slideRoute(const ProfileScreen()),
+                );
               },
               child: Container(
                 padding: const EdgeInsets.all(12),

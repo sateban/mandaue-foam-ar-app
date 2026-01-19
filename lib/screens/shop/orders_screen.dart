@@ -1,5 +1,10 @@
 import 'package:flutter/material.dart';
 
+import '../../utils/slide_route.dart';
+import 'cart_screen.dart';
+import 'home_screen.dart';
+import 'profile_screen.dart';
+
 class OrdersScreen extends StatefulWidget {
   const OrdersScreen({super.key});
 
@@ -8,8 +13,6 @@ class OrdersScreen extends StatefulWidget {
 }
 
 class _OrdersScreenState extends State<OrdersScreen> {
-  int _currentNavIndex = 2;
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -74,7 +77,10 @@ class _OrdersScreenState extends State<OrdersScreen> {
           children: [
             GestureDetector(
               onTap: () {
-                Navigator.pushNamedAndRemoveUntil(context, '/home', (route) => false);
+                Navigator.of(context).pushAndRemoveUntil(
+                  slideRoute(const HomeScreen(), begin: const Offset(-1.0, 0.0)),
+                  (route) => false,
+                );
               },
               child: Container(
                 padding: const EdgeInsets.all(12),
@@ -91,7 +97,9 @@ class _OrdersScreenState extends State<OrdersScreen> {
             ),
             GestureDetector(
               onTap: () {
-                Navigator.pushNamed(context, '/cart');
+                Navigator.of(context).push(
+                  slideRoute(const CartScreen()),
+                );
               },
               child: Container(
                 padding: const EdgeInsets.all(12),
@@ -108,7 +116,6 @@ class _OrdersScreenState extends State<OrdersScreen> {
             ),
             GestureDetector(
               onTap: () {
-                setState(() => _currentNavIndex = 2);
               },
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
@@ -134,7 +141,9 @@ class _OrdersScreenState extends State<OrdersScreen> {
             ),
             GestureDetector(
               onTap: () {
-                Navigator.pushNamed(context, '/profile');
+                Navigator.of(context).push(
+                  slideRoute(const ProfileScreen()),
+                );
               },
               child: Container(
                 padding: const EdgeInsets.all(12),

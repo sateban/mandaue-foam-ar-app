@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'dart:async';
 import '../../data/dummy_data.dart';
-import 'filter_modal.dart';
+import '../../utils/slide_route.dart';
+import 'cart_screen.dart';
+import 'orders_screen.dart';
+import 'profile_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -17,7 +20,6 @@ class _HomeScreenState extends State<HomeScreen> {
   double _maxPrice = 500;
   List<String> _selectedMaterials = [];
   List<String> _selectedColors = [];
-  int _currentNavIndex = 0;
   // Hero carousel
   late final PageController _heroPageController;
   int _heroCurrentIndex = 0;
@@ -65,6 +67,7 @@ class _HomeScreenState extends State<HomeScreen> {
     super.dispose();
   }
 
+  // ignore: unused_element
   void _applyFilters(List<String> categories, double minPrice, double maxPrice,
       List<String> materials, List<String> colors) {
     setState(() {
@@ -158,7 +161,9 @@ class _HomeScreenState extends State<HomeScreen> {
                           icon: const Icon(Icons.shopping_cart_outlined,
                               color: Color(0xFF1E3A8A)),
                           onPressed: () {
-                            Navigator.pushNamed(context, '/cart');
+                            Navigator.of(context).push(
+                              slideRoute(const CartScreen()),
+                            );
                           },
                         ),
                       ],
@@ -593,9 +598,6 @@ class _HomeScreenState extends State<HomeScreen> {
               // Home
               GestureDetector(
                 onTap: () {
-                  setState(() {
-                    _currentNavIndex = 0;
-                  }); 
                 },
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
@@ -622,7 +624,9 @@ class _HomeScreenState extends State<HomeScreen> {
               // Cart
               GestureDetector(
                 onTap: () {
-                  Navigator.pushNamed(context, '/cart');
+                  Navigator.of(context).push(
+                    slideRoute(const CartScreen()),
+                  );
                 },
                 child: Container(
                   padding: const EdgeInsets.all(12),
@@ -640,7 +644,9 @@ class _HomeScreenState extends State<HomeScreen> {
               // Orders
               GestureDetector(
                 onTap: () {
-                  Navigator.pushNamed(context, '/orders');
+                  Navigator.of(context).push(
+                    slideRoute(const OrdersScreen()),
+                  );
                 },
                 child: Container(
                   padding: const EdgeInsets.all(12),
@@ -658,7 +664,9 @@ class _HomeScreenState extends State<HomeScreen> {
               // Profile
               GestureDetector(
                 onTap: () {
-                  Navigator.pushNamed(context, '/profile');
+                  Navigator.of(context).push(
+                    slideRoute(const ProfileScreen()),
+                  );
                 },
                 child: Container(
                   padding: const EdgeInsets.all(12),
