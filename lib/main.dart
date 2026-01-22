@@ -20,6 +20,7 @@ import 'screens/shop/popular_products_screen.dart';
 import 'screens/shop/new_arrivals_screen.dart';
 import 'screens/shop/categories_screen.dart';
 import 'screens/shop/shop_shell.dart';
+import 'screens/shop/search_products_screen.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
 import 'services/firebase_service.dart'; // Add this import if not already present
@@ -62,6 +63,7 @@ class MyApp extends StatelessWidget {
         '/popular-products': (context) => const PopularProductsScreen(),
         '/new-arrivals': (context) => const NewArrivalsScreen(),
         '/categories': (context) => const CategoriesScreen(),
+        '/search-products': (context) => const SearchProductsScreen(),
       },
     );
   }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'dart:async';
 import '../../data/dummy_data.dart';
 import '../../utils/slide_route.dart';
+import '../../services/firebase_service.dart';
 import 'cart_screen.dart';
 import 'orders_screen.dart';
 import 'profile_screen.dart';
@@ -18,6 +19,7 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   List<Map<String, dynamic>> _filteredProducts = [];
+  List<Map<String, dynamic>> _allFirebaseProducts = [];
   List<String> _selectedCategories = [];
   double _minPrice = 0;
   double _maxPrice = 500;
@@ -29,11 +31,26 @@ class _HomeScreenState extends State<HomeScreen> {
   late List<String> _heroSlides;
   late List<String> _heroNames;
   Timer? _heroTimer;
+  
+  // Search dropdown
+  late TextEditingController _searchController;
+  List<Map<String, dynamic>> _searchResults = [];
+  bool _showSearchDropdown = false;
+  bool _isSearching = false;
+  bool _isLoadingProducts = false;
+  
+  // Stream subscription for Firebase products
+  StreamSubscription<List<Map<String, dynamic>>>? _productsSubscription;
 
   @override 
   void initState() {
     super.initState();
+    _searchController = TextEditingController();
     _filteredProducts = List.from(dummyProducts);
+    
+    // Load Firebase products
+    _loadFirebaseProducts();
+    
     // prepare hero slides (take up to 5 product images as slides)
     _heroSlides = dummyProducts
         .take(5)
@@ -63,10 +80,58 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
+  Future<void> _loadFirebaseProducts() async {
+    try {
+      setState(() {
+        _isLoadingProducts = true;
+      });
+
+      final List<Map<String, dynamic>> productsData =
+          await FirebaseService.readListData('products');
+
+      print("1_isLoadingProducts ${productsData.length}");
+      
+      // Cancel previous subscription if it exists
+      _productsSubscription?.cancel();
+      
+      // Listen to real-time updates
+      _productsSubscription = FirebaseService.streamListData('/products').listen((productsList) {
+        // ignore: avoid_print
+        print('Stream products received: ${productsList.length} items');
+        if (!mounted) return;
+        setState(() {
+          _allFirebaseProducts = productsList;
+        });
+        // Re-run search if there's an active search query
+        if (_searchController.text.isNotEmpty) {
+          _searchProducts(_searchController.text);
+        }
+      }, onError: (error) {
+        // ignore: avoid_print
+        print('Error reading products: $error');
+      });
+      
+      if (!mounted) return;
+
+      setState(() {
+        _allFirebaseProducts = productsData;
+        _isLoadingProducts = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isLoadingProducts = false;
+      });
+      print('Error loading Firebase products: $e');
+    }
+  }
+
   @override
   void dispose() {
     _heroTimer?.cancel();
     _heroPageController.dispose();
+    _searchController.dispose();
+    _productsSubscription?.cancel();
     super.dispose();
   }
 
@@ -98,14 +163,64 @@ class _HomeScreenState extends State<HomeScreen> {
     }).toList();
   }
 
+  void _searchProducts(String query) {
+    setState(() {
+      if (query.isEmpty) {
+        _searchResults = [];
+        _showSearchDropdown = false;
+      } else {
+        _showSearchDropdown = true;
+        final lowerQuery = query.toLowerCase();
+        
+        // Search in Firebase products first, fallback to dummy data
+        List<Map<String, dynamic>> productsToSearch = _allFirebaseProducts.isNotEmpty 
+            ? _allFirebaseProducts 
+            : dummyProducts;
+        
+        // ignore: avoid_print
+        print('Searching in ${_allFirebaseProducts.isNotEmpty ? 'Firebase' : 'Dummy'} products');
+        print('Total products available: ${productsToSearch.length}');
+        print('Query: $lowerQuery');
+        
+        _searchResults = productsToSearch
+            .where((product) {
+              final name = (product['name'] ?? '').toString().toLowerCase();
+              final category = (product['category'] ?? '').toString().toLowerCase();
+              final material = (product['material'] ?? '').toString().toLowerCase();
+              final description = (product['description'] ?? '').toString().toLowerCase();
+              
+              final matches = name.contains(lowerQuery) ||
+                  category.contains(lowerQuery) ||
+                  material.contains(lowerQuery) ||
+                  description.contains(lowerQuery);
+              
+              if (matches) {
+                // ignore: avoid_print
+                print('Match found: ${product['name']}');
+              }
+              
+              return matches;
+            })
+            .take(8)
+            .toList();
+        
+        // ignore: avoid_print
+        print('Search results: ${_searchResults.length} found');
+      }
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
       body: SafeArea(
-        child: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // Header with logo and search
               Padding(
@@ -175,26 +290,52 @@ class _HomeScreenState extends State<HomeScreen> {
                       ],
                     ),
                     const SizedBox(height: 16),
-                    // Search bar
-                    Container(
-                      decoration: BoxDecoration(
-                        border: Border.all(color: Colors.grey[300]!),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: TextField(
-                        style: const TextStyle(color: Colors.black),
-                        decoration: InputDecoration(
-                          hintText: 'Search...',
-                          hintStyle: const TextStyle(color: Colors.grey),
-                          border: InputBorder.none,
-                          prefixIcon: const Icon(Icons.search,
-                              color: Colors.grey),
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 12,
+                    // Search bar with dropdown
+                    Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        Container(
+                          decoration: BoxDecoration(
+                            border: Border.all(color: Colors.grey[300]!),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: TextField(
+                            controller: _searchController,
+                            style: const TextStyle(color: Colors.black),
+                            onChanged: _searchProducts,
+                            onTap: () {
+                              if (_searchController.text.isNotEmpty) {
+                                setState(() {
+                                  _showSearchDropdown = true;
+                                });
+                              }
+                            },
+                            decoration: InputDecoration(
+                              hintText: 'Search...',
+                              hintStyle: const TextStyle(color: Colors.grey),
+                              border: InputBorder.none,
+                              prefixIcon: const Icon(Icons.search,
+                                  color: Colors.grey),
+                              suffixIcon: _searchController.text.isNotEmpty
+                                  ? IconButton(
+                                      icon: const Icon(Icons.clear),
+                                      onPressed: () {
+                                        _searchController.clear();
+                                        setState(() {
+                                          _showSearchDropdown = false;
+                                          _searchResults = [];
+                                        });
+                                      },
+                                    )
+                                  : null,
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 12,
+                              ),
+                            ),
                           ),
                         ),
-                      ),
+                      ],
                     ),
                   ],
                 ),
@@ -583,6 +724,101 @@ class _HomeScreenState extends State<HomeScreen> {
               const SizedBox(height: 24),
             ],
           ),
+        ),
+            // Search dropdown overlay (positioned above scroll content)
+            if (_showSearchDropdown)
+              Positioned(
+                top: 16 + 70 + 16, // logo height + padding + spacing
+                left: 16,
+                right: 16,
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    border: Border.all(color: Colors.grey[300]!),
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.1),
+                        blurRadius: 8,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  constraints: BoxConstraints(
+                    maxHeight: MediaQuery.of(context).size.height * 0.35,
+                  ),
+                  child: _searchResults.isEmpty
+                      ? Padding(
+                          padding: const EdgeInsets.all(16.0),
+                          child: Text(
+                            'No results found for "${_searchController.text}"',
+                            style: const TextStyle(
+                              color: Colors.grey,
+                              fontSize: 12,
+                            ),
+                          ),
+                        )
+                      : ListView.builder(
+                          shrinkWrap: true,
+                          padding: EdgeInsets.zero,
+                          itemCount: _searchResults.length,
+                          itemBuilder: (context, index) {
+                            final product = _searchResults[index];
+                            return ListTile(
+                              dense: true,
+                              leading: Container(
+                                width: 40,
+                                height: 40,
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(6),
+                                  color: Colors.grey[200],
+                                ),
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(6),
+                                  child: Image.network(
+                                    product['imageUrl'] ?? '',
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (context, error, stackTrace) {
+                                      return const Center(
+                                        child: Icon(Icons.image_outlined,
+                                            size: 20, color: Colors.grey),
+                                      );
+                                    },
+                                  ),
+                                ),
+                              ),
+                              title: Text(
+                                product['name'],
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: Color(0xFF1E3A8A),
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              subtitle: Text(
+                                '\$${product['price'].toStringAsFixed(2)}',
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.grey,
+                                ),
+                              ),
+                              onTap: () {
+                                _searchController.clear();
+                                setState(() {
+                                  _showSearchDropdown = false;
+                                  _searchResults = [];
+                                });
+                                // Navigate to product detail with search input
+                                Navigator.pushNamed(context, '/search-products');
+                              },
+                            );
+                          },
+                        ),
+                ),
+              ),
+          ],
         ),
       ),
       bottomNavigationBar: widget.showBottomNav

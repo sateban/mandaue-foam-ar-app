@@ -24,15 +24,29 @@ class FirebaseService {
       List<Map<String, dynamic>> list = [];
       
       if (snapshot.exists) {
-        final data = snapshot.value as Map<dynamic, dynamic>;
-        data.forEach((key, value) {
-          if (value is Map) {
-            list.add({
-              'id': key,
-              ...Map<String, dynamic>.from(value),
-            });
+        final data = snapshot.value;
+        
+        if (data is Map) {
+          // Handle Map data structure (Firebase returns as Map with keys)
+          data.forEach((key, value) {
+            if (value is Map) {
+              list.add({
+                'id': key,
+                ...Map<String, dynamic>.from(value),
+              });
+            }
+          });
+        } else if (data is List) {
+          // Handle List data structure
+          for (int i = 0; i < data.length; i++) {
+            if (data[i] is Map) {
+              list.add({
+                'id': i.toString(),
+                ...Map<String, dynamic>.from(data[i] as Map),
+              });
+            }
           }
-        });
+        }
       }
       return list;
     } catch (e) {
@@ -56,15 +70,29 @@ class FirebaseService {
     return _database.ref(path).onValue.map((event) {
       List<Map<String, dynamic>> list = [];
       if (event.snapshot.exists) {
-        final data = event.snapshot.value as Map<dynamic, dynamic>;
-        data.forEach((key, value) {
-          if (value is Map) {
-            list.add({
-              'id': key,
-              ...Map<String, dynamic>.from(value),
-            });
+        final data = event.snapshot.value;
+        
+        if (data is Map) {
+          // Handle Map data structure (Firebase returns as Map with keys)
+          data.forEach((key, value) {
+            if (value is Map) {
+              list.add({
+                'id': key,
+                ...Map<String, dynamic>.from(value),
+              });
+            }
+          });
+        } else if (data is List) {
+          // Handle List data structure
+          for (int i = 0; i < data.length; i++) {
+            if (data[i] is Map) {
+              list.add({
+                'id': i.toString(),
+                ...Map<String, dynamic>.from(data[i] as Map),
+              });
+            }
           }
-        });
+        }
       }
       return list;
     });

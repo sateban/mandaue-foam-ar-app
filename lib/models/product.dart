@@ -10,6 +10,9 @@ class Product {
   final int reviews;
   bool isFavorite;
   String? discount;
+  String? description;
+  int? quantity;
+  bool? inStock;
 
   Product({
     required this.id,
@@ -23,5 +26,8 @@ class Product {
     required this.reviews,
     this.isFavorite = false,
     this.discount,
+    this.description,
+    this.quantity,
+    this.inStock = true,
   });
 }
