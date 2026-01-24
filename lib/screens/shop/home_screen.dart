@@ -3,9 +3,11 @@ import 'dart:async';
 import '../../data/dummy_data.dart';
 import '../../utils/slide_route.dart';
 import '../../services/firebase_service.dart';
+import '../../models/product.dart';
 import 'cart_screen.dart';
 import 'orders_screen.dart';
 import 'profile_screen.dart';
+import 'product_detail_screen.dart';
 import 'shop_shell_scope.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -178,9 +180,9 @@ class _HomeScreenState extends State<HomeScreen> {
             : dummyProducts;
         
         // ignore: avoid_print
-        print('Searching in ${_allFirebaseProducts.isNotEmpty ? 'Firebase' : 'Dummy'} products');
-        print('Total products available: ${productsToSearch.length}');
-        print('Query: $lowerQuery');
+        // print('Searching in ${_allFirebaseProducts.isNotEmpty ? 'Firebase' : 'Dummy'} products');
+        // print('Total products available: ${productsToSearch.length}');
+        // print('Query: $lowerQuery');
         
         _searchResults = productsToSearch
             .where((product) {
@@ -196,7 +198,7 @@ class _HomeScreenState extends State<HomeScreen> {
               
               if (matches) {
                 // ignore: avoid_print
-                print('Match found: ${product['name']}');
+                // print('Match found: ${product['name']}');
               }
               
               return matches;
@@ -205,7 +207,7 @@ class _HomeScreenState extends State<HomeScreen> {
             .toList();
         
         // ignore: avoid_print
-        print('Search results: ${_searchResults.length} found');
+        // print('Search results: ${_searchResults.length} found');
       }
     });
   }
@@ -810,8 +812,27 @@ class _HomeScreenState extends State<HomeScreen> {
                                   _showSearchDropdown = false;
                                   _searchResults = [];
                                 });
-                                // Navigate to product detail with search input
-                                Navigator.pushNamed(context, '/search-products');
+                                // Create Product object from search result data
+                                final selectedProduct = Product(
+                                  id: product['id']?.toString() ?? '',
+                                  name: product['name'] ?? '',
+                                  price: (product['price'] as num?)?.toDouble() ?? 0.0,
+                                  category: product['category'] ?? '',
+                                  material: product['material'] ?? '',
+                                  color: product['color'] ?? '',
+                                  imageUrl: product['imageUrl'] ?? '',
+                                  rating: (product['rating'] as num?)?.toDouble() ?? 0.0,
+                                  reviews: (product['reviews'] as num?)?.toInt() ?? 0,
+                                  isFavorite: product['isFavorite'] ?? false,
+                                  discount: product['discount'],
+                                  description: product['description'],
+                                  quantity: product['quantity'] as int?,
+                                  inStock: product['inStock'] ?? true,
+                                );
+                                // Navigate to product detail screen
+                                Navigator.of(context).push(
+                                  slideRoute(ProductDetailScreen(product: selectedProduct)),
+                                );
                               },
                             );
                           },

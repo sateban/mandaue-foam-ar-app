@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart';
 import 'package:ar_flutter_plugin_updated/ar_flutter_plugin.dart';
 import 'package:ar_flutter_plugin_updated/datatypes/config_planedetection.dart';
 import 'package:ar_flutter_plugin_updated/datatypes/node_types.dart';
@@ -22,18 +23,32 @@ import 'screens/shop/categories_screen.dart';
 import 'screens/shop/shop_shell.dart';
 import 'screens/shop/search_products_screen.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'firebase_options.dart';
 import 'services/firebase_service.dart'; // Add this import if not already present
 
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
   
-  // Add this call
-  readAndPrintRealtimeData();
+  try {
+    print('DEBUG: Initializing Firebase...');
+    print('DEBUG: Current Platform: ${defaultTargetPlatform.toString()}');
+    
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+    
+    print('DEBUG: Firebase initialized successfully');
+    print('DEBUG: Firebase Auth instance: ${FirebaseAuth.instance}');
+    
+  } catch (e) {
+    print('ERROR: Firebase initialization failed: $e');
+    print('ERROR: This may indicate missing google-services.json or configuration issues');
+  }
+  
+  // Don't call readAndPrintRealtimeData() on startup - it causes issues
+  // readAndPrintRealtimeData();
   
   runApp(const MyApp());
 }

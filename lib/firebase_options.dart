@@ -38,14 +38,14 @@ class DefaultFirebaseOptions {
   }
 
   static const FirebaseOptions web = FirebaseOptions(
-    apiKey: 'your-api-key',
-    appId: 'your-app-id',
-    messagingSenderId: 'your-sender-id',
-    projectId: 'your-project-id',
-    authDomain: 'your-project-id.firebaseapp.com',
-    storageBucket: 'your-project-id.appspot.com',
-    measurementId: 'your-measurement-id',
-    databaseURL: 'https://mandaue-foam-ar-1-default-rtdb.firebaseio.com', // Add this line if missing
+    apiKey: 'AIzaSyCR0zyfyG5UcrJD89q8Wif6KLtD1WOQBO0',
+    appId: '1:245668040106:web:d7ebd9ca06160e1e36efd3',
+    messagingSenderId: '245668040106',
+    projectId: 'mandaue-foam-ar-1',
+    authDomain: 'mandaue-foam-ar-1.firebaseapp.com',
+    databaseURL: 'https://mandaue-foam-ar-1-default-rtdb.firebaseio.com',
+    storageBucket: 'mandaue-foam-ar-1.firebasestorage.app',
+    measurementId: 'G-CGV7CXGHR0',
   );
 
   static const FirebaseOptions android = FirebaseOptions(
@@ -53,6 +53,7 @@ class DefaultFirebaseOptions {
     appId: '1:245668040106:android:e5c7f075086a66dc36efd3',
     messagingSenderId: '245668040106',
     projectId: 'mandaue-foam-ar-1',
+    databaseURL: 'https://mandaue-foam-ar-1-default-rtdb.firebaseio.com',
     storageBucket: 'mandaue-foam-ar-1.firebasestorage.app',
   );
 
@@ -61,6 +62,7 @@ class DefaultFirebaseOptions {
     appId: '1:245668040106:ios:b2acbeab5384a91336efd3',
     messagingSenderId: '245668040106',
     projectId: 'mandaue-foam-ar-1',
+    databaseURL: 'https://mandaue-foam-ar-1-default-rtdb.firebaseio.com',
     storageBucket: 'mandaue-foam-ar-1.firebasestorage.app',
     iosBundleId: 'com.example.ar3dViewer',
   );
