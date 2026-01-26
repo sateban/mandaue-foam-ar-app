@@ -15,7 +15,23 @@ import 'package:path_provider/path_provider.dart';
 import 'dart:io';
 import 'package:ar_flutter_plugin_updated/models/ar_anchor.dart';
 import 'package:ar_flutter_plugin_updated/models/ar_hittest_result.dart';
+import 'screens/onboarding/splash_screen_v1.dart';
+import 'screens/onboarding/welcome_screen.dart';
+import 'screens/onboarding/walkthrough_screen.dart';
+import 'screens/auth/lets_you_in_screen.dart';
+import 'screens/auth/fill_profile_screen.dart';
+import 'screens/auth/create_pin_screen.dart';
+import 'screens/auth/set_fingerprint_screen.dart';
+import 'screens/auth/account_setup_success_screen.dart';
+import 'screens/auth/password_reset_success_screen.dart';
 import 'screens/auth/sign_in_screen.dart';
+import 'screens/auth/sign_up_screen.dart';
+import 'screens/shop/checkout/shipping_address_screen.dart';
+import 'screens/shop/checkout/address_list_screen.dart';
+import 'screens/shop/checkout/payment_method_screen.dart';
+import 'screens/shop/checkout/payment_success_screen.dart';
+import 'screens/shop/profile/edit_profile_screen.dart';
+import 'screens/shop/profile/coupons_screen.dart';
 import 'screens/shop/notifications_screen.dart';
 import 'screens/shop/popular_products_screen.dart';
 import 'screens/shop/new_arrivals_screen.dart';
@@ -25,31 +41,31 @@ import 'screens/shop/search_products_screen.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'firebase_options.dart';
-import 'services/firebase_service.dart'; // Add this import if not already present
-
+import 'services/firebase_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
+
   try {
     print('DEBUG: Initializing Firebase...');
     print('DEBUG: Current Platform: ${defaultTargetPlatform.toString()}');
-    
+
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
     );
-    
+
     print('DEBUG: Firebase initialized successfully');
     print('DEBUG: Firebase Auth instance: ${FirebaseAuth.instance}');
-    
   } catch (e) {
     print('ERROR: Firebase initialization failed: $e');
-    print('ERROR: This may indicate missing google-services.json or configuration issues');
+    print(
+      'ERROR: This may indicate missing google-services.json or configuration issues',
+    );
   }
-  
+
   // Don't call readAndPrintRealtimeData() on startup - it causes issues
   // readAndPrintRealtimeData();
-  
+
   runApp(const MyApp());
 }
 
@@ -68,17 +84,46 @@ class MyApp extends StatelessWidget {
         ),
         useMaterial3: true,
       ),
-      home: const SplashScreen(),
+      home: const SplashScreenV1(),
       routes: {
+        // Onboarding routes
+        '/welcome': (context) => const WelcomeScreen(),
+        '/walkthrough': (context) => const WalkthroughScreen(),
+
+        // Authentication routes
+        '/lets-you-in': (context) => const LetsYouInScreen(),
+        '/sign-in': (context) => const SignInScreen(),
+        '/sign-up': (context) => const SignUpScreen(),
+        '/fill-profile': (context) => const FillProfileScreen(),
+        '/create-pin': (context) => const CreatePinScreen(),
+        '/set-fingerprint': (context) => const SetFingerprintScreen(),
+        '/account-setup-success': (context) =>
+            const AccountSetupSuccessScreenStateful(),
+        '/password-reset-success': (context) =>
+            const PasswordResetSuccessScreen(),
+
+        // Main app routes
         '/home': (context) => const ShopShell(),
         '/cart': (context) => const ShopShell(initialIndex: 1),
         '/orders': (context) => const ShopShell(initialIndex: 2),
         '/profile': (context) => const ShopShell(initialIndex: 3),
+
+        // Shop routes
         '/notifications': (context) => const NotificationsScreen(),
         '/popular-products': (context) => const PopularProductsScreen(),
         '/new-arrivals': (context) => const NewArrivalsScreen(),
         '/categories': (context) => const CategoriesScreen(),
         '/search-products': (context) => const SearchProductsScreen(),
+
+        // Checkout routes
+        '/shipping-address': (context) => const ShippingAddressScreen(),
+        '/address-list': (context) => const AddressListScreen(),
+        '/payment-method': (context) => const PaymentMethodScreen(),
+        '/payment-success': (context) => const PaymentSuccessScreen(),
+
+        // Profile routes
+        '/edit-profile': (context) => const EditProfileScreen(),
+        '/coupons': (context) => const CouponsScreen(),
       },
     );
   }
@@ -584,11 +629,15 @@ class _ThreeDViewerDashboardState extends State<ThreeDViewerDashboard> {
 
 // Add this function to read and print realtime database data
 void readAndPrintRealtimeData() {
-  const String path = '/'; // Replace with your actual database path, e.g., '/users'
+  const String path =
+      '/'; // Replace with your actual database path, e.g., '/users'
   print('Realtime data:');
-  FirebaseService.streamData(path).listen((data) {
-    print('Realtime data: $data');
-  }, onError: (error) {
-    print('Error reading realtime data: $error');
-  });
+  FirebaseService.streamData(path).listen(
+    (data) {
+      print('Realtime data: $data');
+    },
+    onError: (error) {
+      print('Error reading realtime data: $error');
+    },
+  );
 }
