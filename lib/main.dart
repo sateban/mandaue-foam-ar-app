@@ -38,10 +38,12 @@ import 'screens/shop/new_arrivals_screen.dart';
 import 'screens/shop/categories_screen.dart';
 import 'screens/shop/shop_shell.dart';
 import 'screens/shop/search_products_screen.dart';
+import 'screens/shop/track_order_screen.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'firebase_options.dart';
 import 'services/firebase_service.dart';
+import 'models/order.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -85,6 +87,16 @@ class MyApp extends StatelessWidget {
         useMaterial3: true,
       ),
       home: const SplashScreenV1(),
+      onGenerateRoute: (settings) {
+        // Handle routes that need arguments
+        if (settings.name == '/track-order') {
+          final order = settings.arguments as Order;
+          return MaterialPageRoute(
+            builder: (context) => TrackOrderScreen(order: order),
+          );
+        }
+        return null;
+      },
       routes: {
         // Onboarding routes
         '/welcome': (context) => const WelcomeScreen(),
@@ -413,47 +425,60 @@ class _ThreeDViewerDashboardState extends State<ThreeDViewerDashboard> {
             planeDetectionConfig: PlaneDetectionConfig.horizontalAndVertical,
           ),
           Positioned(
-            bottom: 30,
-            left: 20,
-            right: 20,
-            child: Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.black.withValues(alpha: 0.5),
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
+            bottom: 0,
+            left: 0,
+            right: 0,
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(
+                20,
+                0,
+                20,
+                MediaQuery.of(context).padding.bottom + 20,
               ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Text(
-                    'Integrated AR Mode',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                    ),
+              child: Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.5),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.2),
                   ),
-                  const SizedBox(height: 8),
-                  Text(
-                    astronautNode == null
-                        ? 'Looking for surfaces... Model will appear automatically.'
-                        : 'Model placed! Move around to view.',
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(color: Colors.white70, fontSize: 14),
-                  ),
-                  const SizedBox(height: 12),
-                  if (astronautNode == null)
-                    ElevatedButton.icon(
-                      onPressed: _addModel,
-                      icon: const Icon(Icons.add_a_photo),
-                      label: const Text('Try Adding Manually'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.white,
-                        foregroundColor: Colors.black,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text(
+                      'Integrated AR Mode',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
                       ),
                     ),
-                ],
+                    const SizedBox(height: 8),
+                    Text(
+                      astronautNode == null
+                          ? 'Looking for surfaces... Model will appear automatically.'
+                          : 'Model placed! Move around to view.',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        color: Colors.white70,
+                        fontSize: 14,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    if (astronautNode == null)
+                      ElevatedButton.icon(
+                        onPressed: _addModel,
+                        icon: const Icon(Icons.add_a_photo),
+                        label: const Text('Try Adding Manually'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.white,
+                          foregroundColor: Colors.black,
+                        ),
+                      ),
+                  ],
+                ),
               ),
             ),
           ),

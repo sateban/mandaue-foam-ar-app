@@ -67,7 +67,7 @@ class ProfileScreen extends StatelessWidget {
               context,
               icon: Icons.location_on_outlined,
               title: 'Shipping Address',
-              onTap: () => Navigator.pushNamed(context, '/shipping-addresses'),
+              onTap: () => Navigator.pushNamed(context, '/shipping-address'),
             ),
             _buildMenuItem(
               context,
