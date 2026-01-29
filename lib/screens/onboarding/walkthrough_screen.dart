@@ -95,6 +95,7 @@ class _WalkthroughScreenState extends State<WalkthroughScreen> {
                             context,
                             '/lets-you-in',
                           );
+                          // Navigator.pushNamed(context, '/sign-in');
                         }
                       },
                       style: ElevatedButton.styleFrom(
