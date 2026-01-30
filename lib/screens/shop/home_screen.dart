@@ -39,6 +39,12 @@ class _HomeScreenState extends State<HomeScreen> {
   late List<String> _heroSlides;
   late List<String> _heroNames;
   Timer? _heroTimer;
+  DateTime _lastHeroInteraction = DateTime.now();
+  
+  // Categories scroll
+  late ScrollController _categoriesScrollController;
+  bool _canScrollLeft = false;
+  bool _canScrollRight = false;
 
   // Search dropdown
   late TextEditingController _searchController;
@@ -54,6 +60,8 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     _searchController = TextEditingController();
+    _categoriesScrollController = ScrollController();
+    _categoriesScrollController.addListener(_updateCategoriesScrollState);
     
     // Get products from ProductProvider (loaded from Firebase after sign-in)
     final productProvider = context.read<ProductProvider>();
@@ -87,6 +95,14 @@ class _HomeScreenState extends State<HomeScreen> {
     _heroPageController = PageController();
     _heroTimer = Timer.periodic(const Duration(seconds: 5), (timer) {
       if (!_heroPageController.hasClients) return;
+      
+      // Check if user has recently interacted - pause auto-slide for 8 seconds
+      final timeSinceInteraction = DateTime.now().difference(_lastHeroInteraction);
+      if (timeSinceInteraction.inSeconds < 8) {
+        // User interacted recently, skip auto-slide
+        return;
+      }
+      
       _heroCurrentIndex = (_heroCurrentIndex + 1) % _heroSlides.length;
       _heroPageController.animateToPage(
         _heroCurrentIndex,
@@ -187,6 +203,8 @@ class _HomeScreenState extends State<HomeScreen> {
     _heroTimer?.cancel();
     _heroPageController.dispose();
     _searchController.dispose();
+    _categoriesScrollController.removeListener(_updateCategoriesScrollState);
+    _categoriesScrollController.dispose();
     _productsSubscription?.cancel();
     super.dispose();
   }
@@ -224,6 +242,34 @@ class _HomeScreenState extends State<HomeScreen> {
 
       return categoryMatch && priceMatch && materialMatch && colorMatch;
     }).toList();
+  }
+
+  /// Update categories scroll button visibility based on scroll position
+  void _updateCategoriesScrollState() {
+    setState(() {
+      _canScrollLeft = _categoriesScrollController.offset > 0;
+      _canScrollRight =
+          _categoriesScrollController.offset <
+          _categoriesScrollController.position.maxScrollExtent;
+    });
+  }
+
+  /// Scroll categories list left
+  void _scrollCategoriesLeft() {
+    _categoriesScrollController.animateTo(
+      _categoriesScrollController.offset - 120,
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeInOut,
+    );
+  }
+
+  /// Scroll categories list right
+  void _scrollCategoriesRight() {
+    _categoriesScrollController.animateTo(
+      _categoriesScrollController.offset + 120,
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeInOut,
+    );
   }
 
   /// Filter products by isHeroBanner == true and update hero carousel slides
@@ -360,7 +406,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                 Text(
                                   'mandauefoam',
                                   style: TextStyle(
-                                    color: Color(0xFF1E3A8A),
+                                    color: Color(0xFF006ab2),
                                     fontSize: 16,
                                     fontWeight: FontWeight.w600,
                                   ),
@@ -368,7 +414,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                 Text(
                                   'home store',
                                   style: TextStyle(
-                                    color: Colors.grey,
+                                    color: Color.fromARGB(255, 41, 41, 41),
                                     fontSize: 12,
                                   ),
                                 ),
@@ -476,41 +522,46 @@ class _HomeScreenState extends State<HomeScreen> {
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                _heroNames[_heroCurrentIndex],
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 24,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              const SizedBox(height: 16),
-                              ElevatedButton(
-                                onPressed: null,
-                                style: const ButtonStyle(
-                                  backgroundColor: WidgetStatePropertyAll(
-                                    Colors.white,
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  _heroNames[_heroCurrentIndex],
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 24,
+                                    fontWeight: FontWeight.bold,
                                   ),
-                                  padding: WidgetStatePropertyAll(
-                                    EdgeInsets.symmetric(
-                                      horizontal: 24,
-                                      vertical: 12,
+                                  maxLines: 3,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                const SizedBox(height: 16),
+                                ElevatedButton(
+                                  onPressed: null,
+                                  style: const ButtonStyle(
+                                    backgroundColor: WidgetStatePropertyAll(
+                                      Colors.white,
+                                    ),
+                                    padding: WidgetStatePropertyAll(
+                                      EdgeInsets.symmetric(
+                                        horizontal: 24,
+                                        vertical: 12,
+                                      ),
+                                    ),
+                                  ),
+                                  child: const Text(
+                                    'Buy Now',
+                                    style: TextStyle(
+                                      color: Color(0xFF1E3A8A),
+                                      fontWeight: FontWeight.w600,
                                     ),
                                   ),
                                 ),
-                                child: const Text(
-                                  'Buy Now',
-                                  style: TextStyle(
-                                    color: Color(0xFF1E3A8A),
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
+                          const SizedBox(width: 16),
                           SizedBox(
                             width: 120,
                             height: 120,
@@ -522,8 +573,11 @@ class _HomeScreenState extends State<HomeScreen> {
                                     child: PageView.builder(
                                       controller: _heroPageController,
                                       itemCount: _heroSlides.length,
-                                      onPageChanged: (i) =>
-                                          setState(() => _heroCurrentIndex = i),
+                                      onPageChanged: (i) {
+                                        // Record user interaction to pause auto-slide
+                                        _lastHeroInteraction = DateTime.now();
+                                        setState(() => _heroCurrentIndex = i);
+                                      },
                                       itemBuilder: (context, index) {
                                         final url = _heroSlides[index];
                                         if (url.isEmpty) {
@@ -610,58 +664,129 @@ class _HomeScreenState extends State<HomeScreen> {
                       ],
                     ),
                   ),
-                  SizedBox(
-                    height: 100,
-                    child: ListView.builder(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      scrollDirection: Axis.horizontal,
-                      // itemCount: categories.take(5).length,
-                      itemCount: categories.length,
-                      itemBuilder: (context, index) {
-                        return Padding(
-                          padding: const EdgeInsets.only(right: 12),
-                          child: GestureDetector(
-                            onTap: () {},
-                            child: Container(
-                              width: 80,
-                              decoration: BoxDecoration(
-                                color: Colors.grey[100],
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Container(
-                                    width: 48,
-                                    height: 48,
-                                    decoration: BoxDecoration(
-                                      color: Colors.grey[200],
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                    child: ClipRRect(
-                                      borderRadius: BorderRadius.circular(8),
-                                      child: _AuthenticatedCategoryImage(
-                                        imageUrl: categoryImageUrls[categories[index]] ?? '',
+                  Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      SizedBox(
+                        height: 100,
+                        child: ListView.builder(
+                          controller: _categoriesScrollController,
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          scrollDirection: Axis.horizontal,
+                          itemCount: categories.length,
+                          itemBuilder: (context, index) {
+                            return Padding(
+                              padding: const EdgeInsets.only(right: 12),
+                              child: GestureDetector(
+                                onTap: () {},
+                                child: Container(
+                                  width: 80,
+                                  decoration: BoxDecoration(
+                                    color: Colors.grey[100],
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Container(
+                                        width: 48,
+                                        height: 48,
+                                        decoration: BoxDecoration(
+                                          color: Colors.grey[200],
+                                          borderRadius: BorderRadius.circular(8),
+                                        ),
+                                        child: ClipRRect(
+                                          borderRadius: BorderRadius.circular(8),
+                                          child: _AuthenticatedCategoryImage(
+                                            imageUrl: categoryImageUrls[categories[index]] ?? '',
+                                          ),
+                                        ),
                                       ),
-                                    ),
+                                      const SizedBox(height: 8),
+                                      Text(
+                                        categories[index],
+                                        textAlign: TextAlign.center,
+                                        style: const TextStyle(
+                                          color: Color(0xFF1E3A8A),
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ],
                                   ),
-                                  const SizedBox(height: 8),
-                                  Text(
-                                    categories[index],
-                                    textAlign: TextAlign.center,
-                                    style: const TextStyle(
-                                      color: Color(0xFF1E3A8A),
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w600,
-                                    ),
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                      // Left arrow button
+                      if (_canScrollLeft)
+                        Positioned(
+                          left: 0,
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              shape: BoxShape.circle,
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.15),
+                                  blurRadius: 8,
+                                  offset: const Offset(2, 0),
+                                ),
+                              ],
+                            ),
+                            child: Material(
+                              color: Colors.transparent,
+                              child: InkWell(
+                                onTap: _scrollCategoriesLeft,
+                                borderRadius: BorderRadius.circular(20),
+                                child: const Padding(
+                                  padding: EdgeInsets.all(8.0),
+                                  child: Icon(
+                                    Icons.arrow_back,
+                                    color: Color(0xFF1E3A8A),
+                                    size: 20,
                                   ),
-                                ],
+                                ),
                               ),
                             ),
                           ),
-                        );
-                      },
-                    ),
+                        ),
+                      // Right arrow button
+                      if (_canScrollRight)
+                        Positioned(
+                          right: 0,
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              shape: BoxShape.circle,
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.15),
+                                  blurRadius: 8,
+                                  offset: const Offset(-2, 0),
+                                ),
+                              ],
+                            ),
+                            child: Material(
+                              color: Colors.transparent,
+                              child: InkWell(
+                                onTap: _scrollCategoriesRight,
+                                borderRadius: BorderRadius.circular(20),
+                                child: const Padding(
+                                  padding: EdgeInsets.all(8.0),
+                                  child: Icon(
+                                    Icons.arrow_forward,
+                                    color: Color(0xFF1E3A8A),
+                                    size: 20,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
                   ),
 
                   const SizedBox(height: 24),
