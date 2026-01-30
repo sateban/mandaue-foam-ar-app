@@ -234,26 +234,19 @@ class _HomeScreenState extends State<HomeScreen> {
     
     if (heroBannerProducts.isEmpty) {
       // Use default placeholder if no hero banners found
-      _heroSlides = List.filled(5, '');
-      _heroNames = List.filled(5, 'Astra Wood\nChair');
+      _heroSlides = List.filled(1, '');
+      _heroNames = List.filled(1, 'Astra Wood\nChair');
+      _heroCurrentIndex = 0;
       return;
     }
 
-    // Extract URLs and names from hero banner products (up to 5)
+    // Extract URLs and names from hero banner products (show only actual banners)
     _heroSlides = heroBannerProducts
-        .take(5)
         .map<String>((p) => (p['imageUrl'] as String?) ?? '')
         .toList();
     _heroNames = heroBannerProducts
-        .take(5)
         .map<String>((p) => (p['name'] as String?) ?? 'Product')
         .toList();
-
-    // Pad to 5 slides if fewer products found
-    if (_heroSlides.length < 5) {
-      _heroSlides.addAll(List.filled(5 - _heroSlides.length, ''));
-      _heroNames.addAll(List.filled(5 - _heroNames.length, 'Astra Wood\nChair'));
-    }
 
     // Reset carousel index if needed
     if (_heroCurrentIndex >= _heroSlides.length) {
