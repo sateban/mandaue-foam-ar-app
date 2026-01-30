@@ -121,6 +121,9 @@ class _HomeScreenState extends State<HomeScreen> {
         print("🔄 After transformation: ${transformedProducts.first['imageUrl']}");
       }
 
+      // Update hero slides from products with isHeroBanner == true
+      _updateHeroSlidesFromProducts(transformedProducts);
+
       // Cancel previous subscription if it exists
       _productsSubscription?.cancel();
 
@@ -134,6 +137,9 @@ class _HomeScreenState extends State<HomeScreen> {
               
               // Transform Firebase paths to full Filebase URLs
               final transformedStreamProducts = filebaseService.transformProductsWithFilebaseUrls(productsList);
+              
+              // Update hero slides from products with isHeroBanner == true
+              _updateHeroSlidesFromProducts(transformedStreamProducts);
               
               setState(() {
                 _allFirebaseProducts = transformedStreamProducts;
@@ -218,6 +224,52 @@ class _HomeScreenState extends State<HomeScreen> {
 
       return categoryMatch && priceMatch && materialMatch && colorMatch;
     }).toList();
+  }
+
+  /// Filter products by isHeroBanner == true and update hero carousel slides
+  void _updateHeroSlidesFromProducts(List<Map<String, dynamic>> products) {
+    final heroBannerProducts = products
+        .where((p) => p['isHeroBanner'] == true)
+        .toList();
+    
+    if (heroBannerProducts.isEmpty) {
+      // Use default placeholder if no hero banners found
+      _heroSlides = List.filled(5, '');
+      _heroNames = List.filled(5, 'Astra Wood\nChair');
+      return;
+    }
+
+    // Extract URLs and names from hero banner products (up to 5)
+    _heroSlides = heroBannerProducts
+        .take(5)
+        .map<String>((p) => (p['imageUrl'] as String?) ?? '')
+        .toList();
+    _heroNames = heroBannerProducts
+        .take(5)
+        .map<String>((p) => (p['name'] as String?) ?? 'Product')
+        .toList();
+
+    // Pad to 5 slides if fewer products found
+    if (_heroSlides.length < 5) {
+      _heroSlides.addAll(List.filled(5 - _heroSlides.length, ''));
+      _heroNames.addAll(List.filled(5 - _heroNames.length, 'Astra Wood\nChair'));
+    }
+
+    // Reset carousel index if needed
+    if (_heroCurrentIndex >= _heroSlides.length) {
+      _heroCurrentIndex = 0;
+    }
+
+    print('✨ Hero banners updated: ${_heroSlides.length} slides loaded');
+    
+    // Pre-cache hero banner images for instant display when sliding
+    // Filter out empty URLs for pre-caching
+    final nonEmptyUrls = _heroSlides.where((url) => url.isNotEmpty).toList();
+    if (nonEmptyUrls.isNotEmpty) {
+      final filebaseService = FilebaseService();
+      // Don't await - background pre-caching
+      filebaseService.preCacheImages(nonEmptyUrls);
+    }
   }
 
   void _searchProducts(String query) {
@@ -495,42 +547,11 @@ class _HomeScreenState extends State<HomeScreen> {
                                             ),
                                           );
                                         }
-                                        return Image.network(
-                                          url,
+                                        return AuthenticatedImage(
+                                          imageUrl: url,
                                           width: 120,
                                           height: 120,
                                           fit: BoxFit.cover,
-                                          errorBuilder:
-                                              (context, error, stackTrace) {
-                                                return Container(
-                                                  color: Colors.white
-                                                      .withOpacity(0.12),
-                                                  child: const Center(
-                                                    child: Icon(
-                                                      Icons.image_not_supported,
-                                                      color: Colors.white,
-                                                      size: 40,
-                                                    ),
-                                                  ),
-                                                );
-                                              },
-                                          loadingBuilder: (context, child, loadingProgress) {
-                                            if (loadingProgress == null)
-                                              return child;
-                                            return Center(
-                                              child: CircularProgressIndicator(
-                                                value:
-                                                    loadingProgress
-                                                            .expectedTotalBytes !=
-                                                        null
-                                                    ? loadingProgress
-                                                              .cumulativeBytesLoaded /
-                                                          loadingProgress
-                                                              .expectedTotalBytes!
-                                                    : null,
-                                              ),
-                                            );
-                                          },
                                         );
                                       },
                                     ),

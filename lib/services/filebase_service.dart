@@ -14,6 +14,12 @@ class FilebaseService {
   late String _bucketName;
   late String _region;
   late Minio _minioClient;
+  
+  /// Image cache to avoid re-downloading: URL -> Uint8List
+  final Map<String, Uint8List> _imageCache = {};
+  
+  /// Pending download futures to avoid duplicate requests
+  final Map<String, Future<Uint8List?>> _pendingDownloads = {};
 
   factory FilebaseService() {
     return _instance;
@@ -89,9 +95,22 @@ class FilebaseService {
 
   /// Get image bytes from Filebase with proper authentication
   /// Uses MinIO client for secure S3-compatible access
+  /// Implements caching and deduplication to minimize data usage
   Future<Uint8List?> getImageBytes(String imageUrl) async {
     try {
       if (imageUrl.isEmpty) return null;
+
+      // Check cache first - avoid re-downloading
+      if (_imageCache.containsKey(imageUrl)) {
+        print('✨ Image cached (no re-download): ${imageUrl.split('/').last}');
+        return _imageCache[imageUrl];
+      }
+      
+      // Check if download is already in progress - share the future
+      if (_pendingDownloads.containsKey(imageUrl)) {
+        print('⏳ Waiting for in-progress download: ${imageUrl.split('/').last}');
+        return _pendingDownloads[imageUrl];
+      }
 
       print('\n🔍 Fetching Image: $imageUrl');
 
@@ -128,6 +147,33 @@ class FilebaseService {
       print('📋 Bucket: $_bucketName');
       print('📋 Object: $objectPath');
 
+      // Create download future
+      final downloadFuture = _downloadAndCacheImage(imageUrl, objectPath);
+      
+      // Track this download to prevent duplicate requests
+      _pendingDownloads[imageUrl] = downloadFuture;
+      
+      // Wait for download and cache result
+      final result = await downloadFuture;
+      
+      // Remove from pending once complete
+      _pendingDownloads.remove(imageUrl);
+      
+      // Cache the result if successful
+      if (result != null) {
+        _imageCache[imageUrl] = result;
+      }
+      
+      return result;
+    } catch (e) {
+      print('❌ Error fetching image: $e');
+      return null;
+    }
+  }
+  
+  /// Helper method to download and cache image bytes
+  Future<Uint8List?> _downloadAndCacheImage(String imageUrl, String objectPath) async {
+    try {
       // Use MinIO to get the object
       final stream = await _minioClient.getObject(_bucketName, objectPath);
       
@@ -137,13 +183,70 @@ class FilebaseService {
       // Convert stream to bytes
       final bytes = await stream.toList();
       final data = bytes.expand((chunk) => chunk).toList();
+      final result = Uint8List.fromList(data);
       
-      print('✅ Image fetched successfully (${data.length} bytes)');
-      return Uint8List.fromList(data);
+      print('✅ Image cached (${data.length} bytes)');
+      return result;
     } catch (e) {
-      print('❌ Error fetching image: $e');
+      print('❌ Error downloading image: $e');
       return null;
     }
+  }
+  
+  /// Pre-cache multiple images to avoid delays during slideshow
+  /// Useful for hero banners and frequently used images
+  Future<void> preCacheImages(List<String> imageUrls) async {
+    print('\n📥 Pre-caching ${imageUrls.length} hero banner images...');
+    
+    final stopwatch = Stopwatch()..start();
+    
+    // Download all images in parallel for speed
+    final futures = <Future<void>>[];
+    
+    for (final url in imageUrls) {
+      if (url.isNotEmpty && !_imageCache.containsKey(url)) {
+        futures.add(
+          getImageBytes(url).then((_) {
+            // Result already cached in getImageBytes
+          })
+        );
+      }
+    }
+    
+    // Wait for all downloads (with timeout to prevent hanging)
+    try {
+      await Future.wait(
+        futures,
+        eagerError: false,
+      ).timeout(
+        const Duration(seconds: 30),
+      );
+    } on TimeoutException {
+      print('⚠️  Pre-cache timeout - some images may still be loading');
+    }
+    
+    stopwatch.stop();
+    final cached = imageUrls.where((url) => url.isNotEmpty && _imageCache.containsKey(url)).length;
+    print('✨ Pre-cache complete: $cached/${imageUrls.length} images (${stopwatch.elapsedMilliseconds}ms)');
+  }
+  
+  /// Clear image cache to free memory
+  void clearImageCache() {
+    _imageCache.clear();
+    print('🗑️  Image cache cleared');
+  }
+  
+  /// Get cache statistics
+  Map<String, dynamic> getCacheStats() {
+    int totalBytes = 0;
+    for (final bytes in _imageCache.values) {
+      totalBytes += bytes.length;
+    }
+    return {
+      'count': _imageCache.length,
+      'totalBytes': totalBytes,
+      'totalMB': (totalBytes / (1024 * 1024)).toStringAsFixed(2),
+    };
   }
 
   /// Test if credentials are valid by checking bucket access
