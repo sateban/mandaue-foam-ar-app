@@ -45,7 +45,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
         centerTitle: false,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: Color(0xFF1E3A8A)),
-          onPressed: () => {} //=> Navigator.pop(context),
+          onPressed: () => Navigator.pop(context),
         ),
       ),
       body: Padding(
