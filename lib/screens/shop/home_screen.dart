@@ -408,7 +408,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                   style: TextStyle(
                                     color: Color(0xFF006ab2),
                                     fontSize: 16,
-                                    fontWeight: FontWeight.w600,
+                                    fontWeight: FontWeight.bold,
                                   ),
                                 ),
                                 Text(
@@ -416,6 +416,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                   style: TextStyle(
                                     color: Color.fromARGB(255, 41, 41, 41),
                                     fontSize: 12,
+                                    fontWeight: FontWeight.bold,
                                   ),
                                 ),
                               ],
@@ -514,7 +515,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         gradient: const LinearGradient(
                           colors: [
                             Color(0xFF8B6F47),
-                            Color.fromARGB(255, 180, 156, 139),
+                            Color.fromARGB(255, 255, 226, 206),
                           ],
                         ),
                         borderRadius: BorderRadius.circular(16),
@@ -798,7 +799,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         const Text(
-                          'Popular products',
+                          'Popular Products',
                           style: TextStyle(
                             color: Color(0xFF1E3A8A),
                             fontSize: 18,
