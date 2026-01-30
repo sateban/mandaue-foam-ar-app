@@ -1,15 +1,21 @@
 import 'package:flutter/material.dart';
 import 'dart:async';
-import '../../data/dummy_data.dart';
+import 'dart:typed_data';
+import 'package:provider/provider.dart';
+import '../../data/dummy_data.dart' show categories, categoryImageUrls;
+import '../../providers/product_provider.dart';
 import '../../utils/slide_route.dart';
 import '../../services/firebase_service.dart';
+import '../../services/filebase_service.dart';
 import '../../models/product.dart';
 import 'cart_screen.dart';
 import 'orders_screen.dart';
 import 'profile_screen.dart';
 import 'product_detail_screen.dart';
 import 'shop_shell_scope.dart';
+import 'package:logger/logger.dart';
 
+var l = Logger();
 class HomeScreen extends StatefulWidget {
   const HomeScreen({this.showBottomNav = true, super.key});
 
@@ -48,17 +54,23 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     _searchController = TextEditingController();
-    _filteredProducts = List.from(dummyProducts);
+    
+    // Get products from ProductProvider (loaded from Firebase after sign-in)
+    final productProvider = context.read<ProductProvider>();
+    _filteredProducts = List.from(productProvider.products);
 
     // Load Firebase products
     _loadFirebaseProducts();
+    
+    // Test Filebase credentials to diagnose 403 issue
+    _testFilebaseConnection();
 
     // prepare hero slides (take up to 5 product images as slides)
-    _heroSlides = dummyProducts
+    _heroSlides = _filteredProducts
         .take(5)
         .map<String>((p) => (p['imageUrl'] as String?) ?? '')
         .toList();
-    _heroNames = dummyProducts
+    _heroNames = _filteredProducts
         .take(5)
         .map<String>((p) => (p['name'] as String?) ?? '')
         .toList();
@@ -93,7 +105,21 @@ class _HomeScreenState extends State<HomeScreen> {
       final List<Map<String, dynamic>> productsData =
           await FirebaseService.readListData('products');
 
-      print("1_isLoadingProducts ${productsData.length}");
+      print("✅ Products loaded from Firebase: ${productsData.length}");
+      
+      // Show first product path before transformation
+      if (productsData.isNotEmpty) {
+        print("📝 Sample Firebase imageUrl: ${productsData.first['imageUrl']}");
+      }
+
+      // Transform Firebase paths to full Filebase URLs
+      final filebaseService = FilebaseService();
+      final transformedProducts = filebaseService.transformProductsWithFilebaseUrls(productsData);
+      
+      // Show first product path after transformation
+      if (transformedProducts.isNotEmpty) {
+        print("🔄 After transformation: ${transformedProducts.first['imageUrl']}");
+      }
 
       // Cancel previous subscription if it exists
       _productsSubscription?.cancel();
@@ -105,8 +131,13 @@ class _HomeScreenState extends State<HomeScreen> {
               // ignore: avoid_print
               print('Stream products received: ${productsList.length} items');
               if (!mounted) return;
+              
+              // Transform Firebase paths to full Filebase URLs
+              final transformedStreamProducts = filebaseService.transformProductsWithFilebaseUrls(productsList);
+              
               setState(() {
-                _allFirebaseProducts = productsList;
+                _allFirebaseProducts = transformedStreamProducts;
+                _filteredProducts = List.from(_allFirebaseProducts);
               });
               // Re-run search if there's an active search query
               if (_searchController.text.isNotEmpty) {
@@ -122,7 +153,8 @@ class _HomeScreenState extends State<HomeScreen> {
       if (!mounted) return;
 
       setState(() {
-        _allFirebaseProducts = productsData;
+        _allFirebaseProducts = transformedProducts;
+        _filteredProducts = List.from(_allFirebaseProducts);
         _isLoadingProducts = false;
       });
     } catch (e) {
@@ -132,6 +164,16 @@ class _HomeScreenState extends State<HomeScreen> {
       });
       print('Error loading Firebase products: $e');
     }
+  }
+
+  /// Test Filebase connection and credentials
+  Future<void> _testFilebaseConnection() async {
+    final filebaseService = FilebaseService();
+    final result = await filebaseService.testCredentials();
+    print('\n🧪 Filebase Credential Test Result:');
+    print('   Status Code: ${result['statusCode']}');
+    print('   Success: ${result['success']}');
+    print('   Message: ${result['message']}');
   }
 
   @override
@@ -162,7 +204,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _filterProducts() {
-    _filteredProducts = dummyProducts.where((product) {
+    _filteredProducts = _allFirebaseProducts.where((product) {
       bool categoryMatch =
           _selectedCategories.isEmpty ||
           _selectedCategories.contains(product['category']);
@@ -187,11 +229,8 @@ class _HomeScreenState extends State<HomeScreen> {
         _showSearchDropdown = true;
         final lowerQuery = query.toLowerCase();
 
-        // Search in Firebase products first, fallback to dummy data
-        List<Map<String, dynamic>> productsToSearch =
-            _allFirebaseProducts.isNotEmpty
-            ? _allFirebaseProducts
-            : dummyProducts;
+        // Search in Firebase products
+        List<Map<String, dynamic>> productsToSearch = _allFirebaseProducts;
 
         // ignore: avoid_print
         // print('Searching in ${_allFirebaseProducts.isNotEmpty ? 'Firebase' : 'Dummy'} products');
@@ -587,39 +626,8 @@ class _HomeScreenState extends State<HomeScreen> {
                                     ),
                                     child: ClipRRect(
                                       borderRadius: BorderRadius.circular(8),
-                                      child: Image.network(
-                                        categoryImageUrls[categories[index]] ??
-                                            '',
-                                        fit: BoxFit.cover,
-                                        cacheWidth: 96,
-                                        cacheHeight: 96,
-                                        errorBuilder:
-                                            (context, error, stackTrace) {
-                                              return const Center(
-                                                child: Icon(
-                                                  Icons.image_outlined,
-                                                  color: Colors.grey,
-                                                  size: 24,
-                                                ),
-                                              );
-                                            },
-                                        loadingBuilder: (context, child, loadingProgress) {
-                                          if (loadingProgress == null)
-                                            return child;
-                                          return Center(
-                                            child: CircularProgressIndicator(
-                                              value:
-                                                  loadingProgress
-                                                          .expectedTotalBytes !=
-                                                      null
-                                                  ? loadingProgress
-                                                            .cumulativeBytesLoaded /
-                                                        loadingProgress
-                                                            .expectedTotalBytes!
-                                                  : null,
-                                            ),
-                                          );
-                                        },
+                                      child: _AuthenticatedCategoryImage(
+                                        imageUrl: categoryImageUrls[categories[index]] ?? '',
                                       ),
                                     ),
                                   ),
@@ -711,9 +719,13 @@ class _HomeScreenState extends State<HomeScreen> {
                             crossAxisSpacing: 12,
                             mainAxisSpacing: 12,
                           ),
-                      itemCount: _filteredProducts.take(4).length,
+                      itemCount: _filteredProducts.take(4).toList().length,
                       itemBuilder: (context, index) {
-                        final product = _filteredProducts[index];
+                        final products = _filteredProducts.take(4).toList();
+                        if (index >= products.length) {
+                          return const SizedBox.shrink();
+                        }
+                        final product = products[index];
                         return _buildProductCard(product);
                       },
                     ),
@@ -840,18 +852,9 @@ class _HomeScreenState extends State<HomeScreen> {
                                 ),
                                 child: ClipRRect(
                                   borderRadius: BorderRadius.circular(6),
-                                  child: Image.network(
-                                    product['imageUrl'] ?? '',
+                                  child: AuthenticatedImage(
+                                    imageUrl: product['imageUrl'] ?? '',
                                     fit: BoxFit.cover,
-                                    errorBuilder: (context, error, stackTrace) {
-                                      return const Center(
-                                        child: Icon(
-                                          Icons.image_outlined,
-                                          size: 20,
-                                          color: Colors.grey,
-                                        ),
-                                      );
-                                    },
                                   ),
                                 ),
                               ),
@@ -1055,6 +1058,11 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildProductCard(Map<String, dynamic> product) {
+    final imageUrl = product['imageUrl'] ?? '';
+    if (imageUrl.isNotEmpty) {
+      print('🖼️  Product: ${product['name']} | URL: $imageUrl');
+    }
+    
     return Container(
       decoration: BoxDecoration(
         color: Colors.grey[100],
@@ -1080,18 +1088,9 @@ class _HomeScreenState extends State<HomeScreen> {
                       topLeft: Radius.circular(12),
                       topRight: Radius.circular(12),
                     ),
-                    child: Image.network(
-                      product['imageUrl'] ?? '',
+                    child: AuthenticatedImage(
+                      imageUrl: imageUrl,
                       fit: BoxFit.cover,
-                      errorBuilder: (context, error, stackTrace) {
-                        return const Center(
-                          child: Icon(
-                            Icons.image_outlined,
-                            color: Colors.grey,
-                            size: 48,
-                          ),
-                        );
-                      },
                     ),
                   ),
                 ),
@@ -1179,6 +1178,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildNewArrivalItem(Map<String, dynamic> product) {
+    final imageUrl = product['imageUrl'] ?? '';
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.all(16),
@@ -1197,18 +1197,9 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             child: ClipRRect(
               borderRadius: BorderRadius.circular(8),
-              child: Image.network(
-                product['imageUrl'] ?? '',
+              child: AuthenticatedImage(
+                imageUrl: imageUrl,
                 fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) {
-                  return const Center(
-                    child: Icon(
-                      Icons.image_outlined,
-                      color: Colors.grey,
-                      size: 32,
-                    ),
-                  );
-                },
               ),
             ),
           ),
@@ -1326,27 +1317,10 @@ Future<void> showNotificationPanel(BuildContext context) {
                     ),
                     child: ListView.separated(
                       shrinkWrap: true,
-                      itemCount: dummyNotifications.length,
+                      itemCount: 0,
                       separatorBuilder: (_, __) => const Divider(height: 1),
                       itemBuilder: (context, i) {
-                        final n = dummyNotifications[i];
-                        return ListTile(
-                          leading: const Icon(Icons.notifications_outlined),
-                          title: Text(n['title'] ?? ''),
-                          subtitle: Text(n['body'] ?? ''),
-                          trailing: Text(
-                            n['time'] ?? '',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Colors.grey[600],
-                            ),
-                          ),
-                          onTap: () {
-                            // Close overlay and optionally navigate to item
-                            Navigator.of(context).pop();
-                            // handle tap (mark read / open detail)
-                          },
-                        );
+                        return const SizedBox.shrink();
                       },
                     ),
                   ),
@@ -1367,4 +1341,149 @@ Future<void> showNotificationPanel(BuildContext context) {
       );
     },
   );
+}
+/// Widget to load images with AWS Signature V4 authentication
+class AuthenticatedImage extends StatefulWidget {
+  final String imageUrl;
+  final BoxFit fit;
+  final double? width;
+  final double? height;
+
+  const AuthenticatedImage({
+    required this.imageUrl,
+    this.fit = BoxFit.cover,
+    this.width,
+    this.height,
+    super.key,
+  });
+
+  @override
+  State<AuthenticatedImage> createState() => _AuthenticatedImageState();
+}
+
+class _AuthenticatedImageState extends State<AuthenticatedImage> {
+  late Future<Uint8List?> _imageFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _imageFuture = FilebaseService().getImageBytes(widget.imageUrl);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<Uint8List?>(
+      future: _imageFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return Center(
+            child: CircularProgressIndicator(
+              color: Colors.grey[400],
+            ),
+          );
+        }
+
+        if (snapshot.hasError || snapshot.data == null) {
+          print('❌ Image load error: ${snapshot.error}');
+          return Center(
+            child: Icon(
+              Icons.image_outlined,
+              color: Colors.grey,
+              size: 48,
+            ),
+          );
+        }
+
+        return Image.memory(
+          snapshot.data!,
+          fit: widget.fit,
+          width: widget.width,
+          height: widget.height,
+        );
+      },
+    );
+  }
+}
+
+/// Authenticated image widget for categories that fetches images from Filebase
+/// Caches the fetch Future so parent rebuilds (e.g., carousel slide) won't re-trigger downloads.
+class _AuthenticatedCategoryImage extends StatefulWidget {
+  final String imageUrl;
+  final double? width;
+  final double? height;
+
+  const _AuthenticatedCategoryImage({required this.imageUrl, this.width, this.height, super.key});
+
+  @override
+  State<_AuthenticatedCategoryImage> createState() => _AuthenticatedCategoryImageState();
+}
+
+class _AuthenticatedCategoryImageState extends State<_AuthenticatedCategoryImage> {
+  late Future<Uint8List?> _imageFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _imageFuture = FilebaseService().getImageBytes(widget.imageUrl);
+  }
+
+  @override
+  void didUpdateWidget(covariant _AuthenticatedCategoryImage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.imageUrl != widget.imageUrl) {
+      _imageFuture = FilebaseService().getImageBytes(widget.imageUrl);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<Uint8List?>(
+      future: _imageFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(
+            child: CircularProgressIndicator(
+              valueColor: AlwaysStoppedAnimation(Color(0xFFFDB022)),
+            ),
+          );
+        }
+
+        if (snapshot.hasData && snapshot.data != null) {
+          return Image.memory(
+            snapshot.data!,
+            fit: BoxFit.cover,
+            width: widget.width,
+            height: widget.height,
+          );
+        }
+
+        // Fallback: render a network image (public) or placeholder
+        if (widget.imageUrl.isNotEmpty) {
+          return Image.network(
+            widget.imageUrl,
+            fit: BoxFit.cover,
+            width: widget.width,
+            height: widget.height,
+            errorBuilder: (context, error, stackTrace) {
+              return const Center(
+                child: Icon(
+                  Icons.image_outlined,
+                  color: Colors.grey,
+                  size: 24,
+                ),
+              );
+            },
+          );
+        }
+
+        return const Center(
+          child: Icon(
+            Icons.image_outlined,
+            color: Colors.grey,
+            size: 24,
+          ),
+        );
+      },
+    );
+  }
 }

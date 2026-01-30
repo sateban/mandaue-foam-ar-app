@@ -43,7 +43,10 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'firebase_options.dart';
 import 'services/firebase_service.dart';
+import 'services/filebase_service.dart';
+import 'providers/product_provider.dart';
 import 'models/order.dart';
+import 'package:provider/provider.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -65,6 +68,13 @@ void main() async {
     );
   }
 
+  try {
+    print('DEBUG: Initializing Filebase service...');
+    await FilebaseService.initialize();
+  } catch (e) {
+    print('ERROR: Filebase initialization failed: $e');
+  }
+
   // Don't call readAndPrintRealtimeData() on startup - it causes issues
   // readAndPrintRealtimeData();
 
@@ -76,17 +86,19 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Mandaue Foam',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF6200EE),
-          brightness: Brightness.dark,
+    return ChangeNotifierProvider(
+      create: (context) => ProductProvider(),
+      child: MaterialApp(
+        title: 'Mandaue Foam',
+        debugShowCheckedModeBanner: false,
+        theme: ThemeData(
+          colorScheme: ColorScheme.fromSeed(
+            seedColor: const Color(0xFF6200EE),
+            brightness: Brightness.dark,
+          ),
+          useMaterial3: true,
         ),
-        useMaterial3: true,
-      ),
-      home: const SplashScreenV1(),
+        home: const SplashScreenV1(),
       onGenerateRoute: (settings) {
         // Handle routes that need arguments
         if (settings.name == '/track-order') {
@@ -137,6 +149,7 @@ class MyApp extends StatelessWidget {
         '/edit-profile': (context) => const EditProfileScreen(),
         '/coupons': (context) => const CouponsScreen(),
       },
+      ),
     );
   }
 }

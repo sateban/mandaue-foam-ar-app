@@ -93,7 +93,8 @@ class _WalkthroughScreenState extends State<WalkthroughScreen> {
                         } else {
                           Navigator.pushReplacementNamed(
                             context,
-                            '/lets-you-in',
+                            // '/lets-you-in',
+                            '/sign-in',
                           );
                           // Navigator.pushNamed(context, '/sign-in');
                         }

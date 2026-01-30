@@ -7,7 +7,7 @@ import 'profile_screen.dart';
 import 'shop_shell_scope.dart';
 
 class ShopShell extends StatefulWidget {
-  const ShopShell({this.initialIndex = 0, super.key});
+  const   ShopShell({this.initialIndex = 0, super.key});
 
   final int initialIndex;
 

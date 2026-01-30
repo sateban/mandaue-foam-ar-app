@@ -5,9 +5,11 @@ import 'package:flutter/foundation.dart';
 import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'package:provider/provider.dart';
 import 'otp_verification_screen.dart';
 import 'sign_up_screen.dart';
 import 'forgot_password_screen.dart';
+import '../../providers/product_provider.dart';
 
 class SignInScreen extends StatefulWidget {
   const SignInScreen({super.key});
@@ -128,13 +130,26 @@ class _SignInScreenState extends State<SignInScreen> {
       ),
     );
 
-    // Navigate to home screen or next page
+    // Load products from Firebase after successful sign-in
     if (mounted) {
-      Navigator.pushNamedAndRemoveUntil(
-        context,
-        '/home',
-        (route) => false,
-      );
+      final productProvider = context.read<ProductProvider>();
+      productProvider.loadProducts().then((_) {
+        print('DEBUG: Products loaded successfully');
+        // Navigate to home screen
+        Navigator.pushNamedAndRemoveUntil(
+          context,
+          '/home',
+          (route) => false,
+        );
+      }).catchError((e) {
+        print('ERROR: Failed to load products: $e');
+        // Still navigate even if products fail to load
+        Navigator.pushNamedAndRemoveUntil(
+          context,
+          '/home',
+          (route) => false,
+        );
+      });
     }
   }
 

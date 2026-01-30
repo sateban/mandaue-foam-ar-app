@@ -1,0 +1,360 @@
+import 'dart:async';
+import 'dart:convert';
+import 'dart:typed_data';
+import 'package:flutter/services.dart';
+import 'package:minio/minio.dart';
+import 'package:minio/io.dart';
+
+/// Filebase Service for S3-compatible storage using official MinIO package
+/// Handles all CRUD operations for file management
+class FilebaseService {
+  static final FilebaseService _instance = FilebaseService._internal();
+  late String _apiKey;
+  late String _apiSecret;
+  late String _bucketName;
+  late String _region;
+  late Minio _minioClient;
+
+  factory FilebaseService() {
+    return _instance;
+  }
+
+  FilebaseService._internal();
+
+  /// Initialize Filebase service with configuration
+  /// Uses official MinIO client for proper S3 compatibility
+  static Future<void> initialize() async {
+    final instance = FilebaseService();
+    try {
+      // Load configuration from filebase_config.json
+      final configString =
+          await rootBundle.loadString('filebase_config.json');
+      final config = jsonDecode(configString);
+      final filebaseConfig = config['filebase'] ?? {};
+
+      instance._apiKey = filebaseConfig['api_key'] ?? '';
+      instance._apiSecret = filebaseConfig['api_secret'] ?? '';
+      instance._bucketName = filebaseConfig['bucket_name'] ?? '';
+      instance._region = filebaseConfig['region'] ?? 'us-east-1';
+
+      // Initialize MinIO client with Filebase S3 endpoint
+      // Note: Filebase uses s3.filebase.com as the endpoint, not bucket-specific
+      instance._minioClient = Minio(
+        endPoint: 's3.filebase.com',
+        accessKey: instance._apiKey,
+        secretKey: instance._apiSecret,
+        useSSL: true,
+        region: instance._region,
+      );
+
+      print('✓ Filebase service initialized successfully');
+      print('   API Key: ${instance._apiKey.substring(0, 5)}...${instance._apiKey.substring(instance._apiKey.length - 5)}');
+      print('   Bucket: ${instance._bucketName}');
+      print('   Region: ${instance._region}');
+    } catch (e) {
+      print('✗ Error initializing Filebase: $e');
+      rethrow;
+    }
+  }
+
+  /// Build Filebase image URL from relative path
+  /// Prefer bucket-subdomain style: https://<bucket>.s3.filebase.com/<path>
+  String buildFilebaseImageUrl(String relativePath) {
+    return 'https://$_bucketName.s3.filebase.com/$relativePath';
+  }
+
+  /// Transform Firebase product data with Filebase image URLs
+  /// Converts relative image paths to full Filebase URLs
+  List<Map<String, dynamic>> transformProductsWithFilebaseUrls(
+    List<Map<String, dynamic>> products,
+  ) {
+    return products.map((product) {
+      final transformedProduct = Map<String, dynamic>.from(product);
+      
+      if (product['imageUrl'] is String && product['imageUrl'].isNotEmpty) {
+        final imageUrl = product['imageUrl'] as String;
+        
+        // If already a full URL, use as-is
+        if (imageUrl.startsWith('http')) {
+          transformedProduct['imageUrl'] = imageUrl;
+        } else {
+          // Convert relative path to full Filebase URL
+          transformedProduct['imageUrl'] = buildFilebaseImageUrl(imageUrl);
+        }
+      }
+      
+      return transformedProduct;
+    }).toList();
+  }
+
+  /// Get image bytes from Filebase with proper authentication
+  /// Uses MinIO client for secure S3-compatible access
+  Future<Uint8List?> getImageBytes(String imageUrl) async {
+    try {
+      if (imageUrl.isEmpty) return null;
+
+      print('\n🔍 Fetching Image: $imageUrl');
+
+      // Extract object name from URL and support both URL formats:
+      // 1) https://s3.filebase.com/<bucket>/<path/to/object>
+      // 2) https://<bucket>.s3.filebase.com/<path/to/object>
+      final uri = Uri.parse(imageUrl);
+      final pathSegments = uri.pathSegments;
+      final host = uri.host;
+
+      String objectPath;
+
+      if (host == 's3.filebase.com') {
+        // style 1: bucket is first path segment
+        if (pathSegments.length < 2) {
+          print('❌ Invalid URL format: $imageUrl');
+          return null;
+        }
+        objectPath = pathSegments.sublist(1).join('/');
+      } else if (host.endsWith('.s3.filebase.com')) {
+        // style 2: bucket is subdomain
+        objectPath = pathSegments.join('/');
+      } else if (pathSegments.isNotEmpty && pathSegments[0] == _bucketName) {
+        // fallback: path begins with bucket name
+        objectPath = pathSegments.sublist(1).join('/');
+      } else if (pathSegments.isNotEmpty) {
+        // last-resort fallback: use full path
+        objectPath = pathSegments.join('/');
+      } else {
+        print('❌ Invalid URL format: $imageUrl');
+        return null;
+      }
+      
+      print('📋 Bucket: $_bucketName');
+      print('📋 Object: $objectPath');
+
+      // Use MinIO to get the object
+      final stream = await _minioClient.getObject(_bucketName, objectPath);
+      
+      print('✅ Object retrieved successfully');
+      print('📊 Content Length: ${stream.contentLength}');
+      
+      // Convert stream to bytes
+      final bytes = await stream.toList();
+      final data = bytes.expand((chunk) => chunk).toList();
+      
+      print('✅ Image fetched successfully (${data.length} bytes)');
+      return Uint8List.fromList(data);
+    } catch (e) {
+      print('❌ Error fetching image: $e');
+      return null;
+    }
+  }
+
+  /// Test if credentials are valid by checking bucket access
+  Future<Map<String, dynamic>> testCredentials() async {
+    try {
+      print('\n🔐 === TESTING FILEBASE CREDENTIALS ===');
+      print('API Key: ${_apiKey.substring(0, 5)}...${_apiKey.substring(_apiKey.length - 5)}');
+      print('Endpoint: s3.filebase.com');
+      print('Bucket: $_bucketName');
+      print('Region: $_region');
+
+      // Check if bucket exists
+      print('\n📤 Checking bucket access...');
+      final exists = await _minioClient.bucketExists(_bucketName);
+      
+      if (exists) {
+        print('✅ Bucket exists and is accessible');
+        
+        // Try to list objects to verify full access
+        print('📤 Listing objects in bucket...');
+        var objectCount = 0;
+        await _minioClient.listObjects(_bucketName).forEach((chunk) {
+          objectCount += chunk.objects.length;
+        });
+        
+        print('✅ Listed $objectCount objects in bucket');
+        
+        return {
+          'statusCode': 200,
+          'success': true,
+          'message': 'Credentials valid - bucket accessible',
+          'bucketExists': true,
+          'objectCount': objectCount,
+        };
+      } else {
+        print('❌ Bucket does not exist or is not accessible');
+        return {
+          'statusCode': 404,
+          'success': false,
+          'message': 'Bucket not found or not accessible',
+          'bucketExists': false,
+        };
+      }
+    } catch (e) {
+      print('❌ Error: $e');
+      return {
+        'statusCode': 403,
+        'success': false,
+        'message': e.toString(),
+      };
+    }
+  }
+
+  /// Update metadata for an existing object (best-effort/stub)
+  /// Note: Some S3-compatible servers require copying the object to itself
+  /// with metadata replacement. This implementation currently logs intent
+  /// and returns false by default. Replace with a proper copy-with-metadata
+  /// implementation when needed.
+  Future<bool> updateFileMeta({
+    required String objectPath,
+    required Map<String, String> metadata,
+  }) async {
+    try {
+      print('\n🔁 updateFileMeta called for: $objectPath');
+      print('   Metadata: $metadata');
+      // TODO: Implement actual metadata update using copyObject or equivalent
+      // Returning false to indicate metadata was not changed by the stub.
+      return false;
+    } catch (e) {
+      print('❌ Error updating metadata: $e');
+      return false;
+    }
+  }
+
+  /// Upload file to Filebase
+  Future<String?> uploadFile({
+    required String filePath,
+    required String fileName,
+    String? folderPath,
+    Map<String, String> metadata = const {},
+  }) async {
+    try {
+      final objectPath = folderPath != null ? '$folderPath/$fileName' : fileName;
+      
+      print('\n📤 Uploading to Filebase:');
+      print('   Bucket: $_bucketName');
+      print('   Object: $objectPath');
+      
+      final etag = await _minioClient.fPutObject(
+        _bucketName,
+        objectPath,
+        filePath,
+        metadata: metadata,
+      );
+      
+      print('✅ File uploaded successfully');
+      print('   ETag: $etag');
+      return objectPath;
+    } catch (e) {
+      print('❌ Upload failed: $e');
+      return null;
+    }
+  }
+
+  /// Download file from Filebase
+  Future<bool> downloadFile({
+    required String objectPath,
+    required String localSavePath,
+  }) async {
+    try {
+      print('\n📥 Downloading from Filebase:');
+      print('   Bucket: $_bucketName');
+      print('   Object: $objectPath');
+      print('   Save to: $localSavePath');
+      
+      await _minioClient.fGetObject(
+        _bucketName,
+        objectPath,
+        localSavePath,
+      );
+      
+      print('✅ File downloaded successfully');
+      return true;
+    } catch (e) {
+      print('❌ Download failed: $e');
+      return false;
+    }
+  }
+
+  /// Delete file from Filebase
+  Future<bool> deleteFile(String objectPath) async {
+    try {
+      print('\n🗑️  Deleting from Filebase:');
+      print('   Bucket: $_bucketName');
+      print('   Object: $objectPath');
+      
+      await _minioClient.removeObject(_bucketName, objectPath);
+      
+      print('✅ File deleted successfully');
+      return true;
+    } catch (e) {
+      print('❌ Delete failed: $e');
+      return false;
+    }
+  }
+
+  /// List files in bucket
+  Future<List<String>> listFiles(String folderPath) async {
+    try {
+      print('\n📋 Listing files in: $folderPath');
+      
+      final files = <String>[];
+      await _minioClient.listObjects(_bucketName, prefix: folderPath)
+          .forEach((chunk) {
+        for (var obj in chunk.objects) {
+          if (obj.key != null) {
+            files.add(obj.key!);
+          }
+        }
+      });
+      
+      print('✅ Found ${files.length} files');
+      return files;
+    } catch (e) {
+      print('❌ List failed: $e');
+      return [];
+    }
+  }
+
+  /// Check if file exists
+  Future<bool> fileExists(String objectPath) async {
+    try {
+      final stat = await _minioClient.statObject(_bucketName, objectPath);
+      return stat != null;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /// Get file size
+  Future<int?> getFileSize(String objectPath) async {
+    try {
+      final stat = await _minioClient.statObject(_bucketName, objectPath);
+      return stat?.size;
+    } catch (e) {
+      print('Error getting file size: $e');
+      return null;
+    }
+  }
+
+  /// Generate presigned URL for temporary access (1 hour by default)
+  Future<String?> generatePresignedUrl(
+    String objectPath, {
+    int expirationSeconds = 3600,
+  }) async {
+    try {
+      final url = await _minioClient.presignedGetObject(
+        _bucketName,
+        objectPath,
+        expires: expirationSeconds,
+      );
+      return url;
+    } catch (e) {
+      print('Error generating presigned URL: $e');
+      return null;
+    }
+  }
+
+  // Getters
+  String get apiKey => _apiKey;
+  String get apiSecret => _apiSecret;
+  String get bucketName => _bucketName;
+  String get region => _region;
+}
