@@ -357,11 +357,3 @@ class _AuthenticatedCategoryImage extends StatelessWidget {
     );
   }
 }
-
-// Helper to show small debug overlay when in debug mode
-extension _DebugHelpers on String {
-  String truncate(int len) {
-    if (length <= len) return this;
-    return substring(0, len) + '...';
-  }
-}

@@ -10,29 +10,9 @@ class ShippingAddressScreen extends StatefulWidget {
 }
 
 class _ShippingAddressScreenState extends State<ShippingAddressScreen> {
-  Address? _selectedAddress;
-
-  final List<Address> _addresses = [
-    Address(
-      id: '1',
-      name: 'John Doe',
-      street: '123 Main Street',
-      city: 'New York',
-      state: 'NY',
-      zipCode: '10001',
-      country: 'USA',
-      phoneNumber: '+1 234 567 8900',
-      isDefault: true,
-    ),
-  ];
-
   @override
   void initState() {
     super.initState();
-    _selectedAddress = _addresses.firstWhere(
-      (addr) => addr.isDefault,
-      orElse: () => _addresses.first,
-    );
   }
 
   @override

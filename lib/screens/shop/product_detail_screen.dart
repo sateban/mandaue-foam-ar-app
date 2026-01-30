@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'dart:typed_data';
 import '../../models/product.dart';
+import '../../services/filebase_service.dart';
 
 class ProductDetailScreen extends StatefulWidget {
   final Product product;
@@ -68,15 +70,9 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
               child: Stack(
                 children: [
                   Center(
-                    child: Image.network(
-                      widget.product.imageUrl,
+                    child: AuthenticatedImage(
+                      imageUrl: widget.product.imageUrl,
                       fit: BoxFit.contain,
-                      errorBuilder: (context, error, stackTrace) {
-                        return const Center(
-                          child: Icon(Icons.broken_image_outlined,
-                              size: 64, color: Color(0xFFCCCCCC)),
-                        );
-                      },
                     ),
                   ),
                   // Discount Badge
@@ -422,6 +418,68 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Authenticated image loader with Firebase/Filebase caching and MinIO support
+class AuthenticatedImage extends StatefulWidget {
+  final String imageUrl;
+  final BoxFit fit;
+  final double? width;
+  final double? height;
+
+  const AuthenticatedImage({
+    required this.imageUrl,
+    this.fit = BoxFit.cover,
+    this.width,
+    this.height,
+    super.key,
+  });
+
+  @override
+  State<AuthenticatedImage> createState() => _AuthenticatedImageState();
+}
+
+class _AuthenticatedImageState extends State<AuthenticatedImage> {
+  late Future<Uint8List?> _imageFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _imageFuture = FilebaseService().getImageBytes(widget.imageUrl);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<Uint8List?>(
+      future: _imageFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return Center(
+            child: CircularProgressIndicator(
+              color: Colors.grey[400],
+            ),
+          );
+        }
+
+        if (snapshot.hasError || snapshot.data == null) {
+          return Center(
+            child: Icon(
+              Icons.image_outlined,
+              color: Colors.grey,
+              size: 48,
+            ),
+          );
+        }
+
+        return Image.memory(
+          snapshot.data!,
+          fit: widget.fit,
+          width: widget.width,
+          height: widget.height,
+        );
+      },
     );
   }
 }

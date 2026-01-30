@@ -50,8 +50,6 @@ class _HomeScreenState extends State<HomeScreen> {
   late TextEditingController _searchController;
   List<Map<String, dynamic>> _searchResults = [];
   bool _showSearchDropdown = false;
-  bool _isSearching = false;
-  bool _isLoadingProducts = false;
 
   // Stream subscription for Firebase products
   StreamSubscription<List<Map<String, dynamic>>>? _productsSubscription;
@@ -114,10 +112,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _loadFirebaseProducts() async {
     try {
-      setState(() {
-        _isLoadingProducts = true;
-      });
-
       final List<Map<String, dynamic>> productsData =
           await FirebaseService.readListData('products');
 
@@ -177,13 +171,9 @@ class _HomeScreenState extends State<HomeScreen> {
       setState(() {
         _allFirebaseProducts = transformedProducts;
         _filteredProducts = List.from(_allFirebaseProducts);
-        _isLoadingProducts = false;
       });
     } catch (e) {
       if (!mounted) return;
-      setState(() {
-        _isLoadingProducts = false;
-      });
       print('Error loading Firebase products: $e');
     }
   }
@@ -1203,14 +1193,38 @@ class _HomeScreenState extends State<HomeScreen> {
       print('🖼️  Product: ${product['name']} | URL: $imageUrl');
     }
     
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.grey[100],
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
+    return GestureDetector(
+      onTap: () {
+        final selectedProduct = Product(
+          id: product['id']?.toString() ?? '',
+          name: product['name'] ?? '',
+          price: (product['price'] as num?)?.toDouble() ?? 0.0,
+          category: product['category'] ?? '',
+          material: product['material'] ?? '',
+          color: product['color'] ?? '',
+          imageUrl: product['imageUrl'] ?? '',
+          rating: (product['rating'] as num?)?.toDouble() ?? 0.0,
+          reviews: (product['reviews'] as num?)?.toInt() ?? 0,
+          isFavorite: product['isFavorite'] ?? false,
+          discount: product['discount'],
+          description: product['description'],
+          quantity: product['quantity'] as int?,
+          inStock: product['inStock'] ?? true,
+        );
+        Navigator.of(context).push(
+          slideRoute(
+            ProductDetailScreen(product: selectedProduct),
+          ),
+        );
+      },
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.grey[100],
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
           Expanded(
             child: Stack(
               children: [
@@ -1313,21 +1327,46 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
         ],
+        ),
       ),
     );
   }
 
   Widget _buildNewArrivalItem(Map<String, dynamic> product) {
     final imageUrl = product['imageUrl'] ?? '';
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.grey[100],
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        children: [
+    return GestureDetector(
+      onTap: () {
+        final selectedProduct = Product(
+          id: product['id']?.toString() ?? '',
+          name: product['name'] ?? '',
+          price: (product['price'] as num?)?.toDouble() ?? 0.0,
+          category: product['category'] ?? '',
+          material: product['material'] ?? '',
+          color: product['color'] ?? '',
+          imageUrl: product['imageUrl'] ?? '',
+          rating: (product['rating'] as num?)?.toDouble() ?? 0.0,
+          reviews: (product['reviews'] as num?)?.toInt() ?? 0,
+          isFavorite: product['isFavorite'] ?? false,
+          discount: product['discount'],
+          description: product['description'],
+          quantity: product['quantity'] as int?,
+          inStock: product['inStock'] ?? true,
+        );
+        Navigator.of(context).push(
+          slideRoute(
+            ProductDetailScreen(product: selectedProduct),
+          ),
+        );
+      },
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 16),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.grey[100],
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          children: [
           Container(
             width: 80,
             height: 80,
@@ -1401,6 +1440,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
         ],
+        ),
       ),
     );
   }
@@ -1549,10 +1589,8 @@ class _AuthenticatedImageState extends State<AuthenticatedImage> {
 /// Caches the fetch Future so parent rebuilds (e.g., carousel slide) won't re-trigger downloads.
 class _AuthenticatedCategoryImage extends StatefulWidget {
   final String imageUrl;
-  final double? width;
-  final double? height;
 
-  const _AuthenticatedCategoryImage({required this.imageUrl, this.width, this.height, super.key});
+  const _AuthenticatedCategoryImage({required this.imageUrl});
 
   @override
   State<_AuthenticatedCategoryImage> createState() => _AuthenticatedCategoryImageState();
@@ -1592,8 +1630,6 @@ class _AuthenticatedCategoryImageState extends State<_AuthenticatedCategoryImage
           return Image.memory(
             snapshot.data!,
             fit: BoxFit.cover,
-            width: widget.width,
-            height: widget.height,
           );
         }
 
@@ -1602,8 +1638,6 @@ class _AuthenticatedCategoryImageState extends State<_AuthenticatedCategoryImage
           return Image.network(
             widget.imageUrl,
             fit: BoxFit.cover,
-            width: widget.width,
-            height: widget.height,
             errorBuilder: (context, error, stackTrace) {
               return const Center(
                 child: Icon(

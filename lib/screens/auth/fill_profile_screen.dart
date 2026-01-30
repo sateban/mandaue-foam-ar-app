@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
 
 class FillProfileScreen extends StatefulWidget {
   const FillProfileScreen({super.key});
