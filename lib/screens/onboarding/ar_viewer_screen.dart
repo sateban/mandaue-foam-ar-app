@@ -64,6 +64,17 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
   bool _isDisposing = false;
   bool _isExiting = false; // Set true after cleanup to allow pop
 
+  // --- Swipe/Anywhere-move support ---
+  bool _isSwipingAnywhere = false;
+  Offset? _lastPanScreenPosition;
+  Offset? _dragStartScreen;
+  vector.Vector3? _dragStartNodePosition;
+  ARPlaneAnchor? _currentAnchor;
+  DateTime? _lastMoveAt;
+  final Duration _moveThrottle = const Duration(milliseconds: 100); // throttle rapid hit tests
+  bool _isUpdatingNodePosition = false; // prevent overlapping updates
+  // ------------------------------------
+
   /// Explicitly hide native hand/plane overlays. Must be called before dispose
   /// and when leaving the screen to prevent the overlay from persisting.
   void _hideNativeOverlays() {
@@ -130,12 +141,21 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
       this.arObjectManager = arObjectManager;
       this.arAnchorManager = arAnchorManager;
 
+      // Attach plane tap callback to session manager so taps on planes are
+      // routed to our in-widget handler (plugin versions expose this on the
+      // session manager rather than via a named ARView parameter).
+      try {
+        this.arSessionManager?.onPlaneOrPointTap = onPlaneOrPointTapped;
+      } catch (_) {
+        // Some versions may use a different callback name; leaving it optional
+      }
+
       this.arSessionManager?.onInitialize(
         showAnimatedGuide: false,
         showFeaturePoints: false,
         showPlanes: true, // Show plane detection overlay (dotted grid)
         showWorldOrigin: false,
-        handlePans: true, // Enable pan/drag from anywhere
+        handlePans: false, // Panning handled by overlay to support swipe-anywhere
         handleRotation: false,
         handleTaps: true,
       );
@@ -176,12 +196,286 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
       bool? didAddAnchor = await arAnchorManager!.addAnchor(newAnchor);
 
       if (didAddAnchor == true) {
+        // Store as current anchor so subsequent move operations can reuse it
+        _currentAnchor = newAnchor;
         await _addModelAtAnchor(newAnchor);
       } else {
         setState(() {
           _isBusy = false;
         });
       }
+    }
+  }
+
+  /// Perform a dynamic hit test at the given screen point. Uses multiple
+  /// fallbacks (arObjectManager, arSessionManager) invoked dynamically so
+  /// we can call into the plugin even if a strongly typed method isn't
+  /// available in all versions.
+  Future<List<dynamic>?> _performHitTestAt(Offset screenPoint) async {
+    try {
+      final size = MediaQuery.of(context).size;
+      final double px = screenPoint.dx.clamp(0.0, size.width);
+      final double py = screenPoint.dy.clamp(0.0, size.height);
+      final double nx = (screenPoint.dx / size.width).clamp(0.0, 1.0);
+      final double ny = (screenPoint.dy / size.height).clamp(0.0, 1.0);
+
+      List<dynamic>? results;
+
+      // 1) Try pixel-based hit tests (many ARCore bindings expect raw pixels)
+      try {
+        if (arObjectManager != null) {
+          results = await (arObjectManager as dynamic).performHitTest(px, py);
+          if (results != null && results.isNotEmpty) {
+            _logger.d('Hit test (objectManager.performHitTest) succeeded at px,py: $px,$py');
+            return results;
+          }
+        }
+      } catch (e) {
+        _logger.d('objectManager.performHitTest failed: $e');
+      }
+
+      try {
+        if (arSessionManager != null) {
+          results = await (arSessionManager as dynamic).performHitTest(px, py);
+          if (results != null && results.isNotEmpty) {
+            _logger.d('Hit test (sessionManager.performHitTest) succeeded at px,py: $px,$py');
+            return results;
+          }
+        }
+      } catch (e) {
+        _logger.d('sessionManager.performHitTest failed: $e');
+      }
+
+      try {
+        if (arSessionManager != null) {
+          results = await (arSessionManager as dynamic).hitTest(px, py);
+          if (results != null && results.isNotEmpty) {
+            _logger.d('Hit test (sessionManager.hitTest) succeeded at px,py: $px,$py');
+            return results;
+          }
+        }
+      } catch (e) {
+        _logger.d('sessionManager.hitTest(px,py) failed: $e');
+      }
+
+      // 2) Try normalized fallback (some bindings use normalized coordinates)
+      try {
+        if (arObjectManager != null) {
+          results = await (arObjectManager as dynamic).performHitTest(nx, ny);
+          if (results != null && results.isNotEmpty) {
+            _logger.d('Hit test (objectManager.performHitTest normalized) succeeded');
+            return results;
+          }
+        }
+      } catch (e) {
+        _logger.d('objectManager.performHitTest(normalized) failed: $e');
+      }
+
+      try {
+        if (arObjectManager != null) {
+          results = await (arObjectManager as dynamic).hitTest(nx, ny);
+          if (results != null && results.isNotEmpty) {
+            _logger.d('Hit test (objectManager.hitTest normalized) succeeded');
+            return results;
+          }
+        }
+      } catch (e) {
+        _logger.d('objectManager.hitTest(normalized) failed: $e');
+      }
+
+      // No hits
+      _logger.d('No hit test results at ($px,$py) / normalized ($nx,$ny)');
+      return null;
+    } catch (e, st) {
+      _logger.w('Hit test failed: $e', error: e, stackTrace: st);
+      return null;
+    }
+  }
+
+  /// Handle a tap on the screen: place model (if not placed) or move model
+  /// to the tapped plane if it already exists.
+  Future<void> _handleTapToPlace(Offset screenPoint) async {
+    if (_isBusy || _localModelPath == null) return;
+    setState(() => _isBusy = true);
+
+    try {
+      final results = await _performHitTestAt(screenPoint);
+      if (results == null || results.isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('No plane detected at tapped location.'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        return;
+      }
+
+      final dynamic hit = results.first;
+      final newAnchor = ARPlaneAnchor(transformation: hit.worldTransform);
+      bool? added = await arAnchorManager?.addAnchor(newAnchor);
+      if (added == true) {
+        _currentAnchor = newAnchor;
+        await _addModelAtAnchor(newAnchor);
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Failed to add anchor'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    } catch (e, st) {
+      _logger.e('Tap-to-place error: $e', error: e, stackTrace: st);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      setState(() => _isBusy = false);
+    }
+  }
+
+  /// Try to move the currently placed node by performing a hit test at the
+  /// provided screen point and re-anchoring the node at the hit location.
+  Future<void> _tryMoveNodeToScreenPoint(Offset screenPoint) async {
+    if (productNode == null || arAnchorManager == null || arObjectManager == null) return;
+
+    // Throttle to avoid spamming native
+    final now = DateTime.now();
+    if (_lastMoveAt != null && now.difference(_lastMoveAt!) < _moveThrottle) return;
+    _lastMoveAt = now;
+
+    if (_isUpdatingNodePosition) return;
+    _isUpdatingNodePosition = true;
+
+    try {
+      final results = await _performHitTestAt(screenPoint);
+      if (results == null || results.isEmpty) {
+        // Fallback: if hit test yields nothing, translate node locally based on
+        // screen delta (pan) to provide a reasonable swipe-to-move UX.
+        if (_dragStartScreen != null && _dragStartNodePosition != null) {
+          _logger.d('Using fallback screen-delta translation (no hit results)');
+          final dx = screenPoint.dx - _dragStartScreen!.dx;
+          final dy = screenPoint.dy - _dragStartScreen!.dy;
+
+          // Estimate distance factor from anchor translation if available
+          double distanceFactor = 1.0;
+          try {
+            final t = _currentAnchor?.transformation;
+            if (t != null) {
+              final vector.Vector3? trans = (t is vector.Matrix4) ? t.getTranslation() : null;
+              if (trans != null) distanceFactor = trans.length;
+            }
+          } catch (_) {}
+
+          // Sensitivity tuned experimentally: pixels -> meters
+          final double sensitivity = 0.0015 * (distanceFactor > 0 ? distanceFactor : 1.0);
+
+          final vector.Vector3 newPos = vector.Vector3(
+            (_dragStartNodePosition!.x) + (-dx * sensitivity),
+            _dragStartNodePosition!.y,
+            (_dragStartNodePosition!.z) + (dy * sensitivity),
+          );
+
+          final oldNode = productNode!;
+          final dynamic oldRotation = oldNode.rotation;
+          final vector.Vector4 rotationVector = (oldRotation is vector.Vector4)
+              ? oldRotation
+              : vector.Vector4(1, 0, 0, 0);
+
+          final newNode = ARNode(
+            type: oldNode.type,
+            uri: oldNode.uri,
+            scale: _originalScale ?? oldNode.scale,
+            position: newPos,
+            rotation: rotationVector,
+          );
+
+          bool? removed = await arObjectManager?.removeNode(oldNode);
+          bool? didAdd = false;
+          if (removed == true) {
+            didAdd = await arObjectManager?.addNode(newNode, planeAnchor: _currentAnchor);
+          } else {
+            didAdd = await arObjectManager?.addNode(newNode, planeAnchor: _currentAnchor);
+          }
+
+          if (didAdd == true) {
+            productNode = newNode;
+            setState(() {
+              _isModelPlaced = true;
+            });
+          } else {
+            _logger.w('Fallback move failed - could not add new node');
+          }
+        }
+        _isUpdatingNodePosition = false;
+        return;
+      }
+
+      final dynamic hit = results.first;
+      final newAnchor = ARPlaneAnchor(transformation: hit.worldTransform);
+
+      // Remove previous anchor (if any) to avoid orphaned anchors piling up
+      try {
+        if (_currentAnchor != null) {
+          await arAnchorManager?.removeAnchor(_currentAnchor!);
+        }
+      } catch (e) {
+        // Non-fatal
+        _logger.w('Failed to remove previous anchor: $e');
+      }
+
+      final added = await arAnchorManager?.addAnchor(newAnchor);
+      if (added != true) {
+        _isUpdatingNodePosition = false;
+        return;
+      }
+
+      // Remove old node, then add a new one attached to the new anchor
+      final oldNode = productNode!;
+      // Ensure rotation matches the expected Vector4 type. Some plugin
+      // versions may return a Matrix3 - fall back to identity in that case.
+      final dynamic oldRotation = oldNode.rotation;
+      final vector.Vector4 rotationVector = (oldRotation is vector.Vector4)
+          ? oldRotation
+          : vector.Vector4(1, 0, 0, 0);
+
+      final newNode = ARNode(
+        type: oldNode.type,
+        uri: oldNode.uri,
+        scale: _originalScale ?? oldNode.scale,
+        position: vector.Vector3(0.0, 0.0, 0.0),
+        rotation: rotationVector,
+      );
+
+      bool? removed = await arObjectManager?.removeNode(oldNode);
+      bool? didAdd = false;
+      if (removed == true) {
+        didAdd = await arObjectManager?.addNode(newNode, planeAnchor: newAnchor);
+      } else {
+        // If removal failed, try adding new node anyway
+        didAdd = await arObjectManager?.addNode(newNode, planeAnchor: newAnchor);
+      }
+
+      if (didAdd == true) {
+        productNode = newNode;
+        _currentAnchor = newAnchor;
+        setState(() {
+          _isModelPlaced = true;
+          _showCoachingOverlay = false;
+        });
+      } else {
+        _logger.w('Failed to move node to new anchor');
+      }
+    } catch (e, st) {
+      _logger.e('Move node error: $e', error: e, stackTrace: st);
+    } finally {
+      _isUpdatingNodePosition = false;
     }
   }
 
@@ -252,19 +546,19 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
             ),
           );
         }
-        // Keep AR session stable for model display with pans enabled
+        // Keep AR session stable for model display; overlay handles panning
         if (arSessionManager != null) {
-          _logger.d('Enabling manual pan controls after model placement');
+          _logger.d('Configuring AR session after model placement (overlay-driven pans)');
           arSessionManager?.onInitialize(
             showAnimatedGuide: false,
             showFeaturePoints: false,
             showPlanes: true, // Keep showing planes for context
             showWorldOrigin: false,
-            handlePans: true, // Enable pan/drag
+            handlePans: false, // Panning handled by overlay
             handleRotation: false,
             handleTaps: true,
           );
-          _logger.i('AR session configured for manual dragging');
+          _logger.i('AR session configured for overlay-driven panning');
         }
       } else {
         _logger.e('❌ Failed to add node');
@@ -361,19 +655,19 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
             ),
           );
         }
-        // Keep AR session stable for model display with pans enabled
+        // Keep AR session stable for model display; overlay handles panning
         if (arSessionManager != null) {
-          _logger.d('Enabling manual pan controls after model placement at anchor');
+          _logger.d('Configuring AR session after node placed (overlay-driven pans)');
           arSessionManager?.onInitialize(
             showAnimatedGuide: false,
             showFeaturePoints: false,
             showPlanes: true, // Keep showing planes for context
             showWorldOrigin: false,
-            handlePans: true, // Enable pan/drag
+            handlePans: false, // Panning handled by overlay
             handleRotation: false,
             handleTaps: true,
           );
-          _logger.i('AR session configured for manual dragging');
+          _logger.i('AR session configured for overlay-driven panning');
         }
       } else {
         _logger.e('❌ Failed to add node - model not rendering');
@@ -802,10 +1096,56 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
         backgroundColor: Colors.black,
         body: Stack(
           children: [
+            // AR view is underneath an invisible gesture layer that
+            // handles swipe-to-move and tap-to-place/move when the plugin
+            // does not expose a direct performHitTest method.
             ARView(
               key: ValueKey(identityHashCode(this)),
               onARViewCreated: onARViewCreated,
               planeDetectionConfig: PlaneDetectionConfig.horizontalAndVertical,
+            ),
+
+            // Full-screen gesture overlay (transparent). Captures pan and tap
+            // and translates them into AR hit tests at runtime (dynamic call)
+            // to support moving the object by swiping anywhere on screen.
+            Positioned.fill(
+              child: GestureDetector(
+                behavior: HitTestBehavior.translucent,
+                onTapUp: (details) async {
+                  // Convert tap into tap-to-place (if model not placed) or
+                  // tap-to-move (if model already placed)
+                  final tapPos = details.localPosition;
+                  try {
+                    if (!_isModelPlaced) {
+                      await _handleTapToPlace(tapPos);
+                    } else {
+                      await _tryMoveNodeToScreenPoint(tapPos);
+                    }
+                  } catch (e, st) {
+                    _logger.w('Gesture overlay tap error: $e', error: e, stackTrace: st);
+                  }
+                },
+                onPanStart: (details) {
+                  if (!_isModelPlaced || !_isManualPlacement) return;
+                  _isSwipingAnywhere = true;
+                  _lastPanScreenPosition = details.localPosition;
+                  _dragStartScreen = details.localPosition;
+                  _dragStartNodePosition = productNode?.position;
+                },
+                onPanUpdate: (details) async {
+                  if (!_isSwipingAnywhere || productNode == null) return;
+                  _lastPanScreenPosition = details.localPosition;
+                  // First try precise hit-test re-anchoring; if no hit, fall back
+                  // to a screen-delta based local translation that feels natural.
+                  await _tryMoveNodeToScreenPoint(details.localPosition);
+                },
+                onPanEnd: (details) {
+                  _isSwipingAnywhere = false;
+                  _dragStartScreen = null;
+                  _dragStartNodePosition = null;
+                },
+                child: const SizedBox.expand(),
+              ),
             ),
 
             // AppBar Overlay
@@ -1027,7 +1367,7 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
                           )
                         else if (!_isModelPlaced) ...[
                           const Text(
-                            'Point camera at the floor and tap "Place Item"',
+                            'Point camera at the floor and tap on a detected plane to place the item.',
                             textAlign: TextAlign.center,
                             style: TextStyle(
                               color: Colors.white70,
@@ -1128,7 +1468,7 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
                             const SizedBox(height: 12),
                             _buildCoachingStep(
                               '2',
-                              'Tap "Place Item" to place the product',
+                              'Tap on a detected plane to place the product',
                             ),
                             const SizedBox(height: 12),
                             _buildCoachingStep(
