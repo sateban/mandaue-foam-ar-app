@@ -2,9 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:flutter/foundation.dart';
-import 'dart:io';
-import 'package:http/http.dart' as http;
-import 'dart:convert';
 import 'otp_verification_screen.dart';
 import 'sign_up_screen.dart';
 import 'forgot_password_screen.dart';
@@ -21,12 +18,10 @@ class _SignInScreenState extends State<SignInScreen> {
   final _passwordController = TextEditingController();
   bool _rememberMe = false;
   bool _isSignIn = true;  
-  late bool _obscurePassword;
   String? _emailError;
   String? _passwordError;
   bool _isLoading = false;
   
-  final FirebaseAuth _firebaseAuth = FirebaseAuth.instance;
   final GoogleSignIn _googleSignIn = GoogleSignIn(
     scopes: [
       'email',
@@ -38,7 +33,6 @@ class _SignInScreenState extends State<SignInScreen> {
   @override
   void initState() {
     super.initState();
-    _obscurePassword = true;
     _debugPrintGoogleSignInConfig();
     _checkAndPrintCertificateInfo();
   }
@@ -50,7 +44,7 @@ class _SignInScreenState extends State<SignInScreen> {
       print('Platform: ${defaultTargetPlatform.toString()}');
       print('Is Web: ${kIsWeb}');
       print('Google Sign-In Scopes: ${_googleSignIn.scopes}');
-      print('Google Sign-In initialized: ${_googleSignIn != null}');
+      print('Google Sign-In initialized: true');
       
       // For web platform, check if meta tag is present
       if (kIsWeb) {
@@ -90,53 +84,7 @@ class _SignInScreenState extends State<SignInScreen> {
     return emailRegex.hasMatch(email);
   }
 
-  /// For Android, exchange access token for idToken using Google's token endpoint
-  Future<String?> _getIdTokenFromAccessToken(String accessToken) async {
-    try {
-      print('DEBUG: Attempting to get idToken from access token...');
-      
-      final response = await http.get(
-        Uri.parse('https://www.googleapis.com/oauth2/v3/tokeninfo?access_token=$accessToken'),
-      ).timeout(const Duration(seconds: 10));
 
-      if (response.statusCode == 200) {
-        final tokenInfo = jsonDecode(response.body);
-        print('DEBUG: Token info retrieved: ${tokenInfo.keys.toList()}');
-        
-        // For Android, we can use the access token directly as a pseudo idToken
-        // Firebase will validate it through the backend
-        return accessToken; // Return the access token as fallback
-      } else {
-        print('DEBUG: Failed to get token info: ${response.statusCode}');
-      }
-    } catch (e) {
-      print('DEBUG: Error getting idToken: $e');
-    }
-    return null;
-  }
-
-  /// Handle successful sign-in
-  Future<void> _handleSignInSuccess(UserCredential userCredential) async {
-    if (!mounted) return;
-
-    // Show success message
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Welcome ${userCredential.user?.displayName ?? 'User'}!'),
-        duration: const Duration(seconds: 2),
-        backgroundColor: Colors.green,
-      ),
-    );
-
-    // Navigate to home screen or next page
-    if (mounted) {
-      Navigator.pushNamedAndRemoveUntil(
-        context,
-        '/home',
-        (route) => false,
-      );
-    }
-  }
 
   void _handleSignIn() {
     setState(() {

@@ -44,10 +44,23 @@ dependencies:
   google_sign_in: ^6.2.1
   google_sign_in_android: ^5.10.0
   http: ^1.1.0
+  image_picker: ^1.0.7
+  crypto: ^3.0.3
+  dio: ^5.4.0
+  file_picker: ^10.3.10
+  provider: ^6.1.5+1
+  logger: ^2.6.2
+  minio: ^3.5.8
 
 dev_dependencies:
+  flutter_launcher_icons: ^0.13.1
   flutter_test:
     sdk: flutter
+
+flutter_launcher_icns:
+  android: true
+  ios: true
+  image_path: "assets/images/mandaue-icon.png"
 
   # The "flutter_lints" package below contains a set of recommended lints to
   # encourage good coding practices. The lint set provided by the package is
@@ -76,6 +89,7 @@ flutter:
   assets:
     - assets/models/Astronaut.glb
     - assets/images/
+    - filebase_config.json
     # - assets/images/shop/ w
 
   # An image asset can refer to one or more resolution-specific "variants", see

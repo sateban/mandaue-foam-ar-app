@@ -1,21 +1,10 @@
 import 'package:flutter/material.dart';
 
-import '../../utils/slide_route.dart';
-import 'cart_screen.dart';
-import 'home_screen.dart';
-import 'orders_screen.dart';
-import 'shop_shell_scope.dart';
-
-class ProfileScreen extends StatefulWidget {
+class ProfileScreen extends StatelessWidget {
   const ProfileScreen({this.showBottomNav = true, super.key});
 
   final bool showBottomNav;
 
-  @override
-  State<ProfileScreen> createState() => _ProfileScreenState();
-}
-
-class _ProfileScreenState extends State<ProfileScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -23,7 +12,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
-        automaticallyImplyLeading: false,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.black),
+          onPressed: () => Navigator.pop(context),
+        ),
         title: const Text(
           'Profile',
           style: TextStyle(
@@ -32,158 +24,155 @@ class _ProfileScreenState extends State<ProfileScreen> {
             fontSize: 18,
           ),
         ),
-        centerTitle: false,
+        centerTitle: true,
       ),
-      body: Center(
+      body: SingleChildScrollView(
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
           children: [
+            const SizedBox(height: 24),
+            // Profile photo
             Container(
-              width: 80,
-              height: 80,
+              width: 100,
+              height: 100,
               decoration: BoxDecoration(
-                color: Colors.grey[200],
                 shape: BoxShape.circle,
+                color: Colors.grey[200],
               ),
-              child: const Icon(
-                Icons.person,
-                size: 40,
-                color: Colors.grey,
-              ),
+              child: Icon(Icons.person, size: 50, color: Colors.grey[400]),
             ),
             const SizedBox(height: 16),
-            Text(
-              'User Profile',
+            const Text(
+              'John Doe',
               style: TextStyle(
-                color: Colors.grey[600],
-                fontSize: 16,
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF1E3A8A),
               ),
+            ),
+            const SizedBox(height: 32),
+            // Menu items
+            _buildMenuItem(
+              context,
+              icon: Icons.edit_outlined,
+              title: 'Edit Profile',
+              onTap: () => Navigator.pushNamed(context, '/edit-profile'),
+            ),
+            _buildMenuItem(
+              context,
+              icon: Icons.local_offer_outlined,
+              title: 'Coupons',
+              onTap: () => Navigator.pushNamed(context, '/coupons'),
+            ),
+            _buildMenuItem(
+              context,
+              icon: Icons.location_on_outlined,
+              title: 'Shipping Address',
+              onTap: () => Navigator.pushNamed(context, '/shipping-address'),
+            ),
+            _buildMenuItem(
+              context,
+              icon: Icons.shopping_bag_outlined,
+              title: 'My Orders',
+              onTap: () => Navigator.pushNamed(context, '/orders'),
+            ),
+            _buildMenuItem(
+              context,
+              icon: Icons.favorite_outline,
+              title: 'Wishlist',
+              onTap: () => Navigator.pushNamed(context, '/wishlist'),
+            ),
+            _buildMenuItem(
+              context,
+              icon: Icons.credit_card_outlined,
+              title: 'My Cards',
+              onTap: () => Navigator.pushNamed(context, '/my-cards'),
+            ),
+            _buildMenuItem(
+              context,
+              icon: Icons.more_horiz,
+              title: 'More',
+              onTap: () => Navigator.pushNamed(context, '/more-settings'),
+            ),
+            _buildMenuItem(
+              context,
+              icon: Icons.logout,
+              title: 'Log Out',
+              onTap: () {
+                _showLogoutDialog(context);
+              },
             ),
           ],
         ),
       ),
-      bottomNavigationBar: widget.showBottomNav ? _buildBottomNavBar() : null,
     );
   }
 
-  Widget _buildBottomNavBar() {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.1),
-            blurRadius: 8,
-            offset: const Offset(0, -2),
-          ),
-        ],
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+  Widget _buildMenuItem(
+    BuildContext context, {
+    required IconData icon,
+    required String title,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+        decoration: BoxDecoration(
+          border: Border(bottom: BorderSide(color: Colors.grey[200]!)),
+        ),
         child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceAround,
           children: [
-            GestureDetector(
-              onTap: () {
-                final shell = ShopShellScope.maybeOf(context);
-                if (shell != null && !widget.showBottomNav) {
-                  shell.setTab(0);
-                  return;
-                }
-                Navigator.of(context).pushAndRemoveUntil(
-                  slideRoute(const HomeScreen(), begin: const Offset(-1.0, 0.0)),
-                  (route) => false,
-                );
-              },
-              child: Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.grey[100],
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  Icons.home,
-                  color: Colors.grey,
-                  size: 24,
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFDB022).withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(icon, color: const Color(0xFFFDB022)),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w500,
                 ),
               ),
             ),
-            GestureDetector(
-              onTap: () {
-                final shell = ShopShellScope.maybeOf(context);
-                if (shell != null && !widget.showBottomNav) {
-                  shell.setTab(1);
-                  return;
-                }
-                Navigator.of(context).push(
-                  slideRoute(const CartScreen()),
-                );
-              },
-              child: Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.grey[100],
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  Icons.shopping_cart,
-                  color: Colors.grey,
-                  size: 24,
-                ),
-              ),
-            ),
-            GestureDetector(
-              onTap: () {
-                final shell = ShopShellScope.maybeOf(context);
-                if (shell != null && !widget.showBottomNav) {
-                  shell.setTab(2);
-                  return;
-                }
-                Navigator.of(context).push(
-                  slideRoute(const OrdersScreen()),
-                );
-              },
-              child: Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.grey[100],
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  Icons.shopping_bag,
-                  color: Colors.grey,
-                  size: 24,
-                ),
-              ),
-            ),
-            GestureDetector(
-              onTap: () {
-              },
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFFDB022),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Row(
-                  children: const [
-                    Icon(Icons.person, color: Color(0xFF1E3A8A), size: 24),
-                    SizedBox(width: 8),
-                    Text(
-                      'Profile',
-                      style: TextStyle(
-                        color: Color(0xFF1E3A8A),
-                        fontWeight: FontWeight.w600,
-                        fontSize: 14,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
+            Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey[600]),
           ],
         ),
       ),
+    );
+  }
+
+  void _showLogoutDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Log Out'),
+          content: const Text('Are you sure you want to log out?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context);
+                Navigator.pushNamedAndRemoveUntil(
+                  context,
+                  '/lets-you-in',
+                  (route) => false,
+                );
+              },
+              child: const Text('Log Out', style: TextStyle(color: Colors.red)),
+            ),
+          ],
+        );
+      },
     );
   }
 }

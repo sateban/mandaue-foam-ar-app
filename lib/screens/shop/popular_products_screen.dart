@@ -1,5 +1,8 @@
+import 'dart:async';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
-import '../../data/dummy_data.dart';
+import '../../services/firebase_service.dart';
+import '../../services/filebase_service.dart';
 import 'filter_modal.dart';
 
 class PopularProductsScreen extends StatefulWidget {
@@ -19,12 +22,67 @@ class _PopularProductsScreenState extends State<PopularProductsScreen> {
   double _maxPrice = 500;
   List<String> _selectedMaterials = [];
   List<String> _selectedColors = [];
+  StreamSubscription<List<Map<String, dynamic>>>? _productsSubscription;
+  bool _isLoadingProducts = false;
 
   @override
   void initState() {
     super.initState();
-    _products = List.from(dummyProducts);
-    _filteredProducts = List.from(dummyProducts);
+    _products = [];
+    _filteredProducts = [];
+    _loadPopularProducts();
+  }
+
+  Future<void> _loadPopularProducts() async {
+    try {
+      setState(() {
+        _isLoadingProducts = true;
+      });
+
+      final filebaseService = FilebaseService();
+
+      // Cancel previous subscription if it exists
+      _productsSubscription?.cancel();
+
+      // Listen to real-time updates from Firebase
+      _productsSubscription = FirebaseService.streamListData('/products')
+          .listen(
+            (productsList) {
+              if (!mounted) return;
+              
+              // Filter only popular products (isPopular == true)
+              final popularProducts = productsList.where((product) {
+                return product['isPopular'] == true;
+              }).toList();
+              
+              // Transform Firebase paths to full Filebase URLs
+              final transformedProducts = filebaseService.transformProductsWithFilebaseUrls(popularProducts);
+              
+              setState(() {
+                _products = transformedProducts;
+                _filteredProducts = List.from(_products);
+                _isLoadingProducts = false;
+              });
+            },
+            onError: (error) {
+              print('Error loading popular products: $error');
+              setState(() {
+                _isLoadingProducts = false;
+              });
+            },
+          );
+    } catch (e) {
+      print('Error in _loadPopularProducts: $e');
+      setState(() {
+        _isLoadingProducts = false;
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _productsSubscription?.cancel();
+    super.dispose();
   }
 
   void _applyFilters(List<String> categories, double minPrice, double maxPrice,
@@ -101,7 +159,23 @@ class _PopularProductsScreenState extends State<PopularProductsScreen> {
           ),
         ],
       ),
-      body: Padding(
+      body: _isLoadingProducts
+        ? const Center(
+            child: CircularProgressIndicator(
+              valueColor: AlwaysStoppedAnimation(Color(0xFFFDB022)),
+            ),
+          )
+        : _filteredProducts.isEmpty
+          ? const Center(
+              child: Text(
+                'No popular products found',
+                style: TextStyle(
+                  color: Color(0xFF1E3A8A),
+                  fontSize: 16,
+                ),
+              ),
+            )
+          : Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 16.0),
         child: GridView.builder(
           gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
@@ -110,46 +184,48 @@ class _PopularProductsScreenState extends State<PopularProductsScreen> {
             crossAxisSpacing: 12,
             mainAxisSpacing: 12,
           ),
-          itemCount: _itemsToShow + 1, // +1 for load more button
+          itemCount: _itemsToShow >= _filteredProducts.length 
+            ? _filteredProducts.length 
+            : _itemsToShow + 1, // +1 for load more button
           itemBuilder: (context, index) {
-            if (index == _itemsToShow) {
+            if (index == _itemsToShow && _itemsToShow < _filteredProducts.length) {
               // Load more button
-              if (_itemsToShow < _filteredProducts.length) {
-                return GestureDetector(
-                  onTap: _loadMoreItems,
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: Colors.grey[100],
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: const Color(0xFFFDB022),
-                        width: 2,
-                      ),
-                    ),
-                    child: const Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            Icons.add,
-                            color: Color(0xFFFDB022),
-                            size: 32,
-                          ),
-                          SizedBox(height: 8),
-                          Text(
-                            'Load More',
-                            style: TextStyle(
-                              color: Color(0xFFFDB022),
-                              fontWeight: FontWeight.w600,
-                              fontSize: 14,
-                            ),
-                          ),
-                        ],
-                      ),
+              return GestureDetector(
+                onTap: _loadMoreItems,
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: Colors.grey[100],
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: const Color(0xFFFDB022),
+                      width: 2,
                     ),
                   ),
-                );
-              }
+                  child: const Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.add,
+                          color: Color(0xFFFDB022),
+                          size: 32,
+                        ),
+                        SizedBox(height: 8),
+                        Text(
+                          'Load More',
+                          style: TextStyle(
+                            color: Color(0xFFFDB022),
+                            fontWeight: FontWeight.w600,
+                            fontSize: 14,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            }
+            if (index >= _filteredProducts.length) {
               return const SizedBox.shrink();
             }
             return _buildProductCard(_filteredProducts[index]);
@@ -185,18 +261,8 @@ class _PopularProductsScreenState extends State<PopularProductsScreen> {
                       topLeft: Radius.circular(12),
                       topRight: Radius.circular(12),
                     ),
-                    child: Image.network(
-                      product['imageUrl'] ?? '',
-                      fit: BoxFit.cover,
-                      errorBuilder: (context, error, stackTrace) {
-                        return const Center(
-                          child: Icon(
-                            Icons.image_outlined,
-                            color: Colors.grey,
-                            size: 48,
-                          ),
-                        );
-                      },
+                    child: _AuthenticatedProductImage(
+                      imageUrl: product['imageUrl'] ?? '',
                     ),
                   ),
                 ),
@@ -283,6 +349,44 @@ class _PopularProductsScreenState extends State<PopularProductsScreen> {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Authenticated image widget that fetches images from Filebase with proper auth
+class _AuthenticatedProductImage extends StatelessWidget {
+  final String imageUrl;
+
+  const _AuthenticatedProductImage({required this.imageUrl});
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<Uint8List?>(
+      future: FilebaseService().getImageBytes(imageUrl),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(
+            child: CircularProgressIndicator(
+              valueColor: AlwaysStoppedAnimation(Color(0xFFFDB022)),
+            ),
+          );
+        }
+        
+        if (snapshot.hasData && snapshot.data != null) {
+          return Image.memory(
+            snapshot.data!,
+            fit: BoxFit.cover,
+          );
+        }
+        
+        return const Center(
+          child: Icon(
+            Icons.image_outlined,
+            color: Colors.grey,
+            size: 48,
+          ),
+        );
+      },
     );
   }
 }

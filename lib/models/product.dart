@@ -13,6 +13,8 @@ class Product {
   String? description;
   int? quantity;
   bool? inStock;
+  String? modelUrl;
+  double? modelScale;
 
   Product({
     required this.id,
@@ -29,5 +31,7 @@ class Product {
     this.description,
     this.quantity,
     this.inStock = true,
+    this.modelUrl,
+    this.modelScale,
   });
 }

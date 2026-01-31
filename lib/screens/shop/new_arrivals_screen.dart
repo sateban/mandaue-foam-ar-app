@@ -1,5 +1,8 @@
+import 'dart:async';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
-import '../../data/dummy_data.dart';
+import '../../services/firebase_service.dart';
+import '../../services/filebase_service.dart';
 import 'filter_modal.dart';
 
 class NewArrivalsScreen extends StatefulWidget {
@@ -20,18 +23,68 @@ class _NewArrivalsScreenState extends State<NewArrivalsScreen> {
   double _maxPrice = 500;
   List<String> _selectedMaterials = [];
   List<String> _selectedColors = [];
+  StreamSubscription<List<Map<String, dynamic>>>? _productsSubscription;
+  bool _isLoadingProducts = false;
 
   @override
   void initState() {
     super.initState();
-    _products = List.from(dummyProducts);
-    _filteredProducts = List.from(dummyProducts);
+    _products = [];
+    _filteredProducts = [];
     _scrollController.addListener(_onScroll);
+    _loadNewArrivalProducts();
+  }
+
+  Future<void> _loadNewArrivalProducts() async {
+    try {
+      setState(() {
+        _isLoadingProducts = true;
+      });
+
+      final filebaseService = FilebaseService();
+
+      // Cancel previous subscription if it exists
+      _productsSubscription?.cancel();
+
+      // Listen to real-time updates from Firebase
+      _productsSubscription = FirebaseService.streamListData('/products')
+          .listen(
+            (productsList) {
+              if (!mounted) return;
+              
+              // Filter only new arrival products (isNewArrival == true)
+              final newArrivalProducts = productsList.where((product) {
+                return product['isNewArrival'] == true;
+              }).toList();
+              
+              // Transform Firebase paths to full Filebase URLs
+              final transformedProducts = filebaseService.transformProductsWithFilebaseUrls(newArrivalProducts);
+              
+              setState(() {
+                _products = transformedProducts;
+                _filteredProducts = List.from(_products);
+                _isLoadingProducts = false;
+              });
+            },
+            onError: (error) {
+              print('Error loading new arrival products: $error');
+              setState(() {
+                _isLoadingProducts = false;
+              });
+            },
+          );
+    } catch (e) {
+      print('Error in _loadNewArrivalProducts: $e');
+      setState(() {
+        _isLoadingProducts = false;
+      });
+    }
   }
 
   @override
   void dispose() {
     _scrollController.dispose();
+    _productsSubscription?.cancel();
     super.dispose();
   }
 
@@ -118,29 +171,40 @@ class _NewArrivalsScreenState extends State<NewArrivalsScreen> {
           ),
         ],
       ),
-      body: ListView.builder(
+      body: _isLoadingProducts
+        ? const Center(
+            child: CircularProgressIndicator(
+              valueColor: AlwaysStoppedAnimation(Color(0xFFFDB022)),
+            ),
+          )
+        : _filteredProducts.isEmpty
+          ? const Center(
+              child: Text(
+                'No new arrival products found',
+                style: TextStyle(
+                  color: Color(0xFF1E3A8A),
+                  fontSize: 16,
+                ),
+              ),
+            )
+          : ListView.builder(
         controller: _scrollController,
         padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
         itemCount: _itemsToShow + (_itemsToShow < _filteredProducts.length ? 1 : 0),
         itemBuilder: (context, index) {
-          if (index == _itemsToShow) {
+          if (index == _itemsToShow && _itemsToShow < _filteredProducts.length) {
             // Loading indicator
             return Padding(
               padding: const EdgeInsets.all(16.0),
               child: Center(
-                child: _itemsToShow < _filteredProducts.length
-                    ? const CircularProgressIndicator(
-                        valueColor: AlwaysStoppedAnimation(Color(0xFFFDB022)),
-                      )
-                    : const Text(
-                        'No more items',
-                        style: TextStyle(
-                          color: Colors.grey,
-                          fontSize: 14,
-                        ),
-                      ),
+                child: const CircularProgressIndicator(
+                  valueColor: AlwaysStoppedAnimation(Color(0xFFFDB022)),
+                ),
               ),
             );
+          }
+          if (index >= _filteredProducts.length) {
+            return const SizedBox.shrink();
           }
           return _buildNewArrivalItem(_filteredProducts[index]);
         },
@@ -167,18 +231,8 @@ class _NewArrivalsScreenState extends State<NewArrivalsScreen> {
             ),
             child: ClipRRect(
               borderRadius: BorderRadius.circular(8),
-              child: Image.network(
-                product['imageUrl'] ?? '',
-                fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) {
-                  return const Center(
-                    child: Icon(
-                      Icons.image_outlined,
-                      color: Colors.grey,
-                      size: 40,
-                    ),
-                  );
-                },
+              child: _AuthenticatedArrivalImage(
+                imageUrl: product['imageUrl'] ?? '',
               ),
             ),
           ),
@@ -238,6 +292,44 @@ class _NewArrivalsScreenState extends State<NewArrivalsScreen> {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Authenticated image widget for new arrivals that fetches images from Filebase
+class _AuthenticatedArrivalImage extends StatelessWidget {
+  final String imageUrl;
+
+  const _AuthenticatedArrivalImage({required this.imageUrl});
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<Uint8List?>(
+      future: FilebaseService().getImageBytes(imageUrl),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(
+            child: CircularProgressIndicator(
+              valueColor: AlwaysStoppedAnimation(Color(0xFFFDB022)),
+            ),
+          );
+        }
+        
+        if (snapshot.hasData && snapshot.data != null) {
+          return Image.memory(
+            snapshot.data!,
+            fit: BoxFit.cover,
+          );
+        }
+        
+        return const Center(
+          child: Icon(
+            Icons.image_outlined,
+            color: Colors.grey,
+            size: 40,
+          ),
+        );
+      },
     );
   }
 }

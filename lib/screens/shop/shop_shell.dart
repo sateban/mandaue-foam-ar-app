@@ -7,7 +7,7 @@ import 'profile_screen.dart';
 import 'shop_shell_scope.dart';
 
 class ShopShell extends StatefulWidget {
-  const ShopShell({this.initialIndex = 0, super.key});
+  const   ShopShell({this.initialIndex = 0, super.key});
 
   final int initialIndex;
 
@@ -60,10 +60,7 @@ class _ShopShellState extends State<ShopShell> {
               ).chain(CurveTween(curve: Curves.easeOutCubic));
               return SlideTransition(
                 position: animation.drive(offsetTween),
-                child: FadeTransition(
-                  opacity: animation,
-                  child: child,
-                ),
+                child: FadeTransition(opacity: animation, child: child),
               );
             },
             child: KeyedSubtree(
@@ -101,7 +98,7 @@ class _BottomNav extends StatelessWidget {
         ],
       ),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+        padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 20.0),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceAround,
           children: [
@@ -186,11 +183,7 @@ class _NavItem extends StatelessWidget {
           color: Colors.grey[100],
           shape: BoxShape.circle,
         ),
-        child: Icon(
-          icon,
-          color: Colors.grey,
-          size: 24,
-        ),
+        child: Icon(icon, color: Colors.grey, size: 24),
       ),
     );
   }
