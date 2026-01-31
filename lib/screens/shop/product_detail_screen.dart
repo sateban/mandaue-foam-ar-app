@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'dart:typed_data';
+import 'dart:io';
+import 'package:path_provider/path_provider.dart';
 import '../../models/product.dart';
 import '../../services/filebase_service.dart';
 import '../onboarding/ar_viewer_screen.dart';
@@ -7,10 +9,7 @@ import '../onboarding/ar_viewer_screen.dart';
 class ProductDetailScreen extends StatefulWidget {
   final Product product;
 
-  const ProductDetailScreen({
-    super.key,
-    required this.product,
-  });
+  const ProductDetailScreen({super.key, required this.product});
 
   @override
   State<ProductDetailScreen> createState() => _ProductDetailScreenState();
@@ -19,6 +18,8 @@ class ProductDetailScreen extends StatefulWidget {
 class _ProductDetailScreenState extends State<ProductDetailScreen> {
   bool _isFavorite = false;
   int _quantity = 1;
+  bool _isDownloadingModel = false;
+  double _downloadProgress = 0.0;
 
   @override
   void initState() {
@@ -49,9 +50,11 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
               });
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
-                  content: Text(_isFavorite
-                      ? 'Added to favorites'
-                      : 'Removed from favorites'),
+                  content: Text(
+                    _isFavorite
+                        ? 'Added to favorites'
+                        : 'Removed from favorites',
+                  ),
                   duration: const Duration(seconds: 1),
                 ),
               );
@@ -83,7 +86,9 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                       right: 16,
                       child: Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 8),
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
                         decoration: BoxDecoration(
                           color: Colors.red,
                           borderRadius: BorderRadius.circular(8),
@@ -109,11 +114,13 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                 children: [
                   // Category and Stock Status
                   Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    mainAxisAlignment: MainAxisAlignment.end,
                     children: [
                       Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 6),
+                          horizontal: 12,
+                          vertical: 6,
+                        ),
                         decoration: BoxDecoration(
                           color: const Color(0xFFFDB022).withOpacity(0.2),
                           borderRadius: BorderRadius.circular(8),
@@ -127,9 +134,12 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                           ),
                         ),
                       ),
+                      const SizedBox(width: 8),
                       Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 6),
+                          horizontal: 12,
+                          vertical: 6,
+                        ),
                         decoration: BoxDecoration(
                           color: Colors.green.withOpacity(0.2),
                           borderRadius: BorderRadius.circular(8),
@@ -143,6 +153,38 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                           ),
                         ),
                       ),
+                      const SizedBox(width: 8),
+                      if (widget.product.modelUrl != null &&
+                          widget.product.modelUrl!.isNotEmpty) ...[
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.blue.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Row(
+                            children: [
+                              Icon(
+                                Icons.view_in_ar,
+                                size: 14,
+                                color: Colors.blue,
+                              ),
+                              SizedBox(width: 4),
+                              Text(
+                                'AR',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.blue,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                   const SizedBox(height: 16),
@@ -266,7 +308,9 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                   const SizedBox(height: 12),
                   Container(
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 12),
+                      horizontal: 16,
+                      vertical: 12,
+                    ),
                     decoration: BoxDecoration(
                       border: Border.all(color: const Color(0xFFE0E0E0)),
                       borderRadius: BorderRadius.circular(8),
@@ -314,39 +358,65 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                   ),
                   const SizedBox(height: 32),
                   // View in AR Button
-                  if (widget.product.modelUrl != null && widget.product.modelUrl!.isNotEmpty)
-                    SizedBox(
-                      width: double.infinity,
-                      height: 56,
-                      child: ElevatedButton.icon(
-                        onPressed: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => ARViewerScreen(
-                                productName: widget.product.name,
-                                modelUrl: widget.product.modelUrl!,
-                              ),
-                            ),
-                          );
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFFFDB022),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 56,
+                    child: ElevatedButton.icon(
+                      onPressed:
+                          (widget.product.modelUrl != null &&
+                              widget.product.modelUrl!.isNotEmpty)
+                          ? _isDownloadingModel
+                                ? null
+                                : () => _viewInAR()
+                          : null,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor:
+                            (widget.product.modelUrl != null &&
+                                widget.product.modelUrl!.isNotEmpty)
+                            ? const Color(0xFFFDB022)
+                            : Colors.grey[300],
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
                         ),
-                        icon: const Icon(Icons.view_in_ar),
-                        label: const Text(
-                          'View in AR',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.black,
-                          ),
+                      ),
+                      icon: _isDownloadingModel
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                valueColor: AlwaysStoppedAnimation<Color>(
+                                  Colors.black,
+                                ),
+                              ),
+                            )
+                          : Icon(
+                              Icons.view_in_ar,
+                              color:
+                                  (widget.product.modelUrl != null &&
+                                      widget.product.modelUrl!.isNotEmpty)
+                                  ? Colors.black
+                                  : Colors.grey[500],
+                            ),
+                      label: Text(
+                        _isDownloadingModel
+                            ? 'Downloading ${(_downloadProgress * 100).toInt()}%'
+                            : (widget.product.modelUrl != null &&
+                                  widget.product.modelUrl!.isNotEmpty)
+                            ? 'View in AR'
+                            : 'No AR Model Available',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color:
+                              (widget.product.modelUrl != null &&
+                                  widget.product.modelUrl!.isNotEmpty)
+                              ? Colors.black
+                              : Colors.grey[500],
                         ),
                       ),
                     ),
+                  ),
                   const SizedBox(height: 32),
                   // Add to Cart Button
                   SizedBox(
@@ -456,6 +526,90 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
       ),
     );
   }
+
+  /// View in AR with download progress
+  Future<void> _viewInAR() async {
+    if (widget.product.modelUrl == null || widget.product.modelUrl!.isEmpty) {
+      return;
+    }
+
+    setState(() {
+      _isDownloadingModel = true;
+      _downloadProgress = 0.0;
+    });
+
+    try {
+      // Check if model is already cached
+      final fileName = widget.product.modelUrl!.split('/').last;
+      // Use app support directory for AR plugin compatibility
+      final appSupportDir = await getApplicationSupportDirectory();
+      final filePath = '${appSupportDir.path}/$fileName';
+      final file = File(filePath);
+
+      String? localPath;
+
+      if (await file.exists()) {
+        // Model already downloaded
+        setState(() {
+          _downloadProgress = 1.0;
+        });
+        localPath = filePath;
+      } else {
+        // Download the model with progress
+        final filebaseService = FilebaseService();
+        localPath = await filebaseService.downloadModelFile(
+          modelUrl: widget.product.modelUrl!,
+          localFilePath: filePath,
+          onProgress: (received, total) {
+            if (mounted && total > 0) {
+              setState(() {
+                _downloadProgress = received / total;
+              });
+            }
+          },
+        );
+      }
+
+      setState(() {
+        _isDownloadingModel = false;
+      });
+
+      if (localPath != null && mounted) {
+        // Navigate to AR viewer
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => ARViewerScreen(
+              productName: widget.product.name,
+              modelUrl: widget.product.modelUrl!,
+              modelScale: widget.product.modelScale,
+            ),
+          ),
+        );
+      } else {
+        // Download failed
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Failed to download 3D model. Please try again.'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      print('Error downloading model: $e');
+      setState(() {
+        _isDownloadingModel = false;
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
 }
 
 /// Authenticated image loader with Firebase/Filebase caching and MinIO support
@@ -493,19 +647,13 @@ class _AuthenticatedImageState extends State<AuthenticatedImage> {
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return Center(
-            child: CircularProgressIndicator(
-              color: Colors.grey[400],
-            ),
+            child: CircularProgressIndicator(color: Colors.grey[400]),
           );
         }
 
         if (snapshot.hasError || snapshot.data == null) {
           return Center(
-            child: Icon(
-              Icons.image_outlined,
-              color: Colors.grey,
-              size: 48,
-            ),
+            child: Icon(Icons.image_outlined, color: Colors.grey, size: 48),
           );
         }
 

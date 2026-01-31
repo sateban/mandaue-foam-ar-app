@@ -1051,6 +1051,8 @@ class _HomeScreenState extends State<HomeScreen> {
                                   quantity: product['quantity'] as int?,
                                   inStock: product['inStock'] ?? true,
                                   modelUrl: product['modelUrl'],
+                                  modelScale: (product['modelScale'] as num?)
+                                      ?.toDouble(),
                                 );
                                 // Navigate to product detail screen
                                 Navigator.of(context).push(
@@ -1229,6 +1231,7 @@ class _HomeScreenState extends State<HomeScreen> {
           quantity: product['quantity'] as int?,
           inStock: product['inStock'] ?? true,
           modelUrl: product['modelUrl'],
+          modelScale: (product['modelScale'] as num?)?.toDouble(),
         );
         Navigator.of(
           context,
@@ -1376,6 +1379,7 @@ class _HomeScreenState extends State<HomeScreen> {
           quantity: product['quantity'] as int?,
           inStock: product['inStock'] ?? true,
           modelUrl: product['modelUrl'],
+          modelScale: (product['modelScale'] as num?)?.toDouble(),
         );
         Navigator.of(
           context,

@@ -99,56 +99,56 @@ class MyApp extends StatelessWidget {
           useMaterial3: true,
         ),
         home: const SplashScreenV1(),
-      onGenerateRoute: (settings) {
-        // Handle routes that need arguments
-        if (settings.name == '/track-order') {
-          final order = settings.arguments as Order;
-          return MaterialPageRoute(
-            builder: (context) => TrackOrderScreen(order: order),
-          );
-        }
-        return null;
-      },
-      routes: {
-        // Onboarding routes
-        '/welcome': (context) => const WelcomeScreen(),
-        '/walkthrough': (context) => const WalkthroughScreen(),
+        onGenerateRoute: (settings) {
+          // Handle routes that need arguments
+          if (settings.name == '/track-order') {
+            final order = settings.arguments as Order;
+            return MaterialPageRoute(
+              builder: (context) => TrackOrderScreen(order: order),
+            );
+          }
+          return null;
+        },
+        routes: {
+          // Onboarding routes
+          '/welcome': (context) => const WelcomeScreen(),
+          '/walkthrough': (context) => const WalkthroughScreen(),
 
-        // Authentication routes
-        '/lets-you-in': (context) => const LetsYouInScreen(),
-        '/sign-in': (context) => const SignInScreen(),
-        '/sign-up': (context) => const SignUpScreen(),
-        '/fill-profile': (context) => const FillProfileScreen(),
-        '/create-pin': (context) => const CreatePinScreen(),
-        '/set-fingerprint': (context) => const SetFingerprintScreen(),
-        '/account-setup-success': (context) =>
-            const AccountSetupSuccessScreenStateful(),
-        '/password-reset-success': (context) =>
-            const PasswordResetSuccessScreen(),
+          // Authentication routes
+          '/lets-you-in': (context) => const LetsYouInScreen(),
+          '/sign-in': (context) => const SignInScreen(),
+          '/sign-up': (context) => const SignUpScreen(),
+          '/fill-profile': (context) => const FillProfileScreen(),
+          '/create-pin': (context) => const CreatePinScreen(),
+          '/set-fingerprint': (context) => const SetFingerprintScreen(),
+          '/account-setup-success': (context) =>
+              const AccountSetupSuccessScreenStateful(),
+          '/password-reset-success': (context) =>
+              const PasswordResetSuccessScreen(),
 
-        // Main app routes
-        '/home': (context) => const ShopShell(),
-        '/cart': (context) => const ShopShell(initialIndex: 1),
-        '/orders': (context) => const ShopShell(initialIndex: 2),
-        '/profile': (context) => const ShopShell(initialIndex: 3),
+          // Main app routes
+          '/home': (context) => const ShopShell(),
+          '/cart': (context) => const ShopShell(initialIndex: 1),
+          '/orders': (context) => const ShopShell(initialIndex: 2),
+          '/profile': (context) => const ShopShell(initialIndex: 3),
 
-        // Shop routes
-        '/notifications': (context) => const NotificationsScreen(),
-        '/popular-products': (context) => const PopularProductsScreen(),
-        '/new-arrivals': (context) => const NewArrivalsScreen(),
-        '/categories': (context) => const CategoriesScreen(),
-        '/search-products': (context) => const SearchProductsScreen(),
+          // Shop routes
+          '/notifications': (context) => const NotificationsScreen(),
+          '/popular-products': (context) => const PopularProductsScreen(),
+          '/new-arrivals': (context) => const NewArrivalsScreen(),
+          '/categories': (context) => const CategoriesScreen(),
+          '/search-products': (context) => const SearchProductsScreen(),
 
-        // Checkout routes
-        '/shipping-address': (context) => const ShippingAddressScreen(),
-        '/address-list': (context) => const AddressListScreen(),
-        '/payment-method': (context) => const PaymentMethodScreen(),
-        '/payment-success': (context) => const PaymentSuccessScreen(),
+          // Checkout routes
+          '/shipping-address': (context) => const ShippingAddressScreen(),
+          '/address-list': (context) => const AddressListScreen(),
+          '/payment-method': (context) => const PaymentMethodScreen(),
+          '/payment-success': (context) => const PaymentSuccessScreen(),
 
-        // Profile routes
-        '/edit-profile': (context) => const EditProfileScreen(),
-        '/coupons': (context) => const CouponsScreen(),
-      },
+          // Profile routes
+          '/edit-profile': (context) => const EditProfileScreen(),
+          '/coupons': (context) => const CouponsScreen(),
+        },
       ),
     );
   }
