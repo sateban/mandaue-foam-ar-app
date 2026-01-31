@@ -58,6 +58,7 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
   double _rotation = 0.0;
   ARAnchorManager? arAnchorManager;
   String? _localModelPath;
+  vector.Vector3? _currentNodePosition; // Track current position for drag
   vector.Vector3? _originalScale; // Store original scale
   bool _isPlacingModel = false; // Loading state for model placement
   bool _isDisposing = false;
@@ -73,7 +74,7 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
         showFeaturePoints: false,
         showPlanes: false,
         showWorldOrigin: false,
-        handlePans: false,
+        handlePans: false, 
         handleRotation: false,
         handleTaps: false,
       );
@@ -134,12 +135,13 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
         showFeaturePoints: false,
         showPlanes: true, // Show plane detection overlay (dotted grid)
         showWorldOrigin: false,
-        handlePans: false,
+        handlePans: true, // Enable pan/drag from anywhere
         handleRotation: false,
         handleTaps: true,
       );
       this.arObjectManager?.onInitialize();
 
+      // Set up gesture handlers
       this.arObjectManager?.onPanStart = onPanStart;
       this.arObjectManager?.onPanChange = onPanChange;
       this.arObjectManager?.onPanEnd = onPanEnd;
@@ -237,9 +239,9 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
           _isPlacingModel = false;
           // Hide coaching overlay
           _showCoachingOverlay = false;
-          // DISABLED: Auto-enable manual mode - now manual by default
-          // _isManualPlacement = true;
-          // _showGuide = true;
+          // Re-enable manual mode to allow swiping
+          _isManualPlacement = true;
+          _showGuide = true;
         });
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -250,19 +252,19 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
             ),
           );
         }
-        // Keep AR session stable for model display
+        // Keep AR session stable for model display with pans enabled
         if (arSessionManager != null) {
-          _logger.d('Keeping AR session stable after model placement');
+          _logger.d('Enabling manual pan controls after model placement');
           arSessionManager?.onInitialize(
             showAnimatedGuide: false,
             showFeaturePoints: false,
             showPlanes: true, // Keep showing planes for context
             showWorldOrigin: false,
-            handlePans: false,
+            handlePans: true, // Enable pan/drag
             handleRotation: false,
             handleTaps: true,
           );
-          _logger.i('AR session maintained');
+          _logger.i('AR session configured for manual dragging');
         }
       } else {
         _logger.e('❌ Failed to add node');
@@ -346,9 +348,9 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
           _isPlacingModel = false; // Hide loading indicator
           // Hide coaching overlay
           _showCoachingOverlay = false;
-          // DISABLED: Auto-enable manual mode - now manual by default
-          // _isManualPlacement = true;
-          // _showGuide = true;
+          // Re-enable manual mode to allow swiping
+          _isManualPlacement = true;
+          _showGuide = true;
         });
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -359,19 +361,19 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
             ),
           );
         }
-        // Keep AR session stable for model display
+        // Keep AR session stable for model display with pans enabled
         if (arSessionManager != null) {
-          _logger.d('Keeping AR session stable after model placement at anchor');
+          _logger.d('Enabling manual pan controls after model placement at anchor');
           arSessionManager?.onInitialize(
             showAnimatedGuide: false,
             showFeaturePoints: false,
             showPlanes: true, // Keep showing planes for context
             showWorldOrigin: false,
-            handlePans: false,
+            handlePans: true, // Enable pan/drag
             handleRotation: false,
             handleTaps: true,
           );
-          _logger.i('AR session maintained');
+          _logger.i('AR session configured for manual dragging');
         }
       } else {
         _logger.e('❌ Failed to add node - model not rendering');
@@ -494,9 +496,10 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
         'Manual mode: $_isManualPlacement, Model placed: $_isModelPlaced',
       );
 
-      // Store the original scale before panning starts
-      if (productNode != null && _originalScale != null) {
-        _logger.d('Original scale preserved: $_originalScale');
+      // Store current position when pan starts
+      if (productNode != null) {
+        _currentNodePosition = productNode!.position;
+        _logger.d('Pan start - Current position: $_currentNodePosition');
       }
     } catch (e, stackTrace) {
       _logger.e('Error in onPanStart', error: e, stackTrace: stackTrace);
@@ -505,8 +508,8 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
 
   void onPanChange(String nodeName) {
     try {
-      // Object is being dragged by the AR plugin automatically
-      // Scale preservation is handled in onPanEnd
+      // The AR plugin handles the visual dragging in real-time
+      // No need to update here - the native layer moves the node
     } catch (e, stackTrace) {
       _logger.e('Error in onPanChange', error: e, stackTrace: stackTrace);
     }
@@ -515,44 +518,27 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
   void onPanEnd(String nodeName, vector.Matrix4 newTransform) {
     try {
       _logger.i('✋ Pan ended on node: $nodeName');
+      _logger.d('New transform received: $newTransform');
 
-      // Ensure scale is retained after dragging
-      if (productNode != null &&
-          _originalScale != null &&
-          arObjectManager != null) {
-        _logger.d('Restoring scale after pan: $_originalScale');
+      // Extract the new position from the transform
+      final newPosition = newTransform.getTranslation();
+      _logger.d('New position extracted: $newPosition');
 
-        // Extract position from new transform
-        final translation = newTransform.getTranslation();
-
-        // Extract rotation as Quaternion from Matrix4
-        final rotationMatrix = newTransform.getRotation();
-        final quaternion = vector.Quaternion.fromRotation(rotationMatrix);
-
-        // Create updated node with preserved scale
-        final updatedNode = ARNode(
-          type: productNode!.type,
-          uri: productNode!.uri,
-          scale: _originalScale!, // Use original scale
-          position: translation,
-          rotation: vector.Vector4(
-            quaternion.x,
-            quaternion.y,
-            quaternion.z,
-            quaternion.w,
-          ),
-        );
-
-        // Update the node
-        arObjectManager?.removeNode(productNode!);
-        arObjectManager?.addNode(updatedNode).then((success) {
-          if (success == true) {
-            setState(() {
-              productNode = updatedNode;
-            });
-            _logger.d('Successfully updated node with preserved scale');
-          } else {
-            _logger.w('Failed to update node after pan');
+      // Update our state to track the new position
+      if (mounted && newPosition != null) {
+        setState(() {
+          _currentNodePosition = newPosition;
+          // Update productNode position to sync with native AR position
+          if (productNode != null) {
+            _logger.d('Updating model position from ${"productNode!.position"} to $newPosition');
+            productNode = ARNode(
+              type: productNode!.type,
+              uri: productNode!.uri,
+              scale: _originalScale ?? productNode!.scale,
+              position: newPosition,
+              rotation: vector.Vector4(1, 0, 0, 0),
+            );
+            _logger.d('✅ Model position synced after pan');
           }
         });
       }
