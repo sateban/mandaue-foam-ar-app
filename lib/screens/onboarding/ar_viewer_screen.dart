@@ -130,8 +130,8 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
       this.arAnchorManager = arAnchorManager;
 
       this.arSessionManager?.onInitialize(
-        showAnimatedGuide: true,
-        showFeaturePoints: true,
+        showAnimatedGuide: false,
+        showFeaturePoints: false,
         showPlanes: true, // Show plane detection overlay (dotted grid)
         showWorldOrigin: false,
         handlePans: false,
@@ -250,23 +250,19 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
             ),
           );
         }
-        // Auto-enable pans and rotation for manual mode
+        // Keep AR session stable for model display
         if (arSessionManager != null) {
-          _logger.d('Initializing AR session with manual mode enabled');
+          _logger.d('Keeping AR session stable after model placement');
           arSessionManager?.onInitialize(
             showAnimatedGuide: false,
             showFeaturePoints: false,
-            showPlanes: false,
+            showPlanes: true, // Keep showing planes for context
             showWorldOrigin: false,
-            handlePans: true,
-            handleRotation: true,
+            handlePans: false,
+            handleRotation: false,
             handleTaps: true,
           );
-          _logger.i('AR session initialized for manual mode');
-          // Refresh node to apply new settings
-          if (_isModelPlaced && productNode != null) {
-            _refreshNode();
-          }
+          _logger.i('AR session maintained');
         }
       } else {
         _logger.e('❌ Failed to add node');
@@ -363,23 +359,19 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
             ),
           );
         }
-        // Auto-enable pans and rotation for manual mode
+        // Keep AR session stable for model display
         if (arSessionManager != null) {
-          _logger.d('Initializing AR session with manual mode enabled');
+          _logger.d('Keeping AR session stable after model placement at anchor');
           arSessionManager?.onInitialize(
             showAnimatedGuide: false,
             showFeaturePoints: false,
-            showPlanes: false,
+            showPlanes: true, // Keep showing planes for context
             showWorldOrigin: false,
-            handlePans: true,
-            handleRotation: true,
+            handlePans: false,
+            handleRotation: false,
             handleTaps: true,
           );
-          _logger.i('AR session initialized for manual mode');
-          // Refresh node to apply new settings
-          if (_isModelPlaced && productNode != null) {
-            _refreshNode();
-          }
+          _logger.i('AR session maintained');
         }
       } else {
         _logger.e('❌ Failed to add node - model not rendering');
@@ -669,43 +661,44 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
 
   /// Refreshes the node by removing and re-adding it.
   /// This fixes issues where the node gets stuck or gestures stop working.
-  void _refreshNode() async {
-    if (productNode == null || arObjectManager == null) return;
-
-    _logger.i('🔄 Refreshing node to apply new interaction settings...');
-
-    final oldNode = productNode!;
-
-    // Calculate rotation matching current angle
-    final tempQuat = vector.Quaternion.axisAngle(
-      vector.Vector3(0, 1, 0),
-      _rotation,
-    );
-
-    // Create an identical copy
-    final newNode = ARNode(
-      type: oldNode.type,
-      uri: oldNode.uri, // Use the same URI
-      scale: _originalScale ?? oldNode.scale, // Use original scale if available
-      position: oldNode.position,
-      rotation: vector.Vector4(tempQuat.x, tempQuat.y, tempQuat.z, tempQuat.w),
-    );
-
-    // Remove old
-    await arObjectManager?.removeNode(oldNode);
-
-    // Add new (native side will pick up current Drag/Pan settings)
-    bool? success = await arObjectManager?.addNode(newNode);
-
-    if (success == true) {
-      setState(() {
-        productNode = newNode;
-      });
-      _logger.i('✅ Node refreshed successfully');
-    } else {
-      _logger.e('❌ Failed to refresh node');
-    }
-  }
+  // DISABLED: Refresh node method - kept for rollback if manual mode is re-enabled
+  // void _refreshNode() async {
+  //   if (productNode == null || arObjectManager == null) return;
+  //
+  //   _logger.i('🔄 Refreshing node to apply new interaction settings...');
+  //
+  //   final oldNode = productNode!;
+  //
+  //   // Calculate rotation matching current angle
+  //   final tempQuat = vector.Quaternion.axisAngle(
+  //     vector.Vector3(0, 1, 0),
+  //     _rotation,
+  //   );
+  //
+  //   // Create an identical copy
+  //   final newNode = ARNode(
+  //     type: oldNode.type,
+  //     uri: oldNode.uri, // Use the same URI
+  //     scale: _originalScale ?? oldNode.scale, // Use original scale if available
+  //     position: oldNode.position,
+  //     rotation: vector.Vector4(tempQuat.x, tempQuat.y, tempQuat.z, tempQuat.w),
+  //   );
+  //
+  //   // Remove old
+  //   await arObjectManager?.removeNode(oldNode);
+  //
+  //   // Add new (native side will pick up current Drag/Pan settings)
+  //   bool? success = await arObjectManager?.addNode(newNode);
+  //
+  //   if (success == true) {
+  //     setState(() {
+  //       productNode = newNode;
+  //     });
+  //     _logger.i('✅ Node refreshed successfully');
+  //   } else {
+  //     _logger.e('❌ Failed to refresh node');
+  //   }
+  // }
 
   void _rotateNode(double angle) {
     if (productNode == null ||

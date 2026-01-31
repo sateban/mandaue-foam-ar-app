@@ -521,12 +521,15 @@ class _ThreeDViewerDashboardState extends State<ThreeDViewerDashboard> {
     // Set up plane tap handler for manual placement
     this.arSessionManager!.onPlaneOrPointTap = onPlaneOrPointTapped;
 
-    // Automatically load the model after a longer delay
-    Future.delayed(const Duration(seconds: 4), () {
-      if (mounted && astronautNode == null) {
-        _addModel();
-      }
-    });
+    // Force model placement immediately without waiting for AR detection
+    _addModel();
+
+    // Commented out: Automatically load the model after a longer delay
+    // Future.delayed(const Duration(seconds: 4), () {
+    //   if (mounted && astronautNode == null) {
+    //     _addModel();
+    //   }
+    // });
   }
 
   void onPlaneOrPointTapped(List<ARHitTestResult> hitTestResults) async {
