@@ -83,11 +83,12 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
       showWorldOrigin: false,
       handlePans: false, // Start with pans disabled
       handleRotation: false, // Start with rotation disabled
-      handleTaps: false, // Disable tap-to-place
+      handleTaps: true, // Enable taps so we can select nodes for dragging
     );
     this.arObjectManager?.onInitialize();
 
     // Tap-to-place is disabled - users must use "Place Item" button
+    // We keep onPlaneOrPointTap unassigned so tapping background does nothing
     // this.arSessionManager?.onPlaneOrPointTap = onPlaneOrPointTapped;
 
     // Add pan handlers - they will check manual mode internally
@@ -164,11 +165,7 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
         type: NodeType.fileSystemAppFolderGLB,
         uri: fileName,
         scale: vector.Vector3(scaleValue, scaleValue, scaleValue),
-        position: vector.Vector3(
-          0.0,
-          0.0,
-          -1.0,
-        ), // 1m in front of camera at ground level
+        position: vector.Vector3(0.0, -1.0, -2.0), // 2m in front, 1m down
         rotation: vector.Vector4(1, 0, 0, 0),
       );
 
@@ -500,14 +497,61 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
         showWorldOrigin: false,
         handlePans: value, // Enable pans only in manual mode
         handleRotation: value, // Enable rotation only in manual mode
-        handleTaps: false, // Tap-to-place always disabled
+        handleTaps: true, // Keep taps enabled for node selection
       );
 
       _logger.i(
         'AR session reinitialized. Pans/Rotation ${value ? "ENABLED" : "DISABLED"}',
       );
+
+      // CRITICAL FIX: Refresh the node when toggling manual mode.
+      // The native plugin often fails to apply 'draggable' status to existing nodes
+      // if the session settings change. Re-adding the node forces it to respect the new settings.
+      if (_isModelPlaced && productNode != null) {
+        _refreshNode();
+      }
     } else {
       _logger.w('Cannot reinitialize - arSessionManager is null');
+    }
+  }
+
+  /// Refreshes the node by removing and re-adding it.
+  /// This fixes issues where the node gets stuck or gestures stop working.
+  void _refreshNode() async {
+    if (productNode == null || arObjectManager == null) return;
+
+    _logger.i('🔄 Refreshing node to apply new interaction settings...');
+
+    final oldNode = productNode!;
+
+    // Calculate rotation matching current angle
+    final tempQuat = vector.Quaternion.axisAngle(
+      vector.Vector3(0, 1, 0),
+      _rotation,
+    );
+
+    // Create an identical copy
+    final newNode = ARNode(
+      type: oldNode.type,
+      uri: oldNode.uri, // Use the same URI
+      scale: _originalScale ?? oldNode.scale, // Use original scale if available
+      position: oldNode.position,
+      rotation: vector.Vector4(tempQuat.x, tempQuat.y, tempQuat.z, tempQuat.w),
+    );
+
+    // Remove old
+    await arObjectManager?.removeNode(oldNode);
+
+    // Add new (native side will pick up current Drag/Pan settings)
+    bool? success = await arObjectManager?.addNode(newNode);
+
+    if (success == true) {
+      setState(() {
+        productNode = newNode;
+      });
+      _logger.i('✅ Node refreshed successfully');
+    } else {
+      _logger.e('❌ Failed to refresh node');
     }
   }
 
