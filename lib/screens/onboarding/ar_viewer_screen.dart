@@ -13,6 +13,7 @@ import 'dart:io';
 import 'package:path_provider/path_provider.dart';
 import 'package:ar_flutter_plugin_updated/models/ar_hittest_result.dart';
 import 'package:ar_flutter_plugin_updated/models/ar_anchor.dart';
+import 'package:logger/logger.dart';
 import '../../services/filebase_service.dart';
 
 class ARViewerScreen extends StatefulWidget {
@@ -32,6 +33,17 @@ class ARViewerScreen extends StatefulWidget {
 }
 
 class _ARViewerScreenState extends State<ARViewerScreen> {
+  final Logger _logger = Logger(
+    printer: PrettyPrinter(
+      methodCount: 0,
+      errorMethodCount: 5,
+      lineLength: 80,
+      colors: true,
+      printEmojis: true,
+      dateTimeFormat: DateTimeFormat.onlyTime,
+    ),
+  );
+
   ARSessionManager? arSessionManager;
   ARObjectManager? arObjectManager;
   ARNode? productNode;
@@ -45,6 +57,8 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
   double _rotation = 0.0;
   ARAnchorManager? arAnchorManager;
   String? _localModelPath;
+  vector.Vector3? _originalScale; // Store original scale
+  bool _isPlacingModel = false; // Loading state for model placement
 
   @override
   void dispose() {
@@ -67,26 +81,22 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
       showFeaturePoints: false,
       showPlanes: true,
       showWorldOrigin: false,
-      handlePans: true,
-      handleRotation: true,
-      handleTaps: true,
+      handlePans: false, // Start with pans disabled
+      handleRotation: false, // Start with rotation disabled
+      handleTaps: false, // Disable tap-to-place
     );
     this.arObjectManager?.onInitialize();
 
-    this.arSessionManager?.onPlaneOrPointTap = onPlaneOrPointTapped;
+    // Tap-to-place is disabled - users must use "Place Item" button
+    // this.arSessionManager?.onPlaneOrPointTap = onPlaneOrPointTapped;
+
+    // Add pan handlers - they will check manual mode internally
+    this.arObjectManager?.onPanStart = onPanStart;
+    this.arObjectManager?.onPanChange = onPanChange;
+    this.arObjectManager?.onPanEnd = onPanEnd;
 
     // Start downloading model immediately
     _downloadModel();
-
-    // Listen for node taps/pans if needed for manual control via plugin
-    // However, we will use overlay gestures for manual placement if preferred
-    // or rely on plugin's auto-handling for now if it supports it.
-    // For specific "Swipe to move" requirement, we might need custom handling.
-
-    // Using plugin's pan handling for now as it's more robust than custom overlay
-    // but enabling it only when manual mode is ON if possible, or always.
-    // The requirement says "controls to move the object are by using swipe in screen",
-    // which effectively is what handlePans: true does.
   }
 
   Future<void> onPlaneOrPointTapped(
@@ -128,48 +138,56 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
 
     setState(() {
       _isBusy = true;
+      _isPlacingModel = true; // Show loading indicator
     });
 
     try {
-      print('📍 Placing model directly in AR space...');
+      _logger.i('📍 Placing model at screen center...');
+      // modelScale from Firebase is in centimeters, convert to meters for AR
       final double scaleInCm = widget.modelScale ?? 50.0;
-      final double scaleInMeters = scaleInCm / 100.0;
-      final scaleValue = scaleInMeters;
+      final double scaleValue = scaleInCm / 100.0; // Convert CM to meters
       final fileName = _localModelPath!.split('/').last;
 
-      print('🎯 Placing AR Model:');
-      print('   Full Path: $_localModelPath');
-      print('   File Name: $fileName');
-      print('   Scale (CM): $scaleInCm -> (Meters): $scaleInMeters');
+      _logger.d('🎯 Placing AR Model:');
+      _logger.d('   Full Path: $_localModelPath');
+      _logger.d('   File Name: $fileName');
+      _logger.d('   Scale (CM): $scaleInCm -> (Meters): $scaleValue');
 
       // Verify file exists
       final file = File(_localModelPath!);
       final exists = await file.exists();
       final size = exists ? await file.length() : 0;
-      print('   File Exists: $exists');
-      print('   File Size: $size bytes');
+      _logger.d('   File Exists: $exists');
+      _logger.d('   File Size: $size bytes');
 
       final newNode = ARNode(
         type: NodeType.fileSystemAppFolderGLB,
         uri: fileName,
         scale: vector.Vector3(scaleValue, scaleValue, scaleValue),
-        position: vector.Vector3(0.0, -0.5, -1.5), // 1.5m in front, 0.5m down
+        position: vector.Vector3(
+          0.0,
+          0.0,
+          -1.0,
+        ), // 1m in front of camera at ground level
         rotation: vector.Vector4(1, 0, 0, 0),
       );
 
-      print('   Node Type: ${newNode.type}');
-      print('   Node URI: ${newNode.uri}');
-      print('🚀 Adding node directly to AR scene...');
+      _logger.d('   Node Type: ${newNode.type}');
+      _logger.d('   Node URI: ${newNode.uri}');
+      _logger.i('🚀 Adding node to AR scene...');
 
       bool? didAddNode = await arObjectManager?.addNode(newNode);
 
-      print('   Result: ${didAddNode == true ? "SUCCESS" : "FAILED"}');
+      _logger.i('   Result: ${didAddNode == true ? "SUCCESS" : "FAILED"}');
 
       if (didAddNode ?? false) {
         productNode = newNode;
+        _originalScale = vector.Vector3(scaleValue, scaleValue, scaleValue);
+        _logger.i('Model placed successfully with scale: $_originalScale');
         setState(() {
           _isModelPlaced = true;
           _isBusy = false;
+          _isPlacingModel = false;
         });
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -181,24 +199,25 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
           );
         }
       } else {
-        print('❌ Failed to add node');
+        _logger.e('❌ Failed to add node');
         setState(() {
           _isBusy = false;
+          _isPlacingModel = false;
         });
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Failed to place model - check console'),
+              content: Text('Failed to place model'),
               backgroundColor: Colors.red,
             ),
           );
         }
       }
-    } catch (e) {
-      print('❌ Error placing model: $e');
-      print('   Stack trace: ${StackTrace.current}');
+    } catch (e, stackTrace) {
+      _logger.e('❌ Error placing model', error: e, stackTrace: stackTrace);
       setState(() {
         _isBusy = false;
+        _isPlacingModel = false; // Hide loading indicator
       });
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -210,22 +229,22 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
 
   Future<void> _addModelAtAnchor(ARPlaneAnchor anchor) async {
     try {
+      // modelScale from Firebase is in centimeters, convert to meters for AR
       final double scaleInCm = widget.modelScale ?? 50.0;
-      final double scaleInMeters = scaleInCm / 100.0;
-      final scaleValue = scaleInMeters;
+      final double scaleValue = scaleInCm / 100.0; // Convert CM to meters
       final fileName = _localModelPath!.split('/').last;
 
-      print('🎯 Adding AR Model:');
-      print('   Full Path: $_localModelPath');
-      print('   File Name: $fileName');
-      print('   Scale (CM): $scaleInCm -> (Meters): $scaleInMeters');
+      _logger.d('🎯 Adding AR Model:');
+      _logger.d('   Full Path: $_localModelPath');
+      _logger.d('   File Name: $fileName');
+      _logger.d('   Scale (CM): $scaleInCm -> (Meters): $scaleValue');
 
       // Verify file exists
       final file = File(_localModelPath!);
       final exists = await file.exists();
       final size = exists ? await file.length() : 0;
-      print('   File Exists: $exists');
-      print('   File Size: $size bytes');
+      _logger.d('   File Exists: $exists');
+      _logger.d('   File Size: $size bytes');
 
       final newNode = ARNode(
         type: NodeType.fileSystemAppFolderGLB,
@@ -236,22 +255,29 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
         rotation: vector.Vector4(1, 0, 0, 0),
       );
 
-      print('   Node Type: ${newNode.type}');
-      print('   Node URI: ${newNode.uri}');
-      print('🚀 Attempting to add node to AR scene...');
+      _logger.d('   Node Type: ${newNode.type}');
+      _logger.d('   Node URI: ${newNode.uri}');
+      _logger.i('🚀 Attempting to add node to AR scene...');
 
       bool? didAddNode = await arObjectManager?.addNode(
         newNode,
         planeAnchor: anchor,
       );
 
-      print('   Result: ${didAddNode == true ? "SUCCESS" : "FAILED"}');
+      _logger.i('   Result: ${didAddNode == true ? "SUCCESS" : "FAILED"}');
 
       if (didAddNode ?? false) {
         productNode = newNode;
+        _originalScale = vector.Vector3(
+          scaleValue,
+          scaleValue,
+          scaleValue,
+        ); // Store original scale
+        _logger.i('Model placed at anchor with scale: $_originalScale');
         setState(() {
           _isModelPlaced = true;
           _isBusy = false;
+          _isPlacingModel = false; // Hide loading indicator
         });
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -263,9 +289,10 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
           );
         }
       } else {
-        print('❌ Failed to add node - model not rendering');
+        _logger.e('❌ Failed to add node - model not rendering');
         setState(() {
           _isBusy = false;
+          _isPlacingModel = false; // Hide loading indicator
         });
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -276,11 +303,11 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
           );
         }
       }
-    } catch (e) {
-      print('❌ Exception adding model: $e');
-      print('   Stack trace: ${StackTrace.current}');
+    } catch (e, stackTrace) {
+      _logger.e('❌ Exception adding model', error: e, stackTrace: stackTrace);
       setState(() {
         _isBusy = false;
+        _isPlacingModel = false; // Hide loading indicator
       });
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -374,19 +401,84 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
     }
   }
 
-  /*
-  Future<void> _removeModel() async {
-    if (productNode != null && arObjectManager != null) {
-      await arObjectManager?.removeNode(productNode!);
-      setState(() {
-        _isModelPlaced = false;
-        productNode = null;
-      });
+  /// Pan handlers for dragging the AR object
+  void onPanStart(String nodeName) {
+    try {
+      _logger.i('🖐️ Pan started on node: $nodeName');
+      _logger.d(
+        'Manual mode: $_isManualPlacement, Model placed: $_isModelPlaced',
+      );
+
+      // Store the original scale before panning starts
+      if (productNode != null && _originalScale != null) {
+        _logger.d('Original scale preserved: $_originalScale');
+      }
+    } catch (e, stackTrace) {
+      _logger.e('Error in onPanStart', error: e, stackTrace: stackTrace);
     }
   }
-  */
+
+  void onPanChange(String nodeName) {
+    try {
+      // Object is being dragged by the AR plugin automatically
+      // Scale preservation is handled in onPanEnd
+    } catch (e, stackTrace) {
+      _logger.e('Error in onPanChange', error: e, stackTrace: stackTrace);
+    }
+  }
+
+  void onPanEnd(String nodeName, vector.Matrix4 newTransform) {
+    try {
+      _logger.i('✋ Pan ended on node: $nodeName');
+
+      // Ensure scale is retained after dragging
+      if (productNode != null &&
+          _originalScale != null &&
+          arObjectManager != null) {
+        _logger.d('Restoring scale after pan: $_originalScale');
+
+        // Extract position from new transform
+        final translation = newTransform.getTranslation();
+
+        // Extract rotation as Quaternion from Matrix4
+        final rotationMatrix = newTransform.getRotation();
+        final quaternion = vector.Quaternion.fromRotation(rotationMatrix);
+
+        // Create updated node with preserved scale
+        final updatedNode = ARNode(
+          type: productNode!.type,
+          uri: productNode!.uri,
+          scale: _originalScale!, // Use original scale
+          position: translation,
+          rotation: vector.Vector4(
+            quaternion.x,
+            quaternion.y,
+            quaternion.z,
+            quaternion.w,
+          ),
+        );
+
+        // Update the node
+        arObjectManager?.removeNode(productNode!);
+        arObjectManager?.addNode(updatedNode).then((success) {
+          if (success == true) {
+            setState(() {
+              productNode = updatedNode;
+            });
+            _logger.d('Successfully updated node with preserved scale');
+          } else {
+            _logger.w('Failed to update node after pan');
+          }
+        });
+      }
+    } catch (e, stackTrace) {
+      _logger.e('Error in onPanEnd', error: e, stackTrace: stackTrace);
+    }
+  }
 
   void _toggleManualPlacement(bool value) {
+    _logger.i('🔄 Toggling manual placement mode: $value');
+
     setState(() {
       _isManualPlacement = value;
       // Show guide only when enabling manual placement
@@ -394,25 +486,86 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
         _showGuide = true;
       }
     });
+
+    // Enable/disable pans and rotation based on manual mode
+    // IMPORTANT: This must be called AFTER the model is placed
+    if (arSessionManager != null) {
+      _logger.d(
+        'Reinitializing AR session with handlePans=$value, handleRotation=$value',
+      );
+
+      arSessionManager?.onInitialize(
+        showFeaturePoints: false,
+        showPlanes: true,
+        showWorldOrigin: false,
+        handlePans: value, // Enable pans only in manual mode
+        handleRotation: value, // Enable rotation only in manual mode
+        handleTaps: false, // Tap-to-place always disabled
+      );
+
+      _logger.i(
+        'AR session reinitialized. Pans/Rotation ${value ? "ENABLED" : "DISABLED"}',
+      );
+    } else {
+      _logger.w('Cannot reinitialize - arSessionManager is null');
+    }
   }
 
   void _rotateNode(double angle) {
-    if (productNode != null && arObjectManager != null) {
-      // Create quaternion for rotation around Y axis
-      // Basic implementation for Gizmo rotation
-      // Note: flutter_ar_plugin usually expects Vector4 quaternion
-      // or similar structure depending on version.
-      // Here we assume basic rotation logic.
-      // Since internal rotation modification might be tricky with just 'node.rotation',
-      // we might need to remove and re-add or use transformation methods if available.
-      // For now, let's just log implementation intent or try a simple update if supported.
-
-      // NOTE: Real-time rotation via plugin might require specific method calls.
-      // This is a placeholder for the actual rotation logic connected to the gizmo.
+    if (productNode == null ||
+        arObjectManager == null ||
+        !_isManualPlacement ||
+        !_isModelPlaced) {
+      return;
     }
-    setState(() {
-      _rotation = angle;
-    });
+
+    try {
+      _logger.d('🔄 Rotating node to angle: ${(angle * 57.2958).toInt()}°');
+
+      // Update rotation state immediately for smooth UI
+      setState(() {
+        _rotation = angle;
+      });
+
+      // Create quaternion for Y-axis rotation
+      final quaternion = vector.Quaternion.axisAngle(
+        vector.Vector3(0, 1, 0), // Y-axis (vertical)
+        angle,
+      );
+
+      // Create updated node with new rotation but same position and scale
+      final updatedNode = ARNode(
+        type: productNode!.type,
+        uri: productNode!.uri,
+        scale: _originalScale ?? productNode!.scale,
+        position: productNode!.position,
+        rotation: vector.Vector4(
+          quaternion.x,
+          quaternion.y,
+          quaternion.z,
+          quaternion.w,
+        ),
+      );
+
+      // IMPORTANT: Wait for removal before adding to prevent duplication
+      arObjectManager?.removeNode(productNode!).then((removed) async {
+        if (removed == true) {
+          final success = await arObjectManager?.addNode(updatedNode);
+          if (success == true) {
+            setState(() {
+              productNode = updatedNode;
+            });
+            _logger.d('✅ Node rotated successfully');
+          } else {
+            _logger.w('⚠️ Failed to add rotated node');
+          }
+        } else {
+          _logger.w('⚠️ Failed to remove old node for rotation');
+        }
+      });
+    } catch (e, stackTrace) {
+      _logger.e('Error rotating node', error: e, stackTrace: stackTrace);
+    }
   }
 
   @override
@@ -448,9 +601,6 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
                             color: Colors.white,
                             fontWeight: FontWeight.bold,
                             fontSize: 18,
-                            shadows: [
-                              Shadow(blurRadius: 4, color: Colors.black),
-                            ],
                           ),
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -684,14 +834,30 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
                             ),
                           ],
                         )
+                      else if (_isPlacingModel)
+                        const Column(
+                          children: [
+                            CircularProgressIndicator(
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                Color(0xFFFDB022),
+                              ),
+                            ),
+                            SizedBox(height: 12),
+                            Text(
+                              'Placing model...',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 14,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        )
                       else if (!_isModelPlaced) ...[
-                        Text(
-                          'Aim your camera at a flat surface',
+                        const Text(
+                          'Point camera at the floor and tap "Place Item"',
                           textAlign: TextAlign.center,
-                          style: const TextStyle(
-                            color: Colors.white70,
-                            fontSize: 14,
-                          ),
+                          style: TextStyle(color: Colors.white70, fontSize: 14),
                         ),
                         const SizedBox(height: 12),
                         SizedBox(
