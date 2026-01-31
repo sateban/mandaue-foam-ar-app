@@ -16,6 +16,7 @@ import 'shop_shell_scope.dart';
 import 'package:logger/logger.dart';
 
 var l = Logger();
+
 class HomeScreen extends StatefulWidget {
   const HomeScreen({this.showBottomNav = true, super.key});
 
@@ -40,7 +41,7 @@ class _HomeScreenState extends State<HomeScreen> {
   late List<String> _heroNames;
   Timer? _heroTimer;
   DateTime _lastHeroInteraction = DateTime.now();
-  
+
   // Categories scroll
   late ScrollController _categoriesScrollController;
   bool _canScrollLeft = false;
@@ -60,14 +61,14 @@ class _HomeScreenState extends State<HomeScreen> {
     _searchController = TextEditingController();
     _categoriesScrollController = ScrollController();
     _categoriesScrollController.addListener(_updateCategoriesScrollState);
-    
+
     // Get products from ProductProvider (loaded from Firebase after sign-in)
     final productProvider = context.read<ProductProvider>();
     _filteredProducts = List.from(productProvider.products);
 
     // Load Firebase products
     _loadFirebaseProducts();
-    
+
     // Test Filebase credentials to diagnose 403 issue
     _testFilebaseConnection();
 
@@ -93,14 +94,16 @@ class _HomeScreenState extends State<HomeScreen> {
     _heroPageController = PageController();
     _heroTimer = Timer.periodic(const Duration(seconds: 5), (timer) {
       if (!_heroPageController.hasClients) return;
-      
+
       // Check if user has recently interacted - pause auto-slide for 8 seconds
-      final timeSinceInteraction = DateTime.now().difference(_lastHeroInteraction);
+      final timeSinceInteraction = DateTime.now().difference(
+        _lastHeroInteraction,
+      );
       if (timeSinceInteraction.inSeconds < 8) {
         // User interacted recently, skip auto-slide
         return;
       }
-      
+
       _heroCurrentIndex = (_heroCurrentIndex + 1) % _heroSlides.length;
       _heroPageController.animateToPage(
         _heroCurrentIndex,
@@ -116,19 +119,26 @@ class _HomeScreenState extends State<HomeScreen> {
           await FirebaseService.readListData('products');
 
       print("✅ Products loaded from Firebase: ${productsData.length}");
-      
+
       // Show first product path before transformation
       if (productsData.isNotEmpty) {
         print("📝 Sample Firebase imageUrl: ${productsData.first['imageUrl']}");
+        print("📝 Sample Firebase modelUrl: ${productsData.first['modelUrl']}");
       }
 
       // Transform Firebase paths to full Filebase URLs
       final filebaseService = FilebaseService();
-      final transformedProducts = filebaseService.transformProductsWithFilebaseUrls(productsData);
-      
+      final transformedProducts = filebaseService
+          .transformProductsWithFilebaseUrls(productsData);
+
       // Show first product path after transformation
       if (transformedProducts.isNotEmpty) {
-        print("🔄 After transformation: ${transformedProducts.first['imageUrl']}");
+        print(
+          "🔄 After transformation imageUrl: ${transformedProducts.first['imageUrl']}",
+        );
+        print(
+          "🔄 After transformation modelUrl: ${transformedProducts.first['modelUrl']}",
+        );
       }
 
       // Update hero slides from products with isHeroBanner == true
@@ -144,13 +154,14 @@ class _HomeScreenState extends State<HomeScreen> {
               // ignore: avoid_print
               print('Stream products received: ${productsList.length} items');
               if (!mounted) return;
-              
+
               // Transform Firebase paths to full Filebase URLs
-              final transformedStreamProducts = filebaseService.transformProductsWithFilebaseUrls(productsList);
-              
+              final transformedStreamProducts = filebaseService
+                  .transformProductsWithFilebaseUrls(productsList);
+
               // Update hero slides from products with isHeroBanner == true
               _updateHeroSlidesFromProducts(transformedStreamProducts);
-              
+
               setState(() {
                 _allFirebaseProducts = transformedStreamProducts;
                 _filteredProducts = List.from(_allFirebaseProducts);
@@ -267,7 +278,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final heroBannerProducts = products
         .where((p) => p['isHeroBanner'] == true)
         .toList();
-    
+
     if (heroBannerProducts.isEmpty) {
       // Use default placeholder if no hero banners found
       _heroSlides = List.filled(1, '');
@@ -290,7 +301,7 @@ class _HomeScreenState extends State<HomeScreen> {
     }
 
     print('✨ Hero banners updated: ${_heroSlides.length} slides loaded');
-    
+
     // Pre-cache hero banner images for instant display when sliding
     // Filter out empty URLs for pre-caching
     final nonEmptyUrls = _heroSlides.where((url) => url.isNotEmpty).toList();
@@ -684,12 +695,18 @@ class _HomeScreenState extends State<HomeScreen> {
                                         height: 48,
                                         decoration: BoxDecoration(
                                           color: Colors.grey[200],
-                                          borderRadius: BorderRadius.circular(8),
+                                          borderRadius: BorderRadius.circular(
+                                            8,
+                                          ),
                                         ),
                                         child: ClipRRect(
-                                          borderRadius: BorderRadius.circular(8),
+                                          borderRadius: BorderRadius.circular(
+                                            8,
+                                          ),
                                           child: _AuthenticatedCategoryImage(
-                                            imageUrl: categoryImageUrls[categories[index]] ?? '',
+                                            imageUrl:
+                                                categoryImageUrls[categories[index]] ??
+                                                '',
                                           ),
                                         ),
                                       ),
@@ -1033,6 +1050,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                   description: product['description'],
                                   quantity: product['quantity'] as int?,
                                   inStock: product['inStock'] ?? true,
+                                  modelUrl: product['modelUrl'],
                                 );
                                 // Navigate to product detail screen
                                 Navigator.of(context).push(
@@ -1192,7 +1210,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (imageUrl.isNotEmpty) {
       print('🖼️  Product: ${product['name']} | URL: $imageUrl');
     }
-    
+
     return GestureDetector(
       onTap: () {
         final selectedProduct = Product(
@@ -1210,12 +1228,11 @@ class _HomeScreenState extends State<HomeScreen> {
           description: product['description'],
           quantity: product['quantity'] as int?,
           inStock: product['inStock'] ?? true,
+          modelUrl: product['modelUrl'],
         );
-        Navigator.of(context).push(
-          slideRoute(
-            ProductDetailScreen(product: selectedProduct),
-          ),
-        );
+        Navigator.of(
+          context,
+        ).push(slideRoute(ProductDetailScreen(product: selectedProduct)));
       },
       child: Container(
         decoration: BoxDecoration(
@@ -1225,108 +1242,115 @@ class _HomeScreenState extends State<HomeScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-          Expanded(
-            child: Stack(
-              children: [
-                Container(
-                  width: double.infinity,
-                  decoration: BoxDecoration(
-                    color: Colors.grey[200],
-                    borderRadius: const BorderRadius.only(
-                      topLeft: Radius.circular(12),
-                      topRight: Radius.circular(12),
+            Expanded(
+              child: Stack(
+                children: [
+                  Container(
+                    width: double.infinity,
+                    decoration: BoxDecoration(
+                      color: Colors.grey[200],
+                      borderRadius: const BorderRadius.only(
+                        topLeft: Radius.circular(12),
+                        topRight: Radius.circular(12),
+                      ),
+                    ),
+                    child: ClipRRect(
+                      borderRadius: const BorderRadius.only(
+                        topLeft: Radius.circular(12),
+                        topRight: Radius.circular(12),
+                      ),
+                      child: AuthenticatedImage(
+                        imageUrl: imageUrl,
+                        fit: BoxFit.cover,
+                      ),
                     ),
                   ),
-                  child: ClipRRect(
-                    borderRadius: const BorderRadius.only(
-                      topLeft: Radius.circular(12),
-                      topRight: Radius.circular(12),
-                    ),
-                    child: AuthenticatedImage(
-                      imageUrl: imageUrl,
-                      fit: BoxFit.cover,
-                    ),
-                  ),
-                ),
-                if (product['discount'] != null)
-                  Positioned(
-                    top: 8,
-                    left: 8,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFFDB022),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Text(
-                        product['discount'],
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
+                  if (product['discount'] != null)
+                    Positioned(
+                      top: 8,
+                      left: 8,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFDB022),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          product['discount'],
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                Positioned(
-                  top: 8,
-                  right: 8,
-                  child: GestureDetector(
-                    onTap: () {},
-                    child: Icon(
-                      product['isFavorite']
-                          ? Icons.favorite
-                          : Icons.favorite_border,
-                      color: product['isFavorite'] ? Colors.red : Colors.grey,
-                      size: 24,
+                  Positioned(
+                    top: 8,
+                    right: 8,
+                    child: GestureDetector(
+                      onTap: () {},
+                      child: Icon(
+                        product['isFavorite']
+                            ? Icons.favorite
+                            : Icons.favorite_border,
+                        color: product['isFavorite'] ? Colors.red : Colors.grey,
+                        size: 24,
+                      ),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  product['name'],
-                  style: const TextStyle(
-                    color: Color(0xFF1E3A8A),
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                  ),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  '\$${product['price'].toStringAsFixed(2)}',
-                  style: const TextStyle(
-                    color: Color(0xFF1E3A8A),
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Row(
-                  children: [
-                    const Icon(Icons.star, color: Color(0xFFFDB022), size: 14),
-                    const SizedBox(width: 4),
-                    Text(
-                      '${product['rating']}',
-                      style: const TextStyle(color: Colors.grey, fontSize: 12),
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    product['name'],
+                    style: const TextStyle(
+                      color: Color(0xFF1E3A8A),
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
                     ),
-                  ],
-                ),
-              ],
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '\$${product['price'].toStringAsFixed(2)}',
+                    style: const TextStyle(
+                      color: Color(0xFF1E3A8A),
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      const Icon(
+                        Icons.star,
+                        color: Color(0xFFFDB022),
+                        size: 14,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        '${product['rating']}',
+                        style: const TextStyle(
+                          color: Colors.grey,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
         ),
       ),
     );
@@ -1351,12 +1375,11 @@ class _HomeScreenState extends State<HomeScreen> {
           description: product['description'],
           quantity: product['quantity'] as int?,
           inStock: product['inStock'] ?? true,
+          modelUrl: product['modelUrl'],
         );
-        Navigator.of(context).push(
-          slideRoute(
-            ProductDetailScreen(product: selectedProduct),
-          ),
-        );
+        Navigator.of(
+          context,
+        ).push(slideRoute(ProductDetailScreen(product: selectedProduct)));
       },
       child: Container(
         margin: const EdgeInsets.only(bottom: 16),
@@ -1367,79 +1390,79 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
         child: Row(
           children: [
-          Container(
-            width: 80,
-            height: 80,
-            decoration: BoxDecoration(
-              color: Colors.grey[200],
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: AuthenticatedImage(
-                imageUrl: imageUrl,
-                fit: BoxFit.cover,
+            Container(
+              width: 80,
+              height: 80,
+              decoration: BoxDecoration(
+                color: Colors.grey[200],
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: AuthenticatedImage(
+                  imageUrl: imageUrl,
+                  fit: BoxFit.cover,
+                ),
               ),
             ),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  product['name'],
-                  style: const TextStyle(
-                    color: Color(0xFF1E3A8A),
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    product['name'],
+                    style: const TextStyle(
+                      color: Color(0xFF1E3A8A),
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
                   ),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      '\$${product['price'].toStringAsFixed(2)}',
-                      style: const TextStyle(
-                        color: Color(0xFF1E3A8A),
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
+                  const SizedBox(height: 8),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        '\$${product['price'].toStringAsFixed(2)}',
+                        style: const TextStyle(
+                          color: Color(0xFF1E3A8A),
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
-                    ),
-                    Row(
-                      children: [
-                        const Icon(
-                          Icons.star,
-                          color: Color(0xFFFDB022),
-                          size: 14,
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          '${product['rating']}',
-                          style: const TextStyle(
-                            color: Colors.grey,
-                            fontSize: 12,
+                      Row(
+                        children: [
+                          const Icon(
+                            Icons.star,
+                            color: Color(0xFFFDB022),
+                            size: 14,
                           ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ],
+                          const SizedBox(width: 4),
+                          Text(
+                            '${product['rating']}',
+                            style: const TextStyle(
+                              color: Colors.grey,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
-          ),
-          GestureDetector(
-            onTap: () {},
-            child: Icon(
-              product['isFavorite'] ? Icons.favorite : Icons.favorite_border,
-              color: product['isFavorite'] ? Colors.red : Colors.grey,
-              size: 20,
+            GestureDetector(
+              onTap: () {},
+              child: Icon(
+                product['isFavorite'] ? Icons.favorite : Icons.favorite_border,
+                color: product['isFavorite'] ? Colors.red : Colors.grey,
+                size: 20,
+              ),
             ),
-          ),
-        ],
+          ],
         ),
       ),
     );
@@ -1522,6 +1545,7 @@ Future<void> showNotificationPanel(BuildContext context) {
     },
   );
 }
+
 /// Widget to load images with AWS Signature V4 authentication
 class AuthenticatedImage extends StatefulWidget {
   final String imageUrl;
@@ -1557,20 +1581,14 @@ class _AuthenticatedImageState extends State<AuthenticatedImage> {
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return Center(
-            child: CircularProgressIndicator(
-              color: Colors.grey[400],
-            ),
+            child: CircularProgressIndicator(color: Colors.grey[400]),
           );
         }
 
         if (snapshot.hasError || snapshot.data == null) {
           print('❌ Image load error: ${snapshot.error}');
           return Center(
-            child: Icon(
-              Icons.image_outlined,
-              color: Colors.grey,
-              size: 48,
-            ),
+            child: Icon(Icons.image_outlined, color: Colors.grey, size: 48),
           );
         }
 
@@ -1593,10 +1611,12 @@ class _AuthenticatedCategoryImage extends StatefulWidget {
   const _AuthenticatedCategoryImage({required this.imageUrl});
 
   @override
-  State<_AuthenticatedCategoryImage> createState() => _AuthenticatedCategoryImageState();
+  State<_AuthenticatedCategoryImage> createState() =>
+      _AuthenticatedCategoryImageState();
 }
 
-class _AuthenticatedCategoryImageState extends State<_AuthenticatedCategoryImage> {
+class _AuthenticatedCategoryImageState
+    extends State<_AuthenticatedCategoryImage> {
   late Future<Uint8List?> _imageFuture;
 
   @override
@@ -1627,10 +1647,7 @@ class _AuthenticatedCategoryImageState extends State<_AuthenticatedCategoryImage
         }
 
         if (snapshot.hasData && snapshot.data != null) {
-          return Image.memory(
-            snapshot.data!,
-            fit: BoxFit.cover,
-          );
+          return Image.memory(snapshot.data!, fit: BoxFit.cover);
         }
 
         // Fallback: render a network image (public) or placeholder
@@ -1640,22 +1657,14 @@ class _AuthenticatedCategoryImageState extends State<_AuthenticatedCategoryImage
             fit: BoxFit.cover,
             errorBuilder: (context, error, stackTrace) {
               return const Center(
-                child: Icon(
-                  Icons.image_outlined,
-                  color: Colors.grey,
-                  size: 24,
-                ),
+                child: Icon(Icons.image_outlined, color: Colors.grey, size: 24),
               );
             },
           );
         }
 
         return const Center(
-          child: Icon(
-            Icons.image_outlined,
-            color: Colors.grey,
-            size: 24,
-          ),
+          child: Icon(Icons.image_outlined, color: Colors.grey, size: 24),
         );
       },
     );

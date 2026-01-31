@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
+import 'dart:io';
 import 'package:flutter/services.dart';
 import 'package:minio/minio.dart';
 import 'package:minio/io.dart';
@@ -14,10 +15,10 @@ class FilebaseService {
   late String _bucketName;
   late String _region;
   late Minio _minioClient;
-  
+
   /// Image cache to avoid re-downloading: URL -> Uint8List
   final Map<String, Uint8List> _imageCache = {};
-  
+
   /// Pending download futures to avoid duplicate requests
   final Map<String, Future<Uint8List?>> _pendingDownloads = {};
 
@@ -33,8 +34,7 @@ class FilebaseService {
     final instance = FilebaseService();
     try {
       // Load configuration from filebase_config.json
-      final configString =
-          await rootBundle.loadString('filebase_config.json');
+      final configString = await rootBundle.loadString('filebase_config.json');
       final config = jsonDecode(configString);
       final filebaseConfig = config['filebase'] ?? {};
 
@@ -54,7 +54,9 @@ class FilebaseService {
       );
 
       print('✓ Filebase service initialized successfully');
-      print('   API Key: ${instance._apiKey.substring(0, 5)}...${instance._apiKey.substring(instance._apiKey.length - 5)}');
+      print(
+        '   API Key: ${instance._apiKey.substring(0, 5)}...${instance._apiKey.substring(instance._apiKey.length - 5)}',
+      );
       print('   Bucket: ${instance._bucketName}');
       print('   Region: ${instance._region}');
     } catch (e) {
@@ -76,10 +78,11 @@ class FilebaseService {
   ) {
     return products.map((product) {
       final transformedProduct = Map<String, dynamic>.from(product);
-      
+
+      // Transform imageUrl
       if (product['imageUrl'] is String && product['imageUrl'].isNotEmpty) {
         final imageUrl = product['imageUrl'] as String;
-        
+
         // If already a full URL, use as-is
         if (imageUrl.startsWith('http')) {
           transformedProduct['imageUrl'] = imageUrl;
@@ -88,7 +91,20 @@ class FilebaseService {
           transformedProduct['imageUrl'] = buildFilebaseImageUrl(imageUrl);
         }
       }
-      
+
+      // Transform modelUrl (for 3D models in AR)
+      if (product['modelUrl'] is String && product['modelUrl'].isNotEmpty) {
+        final modelUrl = product['modelUrl'] as String;
+
+        // If already a full URL, use as-is
+        if (modelUrl.startsWith('http')) {
+          transformedProduct['modelUrl'] = modelUrl;
+        } else {
+          // Convert relative path to full Filebase URL
+          transformedProduct['modelUrl'] = buildFilebaseImageUrl(modelUrl);
+        }
+      }
+
       return transformedProduct;
     }).toList();
   }
@@ -105,10 +121,12 @@ class FilebaseService {
         print('✨ Image cached (no re-download): ${imageUrl.split('/').last}');
         return _imageCache[imageUrl];
       }
-      
+
       // Check if download is already in progress - share the future
       if (_pendingDownloads.containsKey(imageUrl)) {
-        print('⏳ Waiting for in-progress download: ${imageUrl.split('/').last}');
+        print(
+          '⏳ Waiting for in-progress download: ${imageUrl.split('/').last}',
+        );
         return _pendingDownloads[imageUrl];
       }
 
@@ -143,48 +161,51 @@ class FilebaseService {
         print('❌ Invalid URL format: $imageUrl');
         return null;
       }
-      
+
       print('📋 Bucket: $_bucketName');
       print('📋 Object: $objectPath');
 
       // Create download future
       final downloadFuture = _downloadAndCacheImage(imageUrl, objectPath);
-      
+
       // Track this download to prevent duplicate requests
       _pendingDownloads[imageUrl] = downloadFuture;
-      
+
       // Wait for download and cache result
       final result = await downloadFuture;
-      
+
       // Remove from pending once complete
       _pendingDownloads.remove(imageUrl);
-      
+
       // Cache the result if successful
       if (result != null) {
         _imageCache[imageUrl] = result;
       }
-      
+
       return result;
     } catch (e) {
       print('❌ Error fetching image: $e');
       return null;
     }
   }
-  
+
   /// Helper method to download and cache image bytes
-  Future<Uint8List?> _downloadAndCacheImage(String imageUrl, String objectPath) async {
+  Future<Uint8List?> _downloadAndCacheImage(
+    String imageUrl,
+    String objectPath,
+  ) async {
     try {
       // Use MinIO to get the object
       final stream = await _minioClient.getObject(_bucketName, objectPath);
-      
+
       print('✅ Object retrieved successfully');
       print('📊 Content Length: ${stream.contentLength}');
-      
+
       // Convert stream to bytes
       final bytes = await stream.toList();
       final data = bytes.expand((chunk) => chunk).toList();
       final result = Uint8List.fromList(data);
-      
+
       print('✅ Image cached (${data.length} bytes)');
       return result;
     } catch (e) {
@@ -192,50 +213,52 @@ class FilebaseService {
       return null;
     }
   }
-  
+
   /// Pre-cache multiple images to avoid delays during slideshow
   /// Useful for hero banners and frequently used images
   Future<void> preCacheImages(List<String> imageUrls) async {
     print('\n📥 Pre-caching ${imageUrls.length} hero banner images...');
-    
+
     final stopwatch = Stopwatch()..start();
-    
+
     // Download all images in parallel for speed
     final futures = <Future<void>>[];
-    
+
     for (final url in imageUrls) {
       if (url.isNotEmpty && !_imageCache.containsKey(url)) {
         futures.add(
           getImageBytes(url).then((_) {
             // Result already cached in getImageBytes
-          })
+          }),
         );
       }
     }
-    
+
     // Wait for all downloads (with timeout to prevent hanging)
     try {
       await Future.wait(
         futures,
         eagerError: false,
-      ).timeout(
-        const Duration(seconds: 30),
-      );
+      ).timeout(const Duration(seconds: 30));
     } on TimeoutException {
       print('⚠️  Pre-cache timeout - some images may still be loading');
     }
-    
+
     stopwatch.stop();
-    final cached = imageUrls.where((url) => url.isNotEmpty && _imageCache.containsKey(url)).length;
-    print('✨ Pre-cache complete: $cached/${imageUrls.length} images (${stopwatch.elapsedMilliseconds}ms)');
+    final cached = imageUrls
+        .where((url) => url.isNotEmpty && _imageCache.containsKey(url))
+        .length;
+    print(
+      '✨ Pre-cache complete: $cached/${imageUrls.length} images (${stopwatch.elapsedMilliseconds}ms)',
+    );
   }
-  
+
   /// Clear image cache to free memory
   void clearImageCache() {
     _imageCache.clear();
     print('🗑️  Image cache cleared');
   }
-  
+
   /// Get cache statistics
   Map<String, dynamic> getCacheStats() {
     int totalBytes = 0;
@@ -249,11 +272,101 @@ class FilebaseService {
     };
   }
 
+  /// Download 3D model file from Filebase with proper authentication
+  /// Returns the local file path where the model was saved
+  Future<String?> downloadModelFile({
+    required String modelUrl,
+    required String localFilePath,
+    void Function(int received, int total)? onProgress,
+  }) async {
+    try {
+      if (modelUrl.isEmpty) return null;
+
+      print('\n🔍 Downloading 3D Model: $modelUrl');
+
+      // Extract object path from URL (same logic as getImageBytes)
+      final uri = Uri.parse(modelUrl);
+      final pathSegments = uri.pathSegments;
+      final host = uri.host;
+
+      String objectPath;
+
+      if (host == 's3.filebase.com') {
+        // style 1: bucket is first path segment
+        if (pathSegments.length < 2) {
+          print('❌ Invalid URL format: $modelUrl');
+          return null;
+        }
+        objectPath = pathSegments.sublist(1).join('/');
+      } else if (host.endsWith('.s3.filebase.com')) {
+        // style 2: bucket is subdomain
+        objectPath = pathSegments.join('/');
+      } else if (pathSegments.isNotEmpty && pathSegments[0] == _bucketName) {
+        // fallback: path begins with bucket name
+        objectPath = pathSegments.sublist(1).join('/');
+      } else if (pathSegments.isNotEmpty) {
+        // last-resort fallback: use full path
+        objectPath = pathSegments.join('/');
+      } else {
+        print('❌ Invalid URL format: $modelUrl');
+        return null;
+      }
+
+      print('📋 Bucket: $_bucketName');
+      print('📋 Object: $objectPath');
+      print('📋 Save to: $localFilePath');
+
+      // Get object metadata for size
+      int totalBytes = -1;
+      try {
+        final stat = await _minioClient.statObject(_bucketName, objectPath);
+        totalBytes = stat.size ?? -1;
+      } catch (e) {
+        print('⚠️ Could not get object stats: $e');
+      }
+
+      // Use MinIO getObject (stream) instead of fGetObject to track progress
+      final stream = await _minioClient.getObject(_bucketName, objectPath);
+
+      final file = File(localFilePath);
+      final sink = file.openWrite();
+
+      int receivedBytes = 0;
+      await stream
+          .listen(
+            (chunk) {
+              sink.add(chunk);
+              receivedBytes += chunk.length;
+              if (onProgress != null && totalBytes > 0) {
+                onProgress(receivedBytes, totalBytes);
+              }
+            },
+            onDone: () async {
+              await sink.close();
+            },
+            onError: (e) async {
+              await sink.close();
+              throw e;
+            },
+            cancelOnError: true,
+          )
+          .asFuture();
+
+      print('✅ Model downloaded successfully: $localFilePath');
+      return localFilePath;
+    } catch (e) {
+      print('❌ Error downloading model: $e');
+      return null;
+    }
+  }
+
   /// Test if credentials are valid by checking bucket access
   Future<Map<String, dynamic>> testCredentials() async {
     try {
       print('\n🔐 === TESTING FILEBASE CREDENTIALS ===');
-      print('API Key: ${_apiKey.substring(0, 5)}...${_apiKey.substring(_apiKey.length - 5)}');
+      print(
+        'API Key: ${_apiKey.substring(0, 5)}...${_apiKey.substring(_apiKey.length - 5)}',
+      );
       print('Endpoint: s3.filebase.com');
       print('Bucket: $_bucketName');
       print('Region: $_region');
@@ -261,19 +374,19 @@ class FilebaseService {
       // Check if bucket exists
       print('\n📤 Checking bucket access...');
       final exists = await _minioClient.bucketExists(_bucketName);
-      
+
       if (exists) {
         print('✅ Bucket exists and is accessible');
-        
+
         // Try to list objects to verify full access
         print('📤 Listing objects in bucket...');
         var objectCount = 0;
         await _minioClient.listObjects(_bucketName).forEach((chunk) {
           objectCount += chunk.objects.length;
         });
-        
+
         print('✅ Listed $objectCount objects in bucket');
-        
+
         return {
           'statusCode': 200,
           'success': true,
@@ -292,11 +405,7 @@ class FilebaseService {
       }
     } catch (e) {
       print('❌ Error: $e');
-      return {
-        'statusCode': 403,
-        'success': false,
-        'message': e.toString(),
-      };
+      return {'statusCode': 403, 'success': false, 'message': e.toString()};
     }
   }
 
@@ -329,19 +438,21 @@ class FilebaseService {
     Map<String, String> metadata = const {},
   }) async {
     try {
-      final objectPath = folderPath != null ? '$folderPath/$fileName' : fileName;
-      
+      final objectPath = folderPath != null
+          ? '$folderPath/$fileName'
+          : fileName;
+
       print('\n📤 Uploading to Filebase:');
       print('   Bucket: $_bucketName');
       print('   Object: $objectPath');
-      
+
       final etag = await _minioClient.fPutObject(
         _bucketName,
         objectPath,
         filePath,
         metadata: metadata,
       );
-      
+
       print('✅ File uploaded successfully');
       print('   ETag: $etag');
       return objectPath;
@@ -361,13 +472,9 @@ class FilebaseService {
       print('   Bucket: $_bucketName');
       print('   Object: $objectPath');
       print('   Save to: $localSavePath');
-      
-      await _minioClient.fGetObject(
-        _bucketName,
-        objectPath,
-        localSavePath,
-      );
-      
+
+      await _minioClient.fGetObject(_bucketName, objectPath, localSavePath);
+
       print('✅ File downloaded successfully');
       return true;
     } catch (e) {
@@ -382,9 +489,9 @@ class FilebaseService {
       print('\n🗑️  Deleting from Filebase:');
       print('   Bucket: $_bucketName');
       print('   Object: $objectPath');
-      
+
       await _minioClient.removeObject(_bucketName, objectPath);
-      
+
       print('✅ File deleted successfully');
       return true;
     } catch (e) {
@@ -397,17 +504,18 @@ class FilebaseService {
   Future<List<String>> listFiles(String folderPath) async {
     try {
       print('\n📋 Listing files in: $folderPath');
-      
+
       final files = <String>[];
-      await _minioClient.listObjects(_bucketName, prefix: folderPath)
-          .forEach((chunk) {
+      await _minioClient.listObjects(_bucketName, prefix: folderPath).forEach((
+        chunk,
+      ) {
         for (var obj in chunk.objects) {
           if (obj.key != null) {
             files.add(obj.key!);
           }
         }
       });
-      
+
       print('✅ Found ${files.length} files');
       return files;
     } catch (e) {
@@ -419,8 +527,8 @@ class FilebaseService {
   /// Check if file exists
   Future<bool> fileExists(String objectPath) async {
     try {
-      final stat = await _minioClient.statObject(_bucketName, objectPath);
-      return stat != null;
+      await _minioClient.statObject(_bucketName, objectPath);
+      return true;
     } catch (e) {
       return false;
     }
@@ -430,7 +538,7 @@ class FilebaseService {
   Future<int?> getFileSize(String objectPath) async {
     try {
       final stat = await _minioClient.statObject(_bucketName, objectPath);
-      return stat?.size;
+      return stat.size;
     } catch (e) {
       print('Error getting file size: $e');
       return null;

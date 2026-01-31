@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'dart:typed_data';
 import '../../models/product.dart';
 import '../../services/filebase_service.dart';
+import '../onboarding/ar_viewer_screen.dart';
 
 class ProductDetailScreen extends StatefulWidget {
   final Product product;
@@ -311,6 +312,41 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                       ],
                     ),
                   ),
+                  const SizedBox(height: 32),
+                  // View in AR Button
+                  if (widget.product.modelUrl != null && widget.product.modelUrl!.isNotEmpty)
+                    SizedBox(
+                      width: double.infinity,
+                      height: 56,
+                      child: ElevatedButton.icon(
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => ARViewerScreen(
+                                productName: widget.product.name,
+                                modelUrl: widget.product.modelUrl!,
+                              ),
+                            ),
+                          );
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFFFDB022),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        icon: const Icon(Icons.view_in_ar),
+                        label: const Text(
+                          'View in AR',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.black,
+                          ),
+                        ),
+                      ),
+                    ),
                   const SizedBox(height: 32),
                   // Add to Cart Button
                   SizedBox(
