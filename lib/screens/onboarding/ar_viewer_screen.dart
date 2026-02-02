@@ -165,10 +165,19 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
   Future<void> _checkInitialPermissions() async {
     _logger.d('Checking storage permissions...');
     if (Platform.isAndroid) {
-      // For Android 13+ we need photos permission or just media
-      final status = await Permission.storage.request();
-      if (status.isPermanentlyDenied) {
-        openAppSettings();
+      // Request multiple permissions to cover different Android versions
+      Map<Permission, PermissionStatus> statuses = await [
+        Permission.storage,
+        Permission.photos,
+        Permission.manageExternalStorage,
+      ].request();
+
+      _logger.d('Permission statuses: $statuses');
+
+      if (statuses[Permission.storage]!.isPermanentlyDenied ||
+          statuses[Permission.photos]!.isPermanentlyDenied) {
+        // Only show message if we really need it
+        _logger.w('Permissions permanently denied');
       }
     }
   }
@@ -412,7 +421,6 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
 
         final oldNodeUri = productNode!.uri;
         final oldNodeType = productNode!.type;
-        final oldNodeTransform = productNode!.transform.clone();
 
         await _clearExistingModel();
 
@@ -420,14 +428,18 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
         final added = await arAnchorManager?.addAnchor(newAnchor);
 
         if (added == true) {
-          final moveTransform = oldNodeTransform;
-          moveTransform.setTranslation(vector.Vector3.zero());
+          // Recreate rotation quaternion from current state
+          final vector.Quaternion quat = vector.Quaternion.axisAngle(
+            vector.Vector3(0, 1, 0),
+            _rotation,
+          );
 
           final newNode = ARNode(
             type: oldNodeType,
             uri: oldNodeUri,
-            transformation: moveTransform,
+            scale: _originalScale ?? vector.Vector3.all(1.0),
             position: vector.Vector3.zero(),
+            rotation: vector.Vector4(quat.x, quat.y, quat.z, quat.w),
           );
 
           bool? didAdd = await arObjectManager?.addNode(
