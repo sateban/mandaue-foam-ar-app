@@ -13,6 +13,7 @@ import 'dart:io';
 import 'package:path_provider/path_provider.dart';
 import 'package:ar_flutter_plugin_updated/models/ar_hittest_result.dart';
 import 'package:ar_flutter_plugin_updated/models/ar_anchor.dart';
+import 'package:ar_flutter_plugin_updated/datatypes/hittest_result_types.dart';
 import 'package:logger/logger.dart';
 import '../../services/filebase_service.dart';
 
@@ -247,21 +248,21 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
       final results = await arSessionManager!.hitTest(px, py);
 
       if (results.isNotEmpty) {
-        // FILTER: Only allow Plane hits (types 1-5).
-        // HitTestResultType.featurePoint (0) is unreliable and can cause "flipped" or "large" models.
-        final List<ARHitTestResult> planeHits = results
-            .where((hit) => hit.type != 0)
-            .toList();
+        // FILTER: Only allow Plane hits and ignore results that are too far away (> 5m)
+        // to prevent the model from "going out" or disappearing into the distance.
+        final List<ARHitTestResult> planeHits = results.where((hit) {
+          return hit.type == ARHitTestResultType.plane && hit.distance < 5.0;
+        }).toList();
 
         if (planeHits.isEmpty) {
           _logger.d(
-            'No suitable plane hits found at logical ${screenPoint.dx},${screenPoint.dy}',
+            'No suitable nearby plane hits found at logical ${screenPoint.dx},${screenPoint.dy}',
           );
           return null;
         }
 
         _logger.d(
-          'Hit test succeeded at logical ${screenPoint.dx},${screenPoint.dy} -> px,py: $px,$py. Found ${planeHits.length} plane hits.',
+          'Hit test succeeded at logical ${screenPoint.dx},${screenPoint.dy} -> px,py: $px,$py. Found ${planeHits.length} suitable plane hits.',
         );
         return planeHits;
       }
@@ -354,10 +355,8 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
           try {
             final t = _currentAnchor?.transformation;
             if (t != null) {
-              final vector.Vector3? trans = (t is vector.Matrix4)
-                  ? t.getTranslation()
-                  : null;
-              if (trans != null) distanceFactor = trans.length;
+              final vector.Vector3 trans = t.getTranslation();
+              distanceFactor = trans.length;
             }
           } catch (_) {}
 
@@ -855,7 +854,7 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
       _logger.d('New position extracted: $newPosition');
 
       // Update our state to track the new position
-      if (mounted && newPosition != null) {
+      if (mounted) {
         setState(() {
           _currentNodePosition = newPosition;
           // Update productNode position to sync with native AR position
@@ -864,14 +863,11 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
               'Updating model position from ${productNode!.position} to $newPosition',
             );
 
-            // PRESERVE: Use the transformation matrix to maintain current rotation and scale.
-            // The position property in the constructor will override the translation in the matrix.
-            productNode = ARNode(
-              type: productNode!.type,
-              uri: productNode!.uri,
-              transformation: productNode!.transform,
-              position: newPosition,
-            );
+            // PRESERVE: Update the position property directly. This triggers the
+            // transformationChanged listener in ARObjectManager, which is much
+            // more efficient than replacing the entire ARNode object.
+            productNode!.position = newPosition;
+
             _logger.d('✅ Model position synced after pan');
           }
         });
@@ -1036,42 +1032,13 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
         _rotation = angle;
       });
 
-      // Create quaternion for Y-axis rotation
-      final quaternion = vector.Quaternion.axisAngle(
-        vector.Vector3(0, 1, 0), // Y-axis (vertical)
-        angle,
-      );
+      // Update the node's rotation directly on its transform matrix.
+      // This is butter-smooth because it triggers the transformationChanged listener
+      // in the ARObjectManager without removing/re-adding the node.
+      // Using Z-axis rotation as requested.
+      productNode!.rotation = vector.Matrix3.rotationY(angle);
 
-      // Create updated node with new rotation but same position and scale
-      final updatedNode = ARNode(
-        type: productNode!.type,
-        uri: productNode!.uri,
-        scale: _originalScale ?? productNode!.scale,
-        position: productNode!.position,
-        rotation: vector.Vector4(
-          quaternion.x,
-          quaternion.y,
-          quaternion.z,
-          quaternion.w,
-        ),
-      );
-
-      // IMPORTANT: Wait for removal before adding to prevent duplication
-      arObjectManager?.removeNode(productNode!).then((removed) async {
-        if (removed == true) {
-          final success = await arObjectManager?.addNode(updatedNode);
-          if (success == true) {
-            setState(() {
-              productNode = updatedNode;
-            });
-            _logger.d('✅ Node rotated successfully');
-          } else {
-            _logger.w('⚠️ Failed to add rotated node');
-          }
-        } else {
-          _logger.w('⚠️ Failed to remove old node for rotation');
-        }
-      });
+      _logger.d('✅ Node rotation updated smoothly');
     } catch (e, stackTrace) {
       _logger.e('Error rotating node', error: e, stackTrace: stackTrace);
     }
