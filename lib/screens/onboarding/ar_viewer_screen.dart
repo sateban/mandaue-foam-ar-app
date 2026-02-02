@@ -413,45 +413,42 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
 
       final dynamic hit = results.first;
 
-      // Remove old node AND anchor before adding new one to prevent "2 models" issue
+      // 1. CAPTURE properties before clearing
+      final oldNodeUri = productNode!.uri;
+      final oldNodeType = productNode!.type;
+      final oldNodeTransform = productNode!.transform.clone();
+
+      // 2. Clear existing model
       await _clearExistingModel();
 
       final newAnchor = ARPlaneAnchor(transformation: hit.worldTransform);
       final added = await arAnchorManager?.addAnchor(newAnchor);
+
       if (added != true) {
+        _logger.w('Failed to add anchor for move');
+        setState(() {
+          _isModelPlaced = false; // Reset state so user can re-place
+        });
         _isUpdatingNodePosition = false;
         return;
       }
 
-      // Remove old node, then add a new one attached to the new anchor
-      final oldNode = productNode!;
-
-      // PRESERVE: Use the current transform (rotation/scale) but zero out translation
+      // PRESERVE: Use the captured transform (rotation/scale) but zero out translation
       // so it's correctly positioned at the new anchor (0,0,0).
-      final moveTransform = oldNode.transform.clone();
+      final moveTransform = oldNodeTransform;
       moveTransform.setTranslation(vector.Vector3.zero());
 
       final newNode = ARNode(
-        type: oldNode.type,
-        uri: oldNode.uri,
+        type: oldNodeType,
+        uri: oldNodeUri,
         transformation: moveTransform,
         position: vector.Vector3(0.0, 0.0, 0.0),
       );
 
-      bool? removed = await arObjectManager?.removeNode(oldNode);
-      bool? didAdd = false;
-      if (removed == true) {
-        didAdd = await arObjectManager?.addNode(
-          newNode,
-          planeAnchor: newAnchor,
-        );
-      } else {
-        // If removal failed, try adding new node anyway
-        didAdd = await arObjectManager?.addNode(
-          newNode,
-          planeAnchor: newAnchor,
-        );
-      }
+      bool? didAdd = await arObjectManager?.addNode(
+        newNode,
+        planeAnchor: newAnchor,
+      );
 
       if (didAdd == true) {
         productNode = newNode;
@@ -460,11 +457,18 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
           _isModelPlaced = true;
           _showCoachingOverlay = false;
         });
+        _logger.d('✅ Node moved and re-anchored successfully');
       } else {
-        _logger.w('Failed to move node to new anchor');
+        _logger.w('Failed to add moved node to new anchor');
+        setState(() {
+          _isModelPlaced = false; // Reset state so user can re-place
+        });
       }
     } catch (e, st) {
       _logger.e('Move node error: $e', error: e, stackTrace: st);
+      setState(() {
+        _isModelPlaced = false; // Fallback reset on error
+      });
     } finally {
       _isUpdatingNodePosition = false;
     }
@@ -1447,22 +1451,26 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
                             width: double.infinity,
                             child: OutlinedButton.icon(
                               onPressed: () async {
+                                _logger.i(
+                                  '🔄 User requested manual reset/relocation',
+                                );
                                 if (productNode != null) {
                                   await arObjectManager?.removeNode(
                                     productNode!,
                                   );
-                                  if (_currentAnchor != null) {
-                                    await arAnchorManager?.removeAnchor(
-                                      _currentAnchor!,
-                                    );
-                                  }
-                                  setState(() {
-                                    productNode = null;
-                                    _currentAnchor = null;
-                                    _isModelPlaced = false;
-                                    _isManualPlacement = false;
-                                  });
                                 }
+                                if (_currentAnchor != null) {
+                                  await arAnchorManager?.removeAnchor(
+                                    _currentAnchor!,
+                                  );
+                                }
+                                setState(() {
+                                  productNode = null;
+                                  _currentAnchor = null;
+                                  _isModelPlaced = false;
+                                  _isManualPlacement = false;
+                                });
+                                _logger.d('✅ AR state reset successfully');
                               },
                               style: OutlinedButton.styleFrom(
                                 foregroundColor: Colors.white,
@@ -1497,7 +1505,8 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
                       const Icon(Icons.videocam, color: Colors.white, size: 64),
                       const SizedBox(height: 24),
                       const Text(
-                        'Welcome to AR View',
+                        'Mandaue Foam AR View',
+                        textAlign: TextAlign.center,
                         style: TextStyle(
                           color: Colors.white,
                           fontSize: 28,
