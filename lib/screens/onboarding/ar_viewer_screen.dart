@@ -566,7 +566,6 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
           _showCoachingOverlay = false;
           // Re-enable manual mode to allow swiping
           _isManualPlacement = true;
-          _showGuide = true;
         });
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -677,7 +676,6 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
           _showCoachingOverlay = false;
           // Re-enable manual mode to allow swiping
           _isManualPlacement = true;
-          _showGuide = true;
         });
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
