@@ -52,6 +52,8 @@ dependencies:
   provider: ^6.1.5+1
   logger: ^2.6.2
   minio: ^3.5.8
+  image: ^4.2.0
+  permission_handler: ^11.3.1
 
 dev_dependencies:
   flutter_launcher_icons: ^0.13.1
