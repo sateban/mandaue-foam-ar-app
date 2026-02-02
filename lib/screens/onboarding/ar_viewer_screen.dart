@@ -74,17 +74,16 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
   Offset? _dragStartScreen;
   vector.Vector3? _dragStartNodePosition;
   ARPlaneAnchor? _currentAnchor;
+
+  // --- AR State & Timing ---
   DateTime? _lastMoveAt;
-  final Duration _moveThrottle = const Duration(
-    milliseconds: 100,
-  ); // throttle rapid hit tests
-  bool _isUpdatingNodePosition = false; // prevent overlapping updates
+  final Duration _moveThrottle = const Duration(milliseconds: 32);
+  bool _isUpdatingNodePosition = false;
   bool _canPlaceAtCenter = false;
   Timer? _centerHitTestTimer;
   vector.Matrix4? _centerHitTransform;
-  bool _isCapturing = false; // Snapshot loading state
-  // ------------------------------------
-
+  bool _isCapturing = false;
+  // -------------------------
   @override
   void initState() {
     super.initState();
@@ -409,8 +408,10 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
             (_dragStartNodePosition!.z) + (dy * sensitivity),
           );
 
-          // CRITICAL: Direct position update during drag!
+          // CRITICAL: Direct updates during drag.
+          // Note: _dragStartNodePosition is already local to the anchor.
           productNode!.position = newPos;
+          productNode!.scale = _originalScale ?? vector.Vector3.all(1.0);
           _currentNodePosition = newPos;
         }
         return;
@@ -420,10 +421,18 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
       final vector.Vector3 hitPos = hit.worldTransform.getTranslation();
 
       if (isDragging) {
-        // SMOOTH DRAG: Just update the position property.
-        // This is fast and prevent duplication crashes.
-        productNode!.position = hitPos;
-        _currentNodePosition = hitPos;
+        // SMOOTH DRAG: Update the position property relative to current anchor.
+        // If we don't subtract anchorPos, the model "doubles" its distance and looks smaller.
+        if (_currentAnchor != null) {
+          final anchorPos = _currentAnchor!.transformation.getTranslation();
+          productNode!.position = hitPos - anchorPos;
+        } else {
+          productNode!.position = hitPos;
+        }
+
+        // FORCIBLY SYNC SCALE to prevent shrinking
+        productNode!.scale = _originalScale ?? vector.Vector3.all(1.0);
+        _currentNodePosition = productNode!.position;
       } else {
         // FINAL DROP / TAP: Full Re-anchor
         _logger.i('📍 Finalizing model drop at new anchor');
