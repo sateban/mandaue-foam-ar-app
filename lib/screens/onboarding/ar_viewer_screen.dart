@@ -1734,20 +1734,41 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
   Future<void> _takeSnapshot() async {
     if (arSessionManager == null || _isCapturing) return;
 
-    // 1. Check Permissions
-    var status = await Permission.storage.status;
-    if (!status.isGranted) {
-      status = await Permission.storage.request();
-      if (!status.isGranted) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Storage permission required to save photos'),
-            ),
-          );
-        }
-        return;
+    // 1. Check Permissions (Robust check for Android 13+)
+    bool hasPermission = false;
+    if (Platform.isAndroid) {
+      final storage = await Permission.storage.status;
+      final photos = await Permission.photos.status;
+      final manage = await Permission.manageExternalStorage.status;
+
+      hasPermission = storage.isGranted || photos.isGranted || manage.isGranted;
+
+      if (!hasPermission) {
+        // Request both to cover all Android versions
+        final statuses = await [
+          Permission.storage,
+          Permission.photos,
+        ].request();
+        hasPermission =
+            statuses[Permission.storage]!.isGranted ||
+            statuses[Permission.photos]!.isGranted;
       }
+    } else {
+      // iOS
+      hasPermission = (await Permission.photos.request()).isGranted;
+    }
+
+    if (!hasPermission) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Permission required to save photos. Please check app settings.',
+            ),
+          ),
+        );
+      }
+      return;
     }
 
     setState(() => _isCapturing = true);
