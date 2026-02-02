@@ -1240,41 +1240,20 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
-                        // Manual Placement Toggle - HIDDEN: Manual mode now requires explicit toggle
-                        // Container(
-                        //   padding: const EdgeInsets.symmetric(
-                        //     horizontal: 8,
-                        //     vertical: 4,
-                        //   ),
-                        //   decoration: BoxDecoration(
-                        //     color: _isManualPlacement
-                        //         ? const Color(0xFFFDB022).withValues(alpha: 0.9)
-                        //         : Colors.black54,
-                        //     borderRadius: BorderRadius.circular(20),
-                        //   ),
-                        //   child: Row(
-                        //     mainAxisSize: MainAxisSize.min,
-                        //     children: [
-                        //       const Text(
-                        //         'Manual',
-                        //         style: TextStyle(
-                        //           color: Colors.white,
-                        //           fontSize: 12,
-                        //         ),
-                        //       ),
-                        //       Switch(
-                        //         value: _isManualPlacement,
-                        //         onChanged: _toggleManualPlacement,
-                        //         activeThumbColor: Colors.white,
-                        //         activeTrackColor: Colors.orange,
-                        //         inactiveThumbColor: Colors.grey,
-                        //         inactiveTrackColor: Colors.grey[800],
-                        //         materialTapTargetSize:
-                        //             MaterialTapTargetSize.shrinkWrap,
-                        //       ),
-                        //     ],
-                        //   ),
-                        // ),
+                        if (_isModelPlaced)
+                          IconButton(
+                            icon: Icon(
+                              _isPreviewMode
+                                  ? Icons.visibility_off
+                                  : Icons.visibility,
+                              color: Colors.white,
+                            ),
+                            onPressed: () {
+                              setState(() {
+                                _isPreviewMode = !_isPreviewMode;
+                              });
+                            },
+                          ),
                       ],
                     ),
                   ),
@@ -1289,67 +1268,64 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
               Positioned(
                 bottom:
                     MediaQuery.of(context).padding.bottom +
-                    100, // Above bottom panel
+                    200, // Moved up to clear bottom panel
                 left: 0,
                 right: 0,
-                child: Center(
-                  child: GestureDetector(
-                    onPanUpdate: (details) {
-                      _rotateNode(_rotation + details.delta.dx * 0.01);
-                    },
-                    child: Container(
-                      width: 200,
-                      height: 50,
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [
-                            Colors.transparent,
-                            const Color(0xFFFDB022).withOpacity(0.5),
-                            Colors.transparent,
-                          ],
-                          stops: const [0.0, 0.5, 1.0],
-                        ),
-                        borderRadius: BorderRadius.circular(25),
-                        border: Border.all(color: Colors.white30),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      "Rotate: ${(_rotation * 57.2958).toInt()}°",
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                        shadows: [Shadow(blurRadius: 4, color: Colors.black)],
                       ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                        children: List.generate(
-                          10,
-                          (index) => Container(
-                            width: 2,
-                            height: index % 2 == 0 ? 20 : 10,
-                            color: Colors.white,
+                    ),
+                    const SizedBox(height: 12),
+                    Center(
+                      child: GestureDetector(
+                        onPanUpdate: (details) {
+                          _rotateNode(_rotation + details.delta.dx * 0.01);
+                        },
+                        child: Container(
+                          width: 240,
+                          height: 60,
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [
+                                Colors.transparent,
+                                const Color(0xFFFDB022).withOpacity(0.5),
+                                Colors.transparent,
+                              ],
+                              stops: const [0.0, 0.5, 1.0],
+                            ),
+                            borderRadius: BorderRadius.circular(30),
+                            border: Border.all(color: Colors.white24),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                            children: List.generate(
+                              12,
+                              (index) => Container(
+                                width: 2,
+                                height: index % 3 == 0 ? 25 : 12,
+                                color: Colors.white.withOpacity(0.8),
+                              ),
+                            ),
                           ),
                         ),
                       ),
                     ),
-                  ),
+                  ],
                 ),
               ),
 
-            // Debug Text for Rotation
-            if (_isManualPlacement && _isModelPlaced && !_isPreviewMode)
+            // Preview Toggle - Floating for Preview Mode only
+            if (_isModelPlaced && !_showGuide && _isPreviewMode)
               Positioned(
-                bottom: MediaQuery.of(context).padding.bottom + 160,
-                left: 0,
-                right: 0,
-                child: Text(
-                  "Rotate: ${(_rotation * 57.2958).toInt()}°", // Rad to Deg
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    shadows: [Shadow(blurRadius: 2, color: Colors.black)],
-                  ),
-                ),
-              ),
-
-            // Preview Toggle (Only when model is placed)
-            if (_isModelPlaced && !_showGuide)
-              Positioned(
-                top: _isPreviewMode
-                    ? MediaQuery.of(context).padding.top + 10
-                    : MediaQuery.of(context).padding.top + 60,
+                top: MediaQuery.of(context).padding.top + 10,
                 right: 16,
                 child: IconButton(
                   onPressed: () {
@@ -1357,11 +1333,7 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
                       _isPreviewMode = !_isPreviewMode;
                     });
                   },
-                  icon: Icon(
-                    _isPreviewMode ? Icons.visibility_off : Icons.visibility,
-                    color: Colors.white,
-                  ),
-                  tooltip: _isPreviewMode ? "Exit Preview" : "Preview",
+                  icon: const Icon(Icons.visibility_off, color: Colors.white),
                   style: IconButton.styleFrom(backgroundColor: Colors.black45),
                 ),
               ),
@@ -1580,22 +1552,22 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
                           children: [
                             _buildCoachingStep(
                               '1',
-                              'Point your camera at the floor or a flat surface',
+                              'Scan: Slowly move your phone to detect the floor or surface.',
                             ),
                             const SizedBox(height: 12),
                             _buildCoachingStep(
                               '2',
-                              'Wait for the reticle to appear on the floor',
+                              'Focus: Align the center reticle where you want the item to be.',
                             ),
                             const SizedBox(height: 12),
                             _buildCoachingStep(
                               '3',
-                              'Click "Place Item" or tap the floor to position it',
+                              'Place: Tap "Place Item" to drop the 3D model into your room.',
                             ),
                             const SizedBox(height: 12),
                             _buildCoachingStep(
                               '4',
-                              'Swipe to move • Rotate wheel to spin',
+                              'Adjust: Swipe to reposition or use the wheel to rotate the item.',
                             ),
                           ],
                         ),
