@@ -15,6 +15,9 @@ import 'package:ar_flutter_plugin_updated/models/ar_hittest_result.dart';
 import 'package:ar_flutter_plugin_updated/models/ar_anchor.dart';
 import 'package:ar_flutter_plugin_updated/datatypes/hittest_result_types.dart';
 import 'package:logger/logger.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:image/image.dart' as img;
+import 'package:flutter/services.dart';
 import '../../services/filebase_service.dart';
 
 class ARViewerScreen extends StatefulWidget {
@@ -79,6 +82,7 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
   bool _canPlaceAtCenter = false;
   Timer? _centerHitTestTimer;
   vector.Matrix4? _centerHitTransform;
+  bool _isCapturing = false; // Snapshot loading state
   // ------------------------------------
 
   /// Explicitly hide native hand/plane overlays. Must be called before dispose
@@ -158,6 +162,17 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
     super.dispose();
   }
 
+  Future<void> _checkInitialPermissions() async {
+    _logger.d('Checking storage permissions...');
+    if (Platform.isAndroid) {
+      // For Android 13+ we need photos permission or just media
+      final status = await Permission.storage.request();
+      if (status.isPermanentlyDenied) {
+        openAppSettings();
+      }
+    }
+  }
+
   void onARViewCreated(
     ARSessionManager arSessionManager,
     ARObjectManager arObjectManager,
@@ -192,6 +207,7 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
 
       _downloadModel();
       _startCenterHitTestTimer();
+      _checkInitialPermissions();
     } catch (e, st) {
       _logger.w('Error in onARViewCreated: $e', error: e, stackTrace: st);
     }
@@ -1270,7 +1286,28 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
-                        if (_isModelPlaced)
+                        if (_isModelPlaced) ...[
+                          if (_isCapturing)
+                            const SizedBox(
+                              width: 40,
+                              height: 40,
+                              child: Padding(
+                                padding: EdgeInsets.all(10.0),
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Color(0xFFFDB022),
+                                ),
+                              ),
+                            )
+                          else
+                            IconButton(
+                              icon: const Icon(
+                                Icons.camera_alt,
+                                color: Colors.white,
+                              ),
+                              onPressed: _takeSnapshot,
+                              tooltip: 'Save Photo',
+                            ),
                           IconButton(
                             icon: Icon(
                               _isPreviewMode
@@ -1284,6 +1321,7 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
                               });
                             },
                           ),
+                        ],
                       ],
                     ),
                   ),
@@ -1699,5 +1737,117 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
         ),
       ),
     );
+  }
+
+  Future<void> _takeSnapshot() async {
+    if (arSessionManager == null || _isCapturing) return;
+
+    // 1. Check Permissions
+    var status = await Permission.storage.status;
+    if (!status.isGranted) {
+      status = await Permission.storage.request();
+      if (!status.isGranted) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Storage permission required to save photos'),
+            ),
+          );
+        }
+        return;
+      }
+    }
+
+    setState(() => _isCapturing = true);
+
+    try {
+      _logger.i('📸 Taking AR snapshot...');
+
+      // Note: ar_session_manager.dart's snapshot() returns Future<ImageProvider>
+      // and it uses MemoryImage(result!) where result is Uint8List.
+      final imageProvider = await arSessionManager!.snapshot();
+      if (imageProvider is! MemoryImage) {
+        throw Exception('Snapshot failed - unexpected image type');
+      }
+      final Uint8List imageBytes = imageProvider.bytes;
+
+      _logger.d('Snapshot captured: ${imageBytes.length} bytes');
+
+      // 2. Process Image (Watermark)
+      _logger.d('Applying watermark...');
+      final img.Image? baseImage = img.decodeImage(imageBytes);
+      if (baseImage == null) throw Exception('Failed to decode captured image');
+
+      // Load Logo Watermark
+      img.Image? logoImg;
+      try {
+        final logoData = await rootBundle.load('assets/images/logo.png');
+        logoImg = img.decodeImage(logoData.buffer.asUint8List());
+      } catch (e) {
+        _logger.w('Logo asset not found for watermark: $e');
+      }
+
+      if (logoImg != null) {
+        // Resize logo to be ~15% of the image width
+        final watermarkWidth = (baseImage.width * 0.15).toInt();
+        final resizedLogo = img.copyResize(logoImg, width: watermarkWidth);
+
+        // Position at bottom-right with 40px margin
+        final x = baseImage.width - resizedLogo.width - 40;
+        final y = baseImage.height - resizedLogo.height - 40;
+
+        img.compositeImage(baseImage, resizedLogo, dstX: x, dstY: y);
+      }
+
+      // 3. Save to /Pictures/MandaueFoam
+      String savePath = '';
+      if (Platform.isAndroid) {
+        final directory = Directory('/storage/emulated/0/Pictures/MandaueFoam');
+        if (!await directory.exists()) {
+          await directory.create(recursive: true);
+        }
+        final timestamp = DateTime.now().millisecondsSinceEpoch;
+        savePath = '${directory.path}/MandaueFoam_AR_$timestamp.jpg';
+      } else {
+        // iOS/Other fallback
+        final directory = await getApplicationDocumentsDirectory();
+        savePath =
+            '${directory.path}/AR_${DateTime.now().millisecondsSinceEpoch}.jpg';
+      }
+
+      final File file = File(savePath);
+      await file.writeAsBytes(img.encodeJpg(baseImage, quality: 95));
+
+      _logger.i('✅ Image saved to: $savePath');
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.check_circle, color: Colors.white),
+                const SizedBox(width: 12),
+                Expanded(child: Text('Photo saved to $savePath')),
+              ],
+            ),
+            backgroundColor: Colors.green.shade700,
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
+    } catch (e, st) {
+      _logger.e('Failed to take snapshot: $e', error: e, stackTrace: st);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error saving photo: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isCapturing = false);
+    }
   }
 }
