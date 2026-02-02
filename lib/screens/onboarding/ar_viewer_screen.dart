@@ -919,57 +919,34 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
   //   }
   // }
 
-  /// Graceful exit: tear down AR session then pop. Always pops even if dispose fails.
+  /// Graceful exit: fire tear-down then pop immediately.
   Future<void> _exitARView() async {
     if (_isExiting) return;
+    _isExiting = true;
     _logger.i('🔙 Exiting AR view...');
     _isDisposing = true;
 
     try {
-      // 1) Hide native overlays
-      try {
-        _hideNativeOverlays();
-      } catch (e) {
-        _logger.w('Error hiding overlays: $e');
-      }
+      // 1) Hide native overlays immediately
+      _hideNativeOverlays();
 
-      // 2) Dispose AR session (with timeout so we never hang)
+      // 2) Fire-and-forget AR session dispose
+      // We don't await this to ensure the UI pops instantly.
       final session = arSessionManager;
       arSessionManager = null;
       arObjectManager = null;
       arAnchorManager = null;
       if (session != null) {
-        try {
-          await session.dispose().timeout(
-            const Duration(seconds: 3),
-            onTimeout: () {
-              _logger.w('AR session dispose timed out');
-            },
-          );
-        } catch (e) {
-          _logger.w('Error disposing AR session: $e');
-        }
+        session.dispose().catchError((e) {
+          _logger.w('Background AR dispose error: $e');
+        });
       }
-
-      // 3) Brief delay for native cleanup
-      try {
-        await Future.delayed(const Duration(milliseconds: 200));
-      } catch (_) {}
-    } catch (e, st) {
-      _logger.w('Exit error: $e', error: e, stackTrace: st);
+    } catch (e) {
+      _logger.w('Exit cleanup error: $e');
     } finally {
-      // Always pop so user can exit even if dispose failed
-      if (!mounted) return;
-      try {
-        setState(() => _isExiting = true);
-      } catch (_) {}
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        try {
-          if (mounted) Navigator.of(context).pop();
-        } catch (e) {
-          _logger.w('Error popping: $e');
-        }
-      });
+      if (mounted) {
+        Navigator.of(context).pop();
+      }
     }
   }
 
