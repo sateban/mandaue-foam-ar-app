@@ -339,45 +339,49 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
     }
   }
 
-  /// Try to move the currently placed node by performing a hit test at the
-  /// provided screen point and re-anchoring the node at the hit location.
-  Future<void> _tryMoveNodeToScreenPoint(Offset screenPoint) async {
+  /// Try to move the currently placed node.
+  /// If [isDragging] is true, we ONLY update the node's local position for feedback.
+  /// If [isDragging] is false (e.g. a tap or pan end), we re-anchor for persistence.
+  Future<void> _tryMoveNodeToScreenPoint(
+    Offset screenPoint, {
+    bool isDragging = false,
+  }) async {
     if (productNode == null ||
         arAnchorManager == null ||
-        arObjectManager == null)
+        arObjectManager == null) {
       return;
+    }
 
     // Throttle to avoid spamming native
     final now = DateTime.now();
-    if (_lastMoveAt != null && now.difference(_lastMoveAt!) < _moveThrottle)
+    if (_lastMoveAt != null && now.difference(_lastMoveAt!) < _moveThrottle) {
       return;
+    }
     _lastMoveAt = now;
 
     if (_isUpdatingNodePosition) return;
     _isUpdatingNodePosition = true;
-    setState(() => _isBusy = true);
+
+    // Show loading only for heavy re-anchor operations, not smooth dragging
+    if (!isDragging) setState(() => _isBusy = true);
 
     try {
       final results = await _performHitTestAt(screenPoint);
+
       if (results == null || results.isEmpty) {
-        // Fallback: if hit test yields nothing, translate node locally based on
-        // screen delta (pan) to provide a reasonable swipe-to-move UX.
+        // Fallback: Screen-delta translation
         if (_dragStartScreen != null && _dragStartNodePosition != null) {
-          _logger.d('Using fallback screen-delta translation (no hit results)');
           final dx = screenPoint.dx - _dragStartScreen!.dx;
           final dy = screenPoint.dy - _dragStartScreen!.dy;
 
-          // Estimate distance factor from anchor translation if available
           double distanceFactor = 1.0;
           try {
             final t = _currentAnchor?.transformation;
             if (t != null) {
-              final vector.Vector3 trans = t.getTranslation();
-              distanceFactor = trans.length;
+              distanceFactor = t.getTranslation().length;
             }
           } catch (_) {}
 
-          // Sensitivity tuned experimentally: pixels -> meters
           final double sensitivity =
               0.0015 * (distanceFactor > 0 ? distanceFactor : 1.0);
 
@@ -387,105 +391,62 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
             (_dragStartNodePosition!.z) + (dy * sensitivity),
           );
 
-          final oldNode = productNode!;
-          final dynamic oldRotation = oldNode.rotation;
-          final vector.Vector4 rotationVector = (oldRotation is vector.Vector4)
-              ? oldRotation
-              : vector.Vector4(1, 0, 0, 0);
-
-          final newNode = ARNode(
-            type: oldNode.type,
-            uri: oldNode.uri,
-            scale: _originalScale ?? oldNode.scale,
-            position: newPos,
-            rotation: rotationVector,
-          );
-
-          bool? removed = await arObjectManager?.removeNode(oldNode);
-          bool? didAdd = false;
-          if (removed == true) {
-            didAdd = await arObjectManager?.addNode(
-              newNode,
-              planeAnchor: _currentAnchor,
-            );
-          } else {
-            didAdd = await arObjectManager?.addNode(
-              newNode,
-              planeAnchor: _currentAnchor,
-            );
-          }
-
-          if (didAdd == true) {
-            productNode = newNode;
-            setState(() {
-              _isModelPlaced = true;
-            });
-          } else {
-            _logger.w('Fallback move failed - could not add new node');
-          }
+          // CRITICAL: Direct position update during drag!
+          productNode!.position = newPos;
+          _currentNodePosition = newPos;
         }
-        _isUpdatingNodePosition = false;
         return;
       }
 
       final dynamic hit = results.first;
+      final vector.Vector3 hitPos = hit.worldTransform.getTranslation();
 
-      // 1. CAPTURE properties before clearing
-      final oldNodeUri = productNode!.uri;
-      final oldNodeType = productNode!.type;
-      final oldNodeTransform = productNode!.transform.clone();
-
-      // 2. Clear existing model
-      await _clearExistingModel();
-
-      final newAnchor = ARPlaneAnchor(transformation: hit.worldTransform);
-      final added = await arAnchorManager?.addAnchor(newAnchor);
-
-      if (added != true) {
-        _logger.w('Failed to add anchor for move');
-        setState(() {
-          _isModelPlaced = false; // Reset state so user can re-place
-        });
-        _isUpdatingNodePosition = false;
-        return;
-      }
-
-      // PRESERVE: Use the captured transform (rotation/scale) but zero out translation
-      // so it's correctly positioned at the new anchor (0,0,0).
-      final moveTransform = oldNodeTransform;
-      moveTransform.setTranslation(vector.Vector3.zero());
-
-      final newNode = ARNode(
-        type: oldNodeType,
-        uri: oldNodeUri,
-        transformation: moveTransform,
-        position: vector.Vector3(0.0, 0.0, 0.0),
-      );
-
-      bool? didAdd = await arObjectManager?.addNode(
-        newNode,
-        planeAnchor: newAnchor,
-      );
-
-      if (didAdd == true) {
-        productNode = newNode;
-        _currentAnchor = newAnchor;
-        setState(() {
-          _isModelPlaced = true;
-          _showCoachingOverlay = false;
-        });
-        _logger.d('✅ Node moved and re-anchored successfully');
+      if (isDragging) {
+        // SMOOTH DRAG: Just update the position property.
+        // This is fast and prevent duplication crashes.
+        productNode!.position = hitPos;
+        _currentNodePosition = hitPos;
       } else {
-        _logger.w('Failed to add moved node to new anchor');
+        // FINAL DROP / TAP: Full Re-anchor
+        _logger.i('📍 Finalizing model drop at new anchor');
+
+        final oldNodeUri = productNode!.uri;
+        final oldNodeType = productNode!.type;
+        final oldNodeTransform = productNode!.transform.clone();
+
+        await _clearExistingModel();
+
+        final newAnchor = ARPlaneAnchor(transformation: hit.worldTransform);
+        final added = await arAnchorManager?.addAnchor(newAnchor);
+
+        if (added == true) {
+          final moveTransform = oldNodeTransform;
+          moveTransform.setTranslation(vector.Vector3.zero());
+
+          final newNode = ARNode(
+            type: oldNodeType,
+            uri: oldNodeUri,
+            transformation: moveTransform,
+            position: vector.Vector3.zero(),
+          );
+
+          bool? didAdd = await arObjectManager?.addNode(
+            newNode,
+            planeAnchor: newAnchor,
+          );
+
+          if (didAdd == true) {
+            productNode = newNode;
+            _currentAnchor = newAnchor;
+          }
+        }
+
         setState(() {
-          _isModelPlaced = false; // Reset state so user can re-place
+          _isModelPlaced = (productNode != null);
         });
       }
     } catch (e, st) {
       _logger.e('Move node error: $e', error: e, stackTrace: st);
-      setState(() {
-        _isModelPlaced = false; // Fallback reset on error
-      });
     } finally {
       if (mounted) {
         setState(() {
@@ -1244,14 +1205,24 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
                 onPanUpdate: (details) async {
                   if (!_isSwipingAnywhere || productNode == null) return;
                   _lastPanScreenPosition = details.localPosition;
-                  // First try precise hit-test re-anchoring; if no hit, fall back
-                  // to a screen-delta based local translation that feels natural.
-                  await _tryMoveNodeToScreenPoint(details.localPosition);
+                  // Only update position during drag for smoothness and crash prevention
+                  await _tryMoveNodeToScreenPoint(
+                    details.localPosition,
+                    isDragging: true,
+                  );
                 },
-                onPanEnd: (details) {
+                onPanEnd: (details) async {
+                  if (_lastPanScreenPosition != null) {
+                    // Final re-anchor at the end of the swipe
+                    await _tryMoveNodeToScreenPoint(
+                      _lastPanScreenPosition!,
+                      isDragging: false,
+                    );
+                  }
                   _isSwipingAnywhere = false;
                   _dragStartScreen = null;
                   _dragStartNodePosition = null;
+                  _lastPanScreenPosition = null;
                 },
                 child: const SizedBox.expand(),
               ),
