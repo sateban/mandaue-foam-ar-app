@@ -99,6 +99,27 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
     }
   }
 
+  /// Removes any existing node and its associated anchor from the scene.
+  Future<void> _clearExistingModel() async {
+    _logger.d('🧹 Clearing existing model and anchors...');
+    if (productNode != null) {
+      try {
+        await arObjectManager?.removeNode(productNode!);
+      } catch (e) {
+        _logger.w('Error removing node: $e');
+      }
+      productNode = null;
+    }
+    if (_currentAnchor != null) {
+      try {
+        await arAnchorManager?.removeAnchor(_currentAnchor!);
+      } catch (e) {
+        _logger.w('Error removing anchor: $e');
+      }
+      _currentAnchor = null;
+    }
+  }
+
   @override
   void deactivate() {
     try {
@@ -147,14 +168,9 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
       this.arObjectManager = arObjectManager;
       this.arAnchorManager = arAnchorManager;
 
-      // Attach plane tap callback to session manager so taps on planes are
-      // routed to our in-widget handler (plugin versions expose this on the
-      // session manager rather than via a named ARView parameter).
-      try {
-        this.arSessionManager?.onPlaneOrPointTap = onPlaneOrPointTapped;
-      } catch (_) {
-        // Some versions may use a different callback name; leaving it optional
-      }
+      // We rely on the GestureDetector in the build method for tap handling
+      // because it allows us to handle coordinate scaling (DPI) correctly.
+      // this.arSessionManager?.onPlaneOrPointTap = onPlaneOrPointTapped;
 
       this.arSessionManager?.onInitialize(
         showAnimatedGuide: false,
@@ -210,41 +226,6 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
     });
   }
 
-  Future<void> onPlaneOrPointTapped(
-    List<ARHitTestResult> hitTestResults,
-  ) async {
-    if (_isModelPlaced || _isBusy) return;
-
-    if (_localModelPath == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Downloading model... please wait')),
-      );
-      return;
-    }
-
-    var singleHitTestResult = hitTestResults.firstOrNull;
-    if (singleHitTestResult != null) {
-      setState(() {
-        _isBusy = true;
-      });
-
-      var newAnchor = ARPlaneAnchor(
-        transformation: singleHitTestResult.worldTransform,
-      );
-      bool? didAddAnchor = await arAnchorManager!.addAnchor(newAnchor);
-
-      if (didAddAnchor == true) {
-        // Store as current anchor so subsequent move operations can reuse it
-        _currentAnchor = newAnchor;
-        await _addModelAtAnchor(newAnchor);
-      } else {
-        setState(() {
-          _isBusy = false;
-        });
-      }
-    }
-  }
-
   /// Utility to perform hit test at a specific screen point
   Future<List<ARHitTestResult>?> _performHitTestAt(Offset screenPoint) async {
     if (arSessionManager == null) return null;
@@ -266,10 +247,23 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
       final results = await arSessionManager!.hitTest(px, py);
 
       if (results.isNotEmpty) {
+        // FILTER: Only allow Plane hits (types 1-5).
+        // HitTestResultType.featurePoint (0) is unreliable and can cause "flipped" or "large" models.
+        final List<ARHitTestResult> planeHits = results
+            .where((hit) => hit.type != 0)
+            .toList();
+
+        if (planeHits.isEmpty) {
+          _logger.d(
+            'No suitable plane hits found at logical ${screenPoint.dx},${screenPoint.dy}',
+          );
+          return null;
+        }
+
         _logger.d(
-          'Hit test succeeded at logical ${screenPoint.dx},${screenPoint.dy} -> px,py: $px,$py',
+          'Hit test succeeded at logical ${screenPoint.dx},${screenPoint.dy} -> px,py: $px,$py. Found ${planeHits.length} plane hits.',
         );
-        return results;
+        return planeHits;
       }
       return null;
     } catch (e, st) {
@@ -297,6 +291,8 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
         }
         return;
       }
+
+      await _clearExistingModel(); // Clear existing model before placing a new one
 
       final dynamic hit = results.first;
       final newAnchor = ARPlaneAnchor(transformation: hit.worldTransform);
@@ -417,18 +413,11 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
       }
 
       final dynamic hit = results.first;
+
+      // Remove old node AND anchor before adding new one to prevent "2 models" issue
+      await _clearExistingModel();
+
       final newAnchor = ARPlaneAnchor(transformation: hit.worldTransform);
-
-      // Remove previous anchor (if any) to avoid orphaned anchors piling up
-      try {
-        if (_currentAnchor != null) {
-          await arAnchorManager?.removeAnchor(_currentAnchor!);
-        }
-      } catch (e) {
-        // Non-fatal
-        _logger.w('Failed to remove previous anchor: $e');
-      }
-
       final added = await arAnchorManager?.addAnchor(newAnchor);
       if (added != true) {
         _isUpdatingNodePosition = false;
@@ -437,19 +426,17 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
 
       // Remove old node, then add a new one attached to the new anchor
       final oldNode = productNode!;
-      // Ensure rotation matches the expected Vector4 type. Some plugin
-      // versions may return a Matrix3 - fall back to identity in that case.
-      final dynamic oldRotation = oldNode.rotation;
-      final vector.Vector4 rotationVector = (oldRotation is vector.Vector4)
-          ? oldRotation
-          : vector.Vector4(1, 0, 0, 0);
+
+      // PRESERVE: Use the current transform (rotation/scale) but zero out translation
+      // so it's correctly positioned at the new anchor (0,0,0).
+      final moveTransform = oldNode.transform.clone();
+      moveTransform.setTranslation(vector.Vector3.zero());
 
       final newNode = ARNode(
         type: oldNode.type,
         uri: oldNode.uri,
-        scale: _originalScale ?? oldNode.scale,
+        transformation: moveTransform,
         position: vector.Vector3(0.0, 0.0, 0.0),
-        rotation: rotationVector,
       );
 
       bool? removed = await arObjectManager?.removeNode(oldNode);
@@ -534,6 +521,10 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
       bool? didAddNode;
       if (targetTransform != null) {
         _logger.i('📍 Using detected plane at center for placement');
+
+        // Ensure scene is clear before adding
+        await _clearExistingModel();
+
         var newAnchor = ARPlaneAnchor(transformation: targetTransform);
         bool? didAddAnchor = await arAnchorManager!.addAnchor(newAnchor);
         if (didAddAnchor == true) {
@@ -870,14 +861,16 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
           // Update productNode position to sync with native AR position
           if (productNode != null) {
             _logger.d(
-              'Updating model position from ${"productNode!.position"} to $newPosition',
+              'Updating model position from ${productNode!.position} to $newPosition',
             );
+
+            // PRESERVE: Use the transformation matrix to maintain current rotation and scale.
+            // The position property in the constructor will override the translation in the matrix.
             productNode = ARNode(
               type: productNode!.type,
               uri: productNode!.uri,
-              scale: _originalScale ?? productNode!.scale,
+              transformation: productNode!.transform,
               position: newPosition,
-              rotation: vector.Vector4(1, 0, 0, 0),
             );
             _logger.d('✅ Model position synced after pan');
           }

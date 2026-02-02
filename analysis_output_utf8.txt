@@ -1,0 +1,46 @@
+﻿Analyzing AR...                                                 
+
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\auth\account_setup_success_screen.dart:23:39 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\auth\account_setup_success_screen.dart:99:39 - deprecated_member_use
+   info - 'value' is deprecated and shouldn't be used. Use initialValue instead. This will set the initial value for the form field. This feature was deprecated after v3.33.0-1.0.pre - lib\screens\auth\fill_profile_screen.dart:199:19 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\auth\password_reset_success_screen.dart:44:39 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\auth\set_fingerprint_screen.dart:45:50 - deprecated_member_use
+warning - The value of the field '_lastPanScreenPosition' isn't used - lib\screens\onboarding\ar_viewer_screen.dart:69:11 - unused_field
+warning - Unnecessary type check; the result is always 'true' - lib\screens\onboarding\ar_viewer_screen.dart:351:46 - unnecessary_type_check
+warning - Dead code - lib\screens\onboarding\ar_viewer_screen.dart:353:21 - dead_code
+warning - The operand can't be 'null', so the condition is always 'true' - lib\screens\onboarding\ar_viewer_screen.dart:851:34 - unnecessary_null_comparison
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\onboarding\ar_viewer_screen.dart:1331:53 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\onboarding\ar_viewer_screen.dart:1409:43 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\onboarding\ar_viewer_screen.dart:1411:62 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\shop\cart_screen.dart:232:33 - deprecated_member_use
+   info - 'groupValue' is deprecated and shouldn't be used. Use a RadioGroup ancestor to manage group value instead. This feature was deprecated after v3.32.0-0.0.pre - lib\screens\shop\checkout\payment_method_screen.dart:114:9 - deprecated_member_use
+   info - 'onChanged' is deprecated and shouldn't be used. Use RadioGroup to handle value change instead. This feature was deprecated after v3.32.0-0.0.pre - lib\screens\shop\checkout\payment_method_screen.dart:115:9 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\shop\checkout\payment_success_screen.dart:38:39 - deprecated_member_use
+warning - Unused import: '../../../models/address.dart' - lib\screens\shop\checkout\shipping_address_screen.dart:3:8 - unused_import
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\shop\home_screen.dart:587:65 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\shop\home_screen.dart:741:55 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\shop\home_screen.dart:774:55 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\shop\home_screen.dart:965:45 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\shop\home_screen.dart:1497:41 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\shop\product_detail_screen.dart:125:58 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\shop\product_detail_screen.dart:144:47 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\shop\product_detail_screen.dart:165:48 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\shop\profile_screen.dart:128:48 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\shop\search_products_screen.dart:304:62 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\shop\search_products_screen.dart:321:51 - deprecated_member_use
+   info - The import of 'dart:typed_data' is unnecessary because all of the used elements are also provided by the import of 'package:flutter/services.dart' - lib\services\filebase_service.dart:3:8 - unnecessary_import
+warning - The exception variable 'e' isn't used, so the 'catch' clause can be removed - packages\ar_flutter_plugin_updated\lib\managers\ar_anchor_manager.dart:88:35 - unused_catch_clause
+warning - The exception variable 'e' isn't used, so the 'catch' clause can be removed - packages\ar_flutter_plugin_updated\lib\managers\ar_anchor_manager.dart:105:35 - unused_catch_clause
+warning - This function has a nullable return type of 'FutureOr<bool?>', but ends without returning a value - packages\ar_flutter_plugin_updated\lib\managers\ar_anchor_manager.dart:111:17 - body_might_complete_normally_nullable
+warning - The declaration '_determinePosition' isn't referenced - packages\ar_flutter_plugin_updated\lib\managers\ar_location_manager.dart:109:20 - unused_element
+warning - Unused import: 'dart:typed_data' - packages\ar_flutter_plugin_updated\lib\managers\ar_object_manager.dart:1:8 - unused_import
+   info - The import of 'package:vector_math/vector_math_64.dart' is unnecessary because all of the used elements are also provided by the import of 'package:flutter/services.dart' - packages\ar_flutter_plugin_updated\lib\managers\ar_object_manager.dart:7:8 - unnecessary_import
+warning - The exception variable 'e' isn't used, so the 'catch' clause can be removed - packages\ar_flutter_plugin_updated\lib\managers\ar_object_manager.dart:139:35 - unused_catch_clause
+   info - The import of 'dart:typed_data' is unnecessary because all of the used elements are also provided by the import of 'package:flutter/services.dart' - packages\ar_flutter_plugin_updated\lib\managers\ar_session_manager.dart:2:8 - unnecessary_import
+warning - The operand can't be 'null', so the condition is always 'true' - packages\ar_flutter_plugin_updated\lib\managers\ar_session_manager.dart:167:33 - unnecessary_null_comparison
+warning - The operand can't be 'null', so the condition is always 'true' - packages\ar_flutter_plugin_updated\lib\managers\ar_session_manager.dart:180:31 - unnecessary_null_comparison
+   info - 'scale' is deprecated and shouldn't be used. Use scaleByVector3, scaleByVector4, or scaleByDouble instead - packages\ar_flutter_plugin_updated\lib\models\ar_node.dart:134:15 - deprecated_member_use
+   info - 'scale' is deprecated and shouldn't be used. Use scaleByVector3, scaleByVector4, or scaleByDouble instead - packages\ar_flutter_plugin_updated\lib\models\ar_node.dart:136:15 - deprecated_member_use
+   info - 'setMockMethodCallHandler' is deprecated and shouldn't be used. Use tester.binding.defaultBinaryMessenger.setMockMethodCallHandler or TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler instead. Pass the channel as the first argument. This feature was deprecated after v3.9.0-19.0.pre - packages\ar_flutter_plugin_updated\test\ar_flutter_plugin_test.dart:11:13 - deprecated_member_use
+   info - 'setMockMethodCallHandler' is deprecated and shouldn't be used. Use tester.binding.defaultBinaryMessenger.setMockMethodCallHandler or TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler instead. Pass the channel as the first argument. This feature was deprecated after v3.9.0-19.0.pre - packages\ar_flutter_plugin_updated\test\ar_flutter_plugin_test.dart:17:13 - deprecated_member_use
+
