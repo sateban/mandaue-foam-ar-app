@@ -339,6 +339,7 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
 
     if (_isUpdatingNodePosition) return;
     _isUpdatingNodePosition = true;
+    setState(() => _isBusy = true);
 
     try {
       final results = await _performHitTestAt(screenPoint);
@@ -470,7 +471,12 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
         _isModelPlaced = false; // Fallback reset on error
       });
     } finally {
-      _isUpdatingNodePosition = false;
+      if (mounted) {
+        setState(() {
+          _isUpdatingNodePosition = false;
+          _isBusy = false;
+        });
+      }
     }
   }
 
@@ -1135,6 +1141,51 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
               onARViewCreated: onARViewCreated,
               planeDetectionConfig: PlaneDetectionConfig.horizontalAndVertical,
             ),
+
+            // Subtle Loading Indicator for Move/Relocate actions
+            if (_isBusy && _isModelPlaced && !_isPlacingModel)
+              Positioned(
+                top: MediaQuery.of(context).padding.top + 70,
+                left: 0,
+                right: 0,
+                child: Center(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 8,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.black54,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: Colors.white24),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              Color(0xFFFDB022),
+                            ),
+                          ),
+                        ),
+                        SizedBox(width: 10),
+                        Text(
+                          'Updating...',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
 
             // Center Reticle
             if (!_isModelPlaced &&
