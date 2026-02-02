@@ -251,14 +251,24 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
 
     try {
       final size = MediaQuery.of(context).size;
-      final double px = screenPoint.dx.clamp(0.0, size.width);
-      final double py = screenPoint.dy.clamp(0.0, size.height);
+      double px = screenPoint.dx.clamp(0.0, size.width);
+      double py = screenPoint.dy.clamp(0.0, size.height);
+
+      // On Android, the native hitTest often expects physical pixels.
+      // Flutter's screenPoint and size are in logical pixels.
+      if (Platform.isAndroid) {
+        final devicePixelRatio = MediaQuery.of(context).devicePixelRatio;
+        px *= devicePixelRatio;
+        py *= devicePixelRatio;
+      }
 
       // Use the newly implemented native hit test method
       final results = await arSessionManager!.hitTest(px, py);
 
       if (results.isNotEmpty) {
-        _logger.d('Hit test succeeded at px,py: $px,$py');
+        _logger.d(
+          'Hit test succeeded at logical ${screenPoint.dx},${screenPoint.dy} -> px,py: $px,$py',
+        );
         return results;
       }
       return null;
@@ -485,22 +495,25 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
 
     try {
       _logger.i('📍 Placing model at screen center...');
+
+      // Perform a fresh hit test at the exact center of the screen right now
+      // for maximum precision, rather than relying on the timer-updated transform.
+      final size = MediaQuery.of(context).size;
+      final center = Offset(size.width / 2, size.height / 2);
+      final results = await _performHitTestAt(center);
+
+      vector.Matrix4? targetTransform = _centerHitTransform;
+      if (results != null && results.isNotEmpty) {
+        targetTransform = results.first.worldTransform;
+      }
+
       // modelScale from Firebase is in centimeters, convert to meters for AR
       final double scaleInCm = widget.modelScale ?? 50.0;
       final double scaleValue = scaleInCm / 100.0; // Convert CM to meters
       final fileName = _localModelPath!.split('/').last;
 
       _logger.d('🎯 Placing AR Model:');
-      _logger.d('   Full Path: $_localModelPath');
-      _logger.d('   File Name: $fileName');
       _logger.d('   Scale (CM): $scaleInCm -> (Meters): $scaleValue');
-
-      // Verify file exists
-      final file = File(_localModelPath!);
-      final exists = await file.exists();
-      final size = exists ? await file.length() : 0;
-      _logger.d('   File Exists: $exists');
-      _logger.d('   File Size: $size bytes');
 
       final vector.Vector4 rotationVector = vector.Vector4(1, 0, 0, 0);
 
@@ -508,17 +521,20 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
         type: NodeType.fileSystemAppFolderGLB,
         uri: fileName,
         scale: vector.Vector3(scaleValue, scaleValue, scaleValue),
-        position: vector.Vector3(0.0, -1.0, -2.0), // 2m in front, 1m down
+        position: vector.Vector3(
+          0.0,
+          -1.0,
+          -2.0,
+        ), // Fallback: 2m in front, 1m down
         rotation: rotationVector,
       );
 
-      _logger.d('   Node URI: ${nodeToPlace.uri}');
       _logger.i('🚀 Adding node to AR scene...');
 
       bool? didAddNode;
-      if (_centerHitTransform != null) {
+      if (targetTransform != null) {
         _logger.i('📍 Using detected plane at center for placement');
-        var newAnchor = ARPlaneAnchor(transformation: _centerHitTransform!);
+        var newAnchor = ARPlaneAnchor(transformation: targetTransform);
         bool? didAddAnchor = await arAnchorManager!.addAnchor(newAnchor);
         if (didAddAnchor == true) {
           _currentAnchor = newAnchor;
@@ -1517,6 +1533,42 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
                               color: Colors.greenAccent,
                               fontSize: 14,
                               fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          SizedBox(
+                            width: double.infinity,
+                            child: OutlinedButton.icon(
+                              onPressed: () async {
+                                if (productNode != null) {
+                                  await arObjectManager?.removeNode(
+                                    productNode!,
+                                  );
+                                  if (_currentAnchor != null) {
+                                    await arAnchorManager?.removeAnchor(
+                                      _currentAnchor!,
+                                    );
+                                  }
+                                  setState(() {
+                                    productNode = null;
+                                    _currentAnchor = null;
+                                    _isModelPlaced = false;
+                                    _isManualPlacement = false;
+                                  });
+                                }
+                              },
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: Colors.white,
+                                side: const BorderSide(color: Colors.white30),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 12,
+                                ),
+                              ),
+                              icon: const Icon(Icons.refresh, size: 18),
+                              label: const Text('Remove & Relocate'),
                             ),
                           ),
                         ],
