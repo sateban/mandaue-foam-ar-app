@@ -85,6 +85,15 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
   bool _isCapturing = false; // Snapshot loading state
   // ------------------------------------
 
+  @override
+  void initState() {
+    super.initState();
+    // Check permissions immediately on screen load
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkInitialPermissions();
+    });
+  }
+
   /// Explicitly hide native hand/plane overlays. Must be called before dispose
   /// and when leaving the screen to prevent the overlay from persisting.
   void _hideNativeOverlays() {
