@@ -58,6 +58,22 @@ class ARSessionManager {
     }
   }
 
+  /// Performs a hit test on the current frame at the given screen coordinates [x] and [y] (in pixels)
+  /// Returns a list of [ARHitTestResult]s
+  Future<List<ARHitTestResult>> hitTest(double x, double y) async {
+    try {
+      final results = await _channel
+          .invokeMethod<List<dynamic>>('hitTest', {'x': x, 'y': y});
+      if (results == null) return [];
+      return results
+          .map((e) => ARHitTestResult.fromJson(Map<String, dynamic>.from(e)))
+          .toList();
+    } catch (e) {
+      print('Error performing hit test: $e');
+      return [];
+    }
+  }
+
   /// Returns the given anchor pose in Matrix4 format with respect to the world coordinate system of the [ARView]
   Future<Matrix4?> getPose(ARAnchor anchor) async {
     try {

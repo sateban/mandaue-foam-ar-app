@@ -480,7 +480,7 @@ class _ThreeDViewerDashboardState extends State<ThreeDViewerDashboard> {
                       ),
                     ),
                     const SizedBox(height: 12),
-                    
+
                     if (astronautNode == null)
                       ElevatedButton.icon(
                         onPressed: _addModel,

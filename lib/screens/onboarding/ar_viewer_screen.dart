@@ -71,8 +71,13 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
   vector.Vector3? _dragStartNodePosition;
   ARPlaneAnchor? _currentAnchor;
   DateTime? _lastMoveAt;
-  final Duration _moveThrottle = const Duration(milliseconds: 100); // throttle rapid hit tests
+  final Duration _moveThrottle = const Duration(
+    milliseconds: 100,
+  ); // throttle rapid hit tests
   bool _isUpdatingNodePosition = false; // prevent overlapping updates
+  bool _canPlaceAtCenter = false;
+  Timer? _centerHitTestTimer;
+  vector.Matrix4? _centerHitTransform;
   // ------------------------------------
 
   /// Explicitly hide native hand/plane overlays. Must be called before dispose
@@ -85,7 +90,7 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
         showFeaturePoints: false,
         showPlanes: false,
         showWorldOrigin: false,
-        handlePans: false, 
+        handlePans: false,
         handleRotation: false,
         handleTaps: false,
       );
@@ -127,6 +132,7 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
     } catch (e) {
       _logger.w('Error during AR dispose: $e');
     }
+    _centerHitTestTimer?.cancel();
     super.dispose();
   }
 
@@ -155,7 +161,8 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
         showFeaturePoints: false,
         showPlanes: true, // Show plane detection overlay (dotted grid)
         showWorldOrigin: false,
-        handlePans: false, // Panning handled by overlay to support swipe-anywhere
+        handlePans:
+            false, // Panning handled by overlay to support swipe-anywhere
         handleRotation: false,
         handleTaps: true,
       );
@@ -167,9 +174,40 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
       this.arObjectManager?.onPanEnd = onPanEnd;
 
       _downloadModel();
+      _startCenterHitTestTimer();
     } catch (e, st) {
       _logger.w('Error in onARViewCreated: $e', error: e, stackTrace: st);
     }
+  }
+
+  void _startCenterHitTestTimer() {
+    _centerHitTestTimer?.cancel();
+    _centerHitTestTimer = Timer.periodic(const Duration(milliseconds: 250), (
+      timer,
+    ) async {
+      if (!mounted || _isModelPlaced || _isBusy || arSessionManager == null)
+        return;
+
+      final size = MediaQuery.of(context).size;
+      final center = Offset(size.width / 2, size.height / 2);
+
+      final results = await _performHitTestAt(center);
+      if (results != null && results.isNotEmpty) {
+        if (mounted) {
+          setState(() {
+            _canPlaceAtCenter = true;
+            _centerHitTransform = results.first.worldTransform;
+          });
+        }
+      } else {
+        if (mounted && _canPlaceAtCenter) {
+          setState(() {
+            _canPlaceAtCenter = false;
+            _centerHitTransform = null;
+          });
+        }
+      }
+    });
   }
 
   Future<void> onPlaneOrPointTapped(
@@ -207,84 +245,22 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
     }
   }
 
-  /// Perform a dynamic hit test at the given screen point. Uses multiple
-  /// fallbacks (arObjectManager, arSessionManager) invoked dynamically so
-  /// we can call into the plugin even if a strongly typed method isn't
-  /// available in all versions.
-  Future<List<dynamic>?> _performHitTestAt(Offset screenPoint) async {
+  /// Utility to perform hit test at a specific screen point
+  Future<List<ARHitTestResult>?> _performHitTestAt(Offset screenPoint) async {
+    if (arSessionManager == null) return null;
+
     try {
       final size = MediaQuery.of(context).size;
       final double px = screenPoint.dx.clamp(0.0, size.width);
       final double py = screenPoint.dy.clamp(0.0, size.height);
-      final double nx = (screenPoint.dx / size.width).clamp(0.0, 1.0);
-      final double ny = (screenPoint.dy / size.height).clamp(0.0, 1.0);
 
-      List<dynamic>? results;
+      // Use the newly implemented native hit test method
+      final results = await arSessionManager!.hitTest(px, py);
 
-      // 1) Try pixel-based hit tests (many ARCore bindings expect raw pixels)
-      try {
-        if (arObjectManager != null) {
-          results = await (arObjectManager as dynamic).performHitTest(px, py);
-          if (results != null && results.isNotEmpty) {
-            _logger.d('Hit test (objectManager.performHitTest) succeeded at px,py: $px,$py');
-            return results;
-          }
-        }
-      } catch (e) {
-        _logger.d('objectManager.performHitTest failed: $e');
+      if (results.isNotEmpty) {
+        _logger.d('Hit test succeeded at px,py: $px,$py');
+        return results;
       }
-
-      try {
-        if (arSessionManager != null) {
-          results = await (arSessionManager as dynamic).performHitTest(px, py);
-          if (results != null && results.isNotEmpty) {
-            _logger.d('Hit test (sessionManager.performHitTest) succeeded at px,py: $px,$py');
-            return results;
-          }
-        }
-      } catch (e) {
-        _logger.d('sessionManager.performHitTest failed: $e');
-      }
-
-      try {
-        if (arSessionManager != null) {
-          results = await (arSessionManager as dynamic).hitTest(px, py);
-          if (results != null && results.isNotEmpty) {
-            _logger.d('Hit test (sessionManager.hitTest) succeeded at px,py: $px,$py');
-            return results;
-          }
-        }
-      } catch (e) {
-        _logger.d('sessionManager.hitTest(px,py) failed: $e');
-      }
-
-      // 2) Try normalized fallback (some bindings use normalized coordinates)
-      try {
-        if (arObjectManager != null) {
-          results = await (arObjectManager as dynamic).performHitTest(nx, ny);
-          if (results != null && results.isNotEmpty) {
-            _logger.d('Hit test (objectManager.performHitTest normalized) succeeded');
-            return results;
-          }
-        }
-      } catch (e) {
-        _logger.d('objectManager.performHitTest(normalized) failed: $e');
-      }
-
-      try {
-        if (arObjectManager != null) {
-          results = await (arObjectManager as dynamic).hitTest(nx, ny);
-          if (results != null && results.isNotEmpty) {
-            _logger.d('Hit test (objectManager.hitTest normalized) succeeded');
-            return results;
-          }
-        }
-      } catch (e) {
-        _logger.d('objectManager.hitTest(normalized) failed: $e');
-      }
-
-      // No hits
-      _logger.d('No hit test results at ($px,$py) / normalized ($nx,$ny)');
       return null;
     } catch (e, st) {
       _logger.w('Hit test failed: $e', error: e, stackTrace: st);
@@ -343,11 +319,15 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
   /// Try to move the currently placed node by performing a hit test at the
   /// provided screen point and re-anchoring the node at the hit location.
   Future<void> _tryMoveNodeToScreenPoint(Offset screenPoint) async {
-    if (productNode == null || arAnchorManager == null || arObjectManager == null) return;
+    if (productNode == null ||
+        arAnchorManager == null ||
+        arObjectManager == null)
+      return;
 
     // Throttle to avoid spamming native
     final now = DateTime.now();
-    if (_lastMoveAt != null && now.difference(_lastMoveAt!) < _moveThrottle) return;
+    if (_lastMoveAt != null && now.difference(_lastMoveAt!) < _moveThrottle)
+      return;
     _lastMoveAt = now;
 
     if (_isUpdatingNodePosition) return;
@@ -368,13 +348,16 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
           try {
             final t = _currentAnchor?.transformation;
             if (t != null) {
-              final vector.Vector3? trans = (t is vector.Matrix4) ? t.getTranslation() : null;
+              final vector.Vector3? trans = (t is vector.Matrix4)
+                  ? t.getTranslation()
+                  : null;
               if (trans != null) distanceFactor = trans.length;
             }
           } catch (_) {}
 
           // Sensitivity tuned experimentally: pixels -> meters
-          final double sensitivity = 0.0015 * (distanceFactor > 0 ? distanceFactor : 1.0);
+          final double sensitivity =
+              0.0015 * (distanceFactor > 0 ? distanceFactor : 1.0);
 
           final vector.Vector3 newPos = vector.Vector3(
             (_dragStartNodePosition!.x) + (-dx * sensitivity),
@@ -399,9 +382,15 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
           bool? removed = await arObjectManager?.removeNode(oldNode);
           bool? didAdd = false;
           if (removed == true) {
-            didAdd = await arObjectManager?.addNode(newNode, planeAnchor: _currentAnchor);
+            didAdd = await arObjectManager?.addNode(
+              newNode,
+              planeAnchor: _currentAnchor,
+            );
           } else {
-            didAdd = await arObjectManager?.addNode(newNode, planeAnchor: _currentAnchor);
+            didAdd = await arObjectManager?.addNode(
+              newNode,
+              planeAnchor: _currentAnchor,
+            );
           }
 
           if (didAdd == true) {
@@ -456,10 +445,16 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
       bool? removed = await arObjectManager?.removeNode(oldNode);
       bool? didAdd = false;
       if (removed == true) {
-        didAdd = await arObjectManager?.addNode(newNode, planeAnchor: newAnchor);
+        didAdd = await arObjectManager?.addNode(
+          newNode,
+          planeAnchor: newAnchor,
+        );
       } else {
         // If removal failed, try adding new node anyway
-        didAdd = await arObjectManager?.addNode(newNode, planeAnchor: newAnchor);
+        didAdd = await arObjectManager?.addNode(
+          newNode,
+          planeAnchor: newAnchor,
+        );
       }
 
       if (didAdd == true) {
@@ -507,24 +502,54 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
       _logger.d('   File Exists: $exists');
       _logger.d('   File Size: $size bytes');
 
-      final newNode = ARNode(
+      final vector.Vector4 rotationVector = vector.Vector4(1, 0, 0, 0);
+
+      ARNode nodeToPlace = ARNode(
         type: NodeType.fileSystemAppFolderGLB,
         uri: fileName,
         scale: vector.Vector3(scaleValue, scaleValue, scaleValue),
         position: vector.Vector3(0.0, -1.0, -2.0), // 2m in front, 1m down
-        rotation: vector.Vector4(1, 0, 0, 0),
+        rotation: rotationVector,
       );
 
-      _logger.d('   Node Type: ${newNode.type}');
-      _logger.d('   Node URI: ${newNode.uri}');
+      _logger.d('   Node URI: ${nodeToPlace.uri}');
       _logger.i('🚀 Adding node to AR scene...');
 
-      bool? didAddNode = await arObjectManager?.addNode(newNode);
+      bool? didAddNode;
+      if (_centerHitTransform != null) {
+        _logger.i('📍 Using detected plane at center for placement');
+        var newAnchor = ARPlaneAnchor(transformation: _centerHitTransform!);
+        bool? didAddAnchor = await arAnchorManager!.addAnchor(newAnchor);
+        if (didAddAnchor == true) {
+          _currentAnchor = newAnchor;
+          nodeToPlace = ARNode(
+            type: nodeToPlace.type,
+            uri: nodeToPlace.uri,
+            scale: nodeToPlace.scale,
+            position: vector.Vector3(0, 0, 0), // At the anchor
+            rotation: rotationVector,
+          );
+          didAddNode = await arObjectManager?.addNode(
+            nodeToPlace,
+            planeAnchor: newAnchor,
+          );
+        } else {
+          _logger.w(
+            'Failed to add anchor for center placement, falling back to world coordinates',
+          );
+          didAddNode = await arObjectManager?.addNode(nodeToPlace);
+        }
+      } else {
+        _logger.w(
+          'No plane detected at center, using fixed world coordinates (floating risk)',
+        );
+        didAddNode = await arObjectManager?.addNode(nodeToPlace);
+      }
 
       _logger.i('   Result: ${didAddNode == true ? "SUCCESS" : "FAILED"}');
 
       if (didAddNode ?? false) {
-        productNode = newNode;
+        productNode = nodeToPlace;
         _originalScale = vector.Vector3(scaleValue, scaleValue, scaleValue);
         _logger.i('Model placed successfully with scale: $_originalScale');
         setState(() {
@@ -548,7 +573,9 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
         }
         // Keep AR session stable for model display; overlay handles panning
         if (arSessionManager != null) {
-          _logger.d('Configuring AR session after model placement (overlay-driven pans)');
+          _logger.d(
+            'Configuring AR session after model placement (overlay-driven pans)',
+          );
           arSessionManager?.onInitialize(
             showAnimatedGuide: false,
             showFeaturePoints: false,
@@ -657,7 +684,9 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
         }
         // Keep AR session stable for model display; overlay handles panning
         if (arSessionManager != null) {
-          _logger.d('Configuring AR session after node placed (overlay-driven pans)');
+          _logger.d(
+            'Configuring AR session after node placed (overlay-driven pans)',
+          );
           arSessionManager?.onInitialize(
             showAnimatedGuide: false,
             showFeaturePoints: false,
@@ -824,7 +853,9 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
           _currentNodePosition = newPosition;
           // Update productNode position to sync with native AR position
           if (productNode != null) {
-            _logger.d('Updating model position from ${"productNode!.position"} to $newPosition');
+            _logger.d(
+              'Updating model position from ${"productNode!.position"} to $newPosition',
+            );
             productNode = ARNode(
               type: productNode!.type,
               uri: productNode!.uri,
@@ -1078,6 +1109,51 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
     );
   }
 
+  Widget _buildReticle() {
+    return Center(
+      child: AnimatedOpacity(
+        duration: const Duration(milliseconds: 300),
+        opacity: _canPlaceAtCenter ? 1.0 : 0.5,
+        child: Container(
+          width: 80,
+          height: 80,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            border: Border.all(
+              color: _canPlaceAtCenter
+                  ? const Color(0xFFFDB022)
+                  : Colors.white38,
+              width: 2,
+            ),
+          ),
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              Container(
+                width: 4,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: _canPlaceAtCenter
+                      ? const Color(0xFFFDB022)
+                      : Colors.white38,
+                  shape: BoxShape.circle,
+                ),
+              ),
+              if (!_canPlaceAtCenter)
+                const SizedBox(
+                  width: 60,
+                  height: 60,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 1,
+                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white24),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1105,6 +1181,13 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
               planeDetectionConfig: PlaneDetectionConfig.horizontalAndVertical,
             ),
 
+            // Center Reticle
+            if (!_isModelPlaced &&
+                !_isPlacingModel &&
+                !_isBusy &&
+                !_showCoachingOverlay)
+              _buildReticle(),
+
             // Full-screen gesture overlay (transparent). Captures pan and tap
             // and translates them into AR hit tests at runtime (dynamic call)
             // to support moving the object by swiping anywhere on screen.
@@ -1122,7 +1205,11 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
                       await _tryMoveNodeToScreenPoint(tapPos);
                     }
                   } catch (e, st) {
-                    _logger.w('Gesture overlay tap error: $e', error: e, stackTrace: st);
+                    _logger.w(
+                      'Gesture overlay tap error: $e',
+                      error: e,
+                      stackTrace: st,
+                    );
                   }
                 },
                 onPanStart: (details) {
@@ -1367,7 +1454,7 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
                           )
                         else if (!_isModelPlaced) ...[
                           const Text(
-                            'Point camera at the floor and tap on a detected plane to place the item.',
+                            'Point camera at the floor and wait for the reticle to appear.',
                             textAlign: TextAlign.center,
                             style: TextStyle(
                               color: Colors.white70,
@@ -1379,26 +1466,44 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
                             width: double.infinity,
                             height: 52,
                             child: ElevatedButton.icon(
-                              onPressed: (_localModelPath != null && !_isBusy)
+                              onPressed:
+                                  (_localModelPath != null &&
+                                      !_isBusy &&
+                                      _canPlaceAtCenter)
                                   ? _placeModelAtCenter
                                   : null,
                               style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFFFDB022),
-                                disabledBackgroundColor: Colors.grey,
+                                backgroundColor: _canPlaceAtCenter
+                                    ? const Color(0xFFFDB022)
+                                    : Colors.grey[700],
+                                disabledBackgroundColor: Colors.grey[800],
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(12),
                                 ),
                               ),
-                              icon: const Icon(
-                                Icons.add_location,
-                                color: Colors.black,
-                              ),
-                              label: const Text(
-                                'Place Item',
+                              icon: _canPlaceAtCenter
+                                  ? const Icon(
+                                      Icons.add_location,
+                                      color: Colors.black,
+                                    )
+                                  : const SizedBox(
+                                      width: 20,
+                                      height: 20,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color: Colors.white54,
+                                      ),
+                                    ),
+                              label: Text(
+                                _canPlaceAtCenter
+                                    ? 'Place Item'
+                                    : 'Scanning for Floor...',
                                 style: TextStyle(
                                   fontSize: 16,
                                   fontWeight: FontWeight.bold,
-                                  color: Colors.black,
+                                  color: _canPlaceAtCenter
+                                      ? Colors.black
+                                      : Colors.white54,
                                 ),
                               ),
                             ),
@@ -1468,11 +1573,16 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
                             const SizedBox(height: 12),
                             _buildCoachingStep(
                               '2',
-                              'Tap on a detected plane to place the product',
+                              'Wait for the reticle to appear on the floor',
                             ),
                             const SizedBox(height: 12),
                             _buildCoachingStep(
                               '3',
+                              'Click "Place Item" or tap the floor to position it',
+                            ),
+                            const SizedBox(height: 12),
+                            _buildCoachingStep(
+                              '4',
                               'Swipe to move • Rotate wheel to spin',
                             ),
                           ],
