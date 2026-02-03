@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
@@ -51,12 +50,16 @@ class _ThreeDViewerScreenState extends State<ThreeDViewerScreen> {
       return;
     }
 
-    final bytes = await file.readAsBytes();
-    final base64String = base64Encode(bytes);
-    final src = 'data:model/gltf-binary;base64,$base64String';
+    // copy the model to a file named 'model.glb' in the same directory to ensure the name is clean for the referencing
+    final parentDir = file.parent;
+    final modelPath = '${parentDir.path}/model.glb';
+    try {
+      await file.copy(modelPath);
+    } catch (e) {
+      debugPrint('Error copying file: $e');
+    }
 
-    final html =
-        '''
+    final html = '''
       <!DOCTYPE html>
       <html>
       <head>
@@ -69,7 +72,7 @@ class _ThreeDViewerScreenState extends State<ThreeDViewerScreen> {
       </head>
       <body>
         <model-viewer 
-          src="$src" 
+          src="model.glb" 
           camera-controls 
           environment-image="neutral" 
           shadow-intensity="1"
@@ -81,6 +84,10 @@ class _ThreeDViewerScreenState extends State<ThreeDViewerScreen> {
       </body>
       </html>
     ''';
+
+    // Write HTML to file in the same directory
+    final htmlFile = File('${parentDir.path}/viewer.html');
+    await htmlFile.writeAsString(html);
 
     final controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
@@ -94,9 +101,12 @@ class _ThreeDViewerScreenState extends State<ThreeDViewerScreen> {
               });
             }
           },
+          onWebResourceError: (WebResourceError error) {
+            debugPrint('WebView Error: ${error.description}');
+          },
         ),
       )
-      ..loadHtmlString(html);
+      ..loadRequest(Uri.file(htmlFile.path));
 
     if (mounted) {
       setState(() {

@@ -426,9 +426,11 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                 Icons.rotate_right,
                                 color: Color(0xFF1E3A8A),
                               ),
-                              label: const Text(
-                                'View 3D',
-                                style: TextStyle(
+                              label: Text(
+                                _isDownloadingModel
+                                    ? '${(_downloadProgress * 100).toInt()}%'
+                                    : 'View 3D',
+                                style: const TextStyle(
                                   fontSize: 14,
                                   fontWeight: FontWeight.bold,
                                   color: Color(0xFF1E3A8A),
