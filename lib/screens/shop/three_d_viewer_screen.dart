@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_3d_controller/flutter_3d_controller.dart';
+import 'package:model_viewer_plus/model_viewer_plus.dart';
+
+enum LightingMode { front, leftSide }
 
 class ThreeDViewerScreen extends StatefulWidget {
   final String localPath;
@@ -16,11 +18,7 @@ class ThreeDViewerScreen extends StatefulWidget {
 }
 
 class _ThreeDViewerScreenState extends State<ThreeDViewerScreen> {
-  final Flutter3DController _controller = Flutter3DController();
-  bool _isLoading = true;
-
-  // Since Flutter3DViewer is native, it handles memory better for 70MB+ models.
-  // We'll adapt the UI to what the native viewer supports.
+  LightingMode _lightingMode = LightingMode.front;
 
   @override
   Widget build(BuildContext context) {
@@ -43,55 +41,30 @@ class _ThreeDViewerScreenState extends State<ThreeDViewerScreen> {
       ),
       body: Stack(
         children: [
-          // Native 3D Viewer - Much more memory efficient for large models
-          Flutter3DViewer(
+          // 3D Viewer using model_viewer_plus for advanced lighting control
+          ModelViewer(
+            key: ValueKey('${widget.localPath}_${_lightingMode.index}'),
             src: 'file://${widget.localPath}',
-            controller: _controller,
-            onProgress: (double progressValue) {
-              debugPrint('Model Loading Progress: $progressValue');
-            },
-            onLoad: (String modelName) {
-              if (mounted) {
-                setState(() {
-                  _isLoading = false;
-                });
-              }
-            },
-            onError: (String error) {
-              debugPrint('Model Loading Error: $error');
-              if (mounted) {
-                setState(() {
-                  _isLoading = false;
-                });
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('Error loading 3D model: $error'),
-                    backgroundColor: Colors.red,
-                  ),
-                );
-              }
-            },
+            alt: widget.productName,
+            autoRotate: false,
+            cameraControls: true,
+            backgroundColor: Colors.white,
+            // Lighting simulation trick:
+            // Front: Default orientation and camera
+            // Left Side: Rotate model 90deg and compensate camera to look at front again.
+            // Since the environment lighting is fixed in the world, the light now hits the side.
+            orientation: _lightingMode == LightingMode.front
+                ? "0deg 0deg 0deg"
+                : "0deg 90deg 0deg",
+            cameraOrbit: _lightingMode == LightingMode.front
+                ? "0deg 75deg auto"
+                : "-90deg 75deg auto",
+            exposure: _lightingMode == LightingMode.front ? 1.0 : 0.8,
+            shadowIntensity: 1.0,
+            shadowSoftness: 0.5,
           ),
 
-          if (_isLoading)
-            const Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  CircularProgressIndicator(color: Color(0xFF1E3A8A)),
-                  SizedBox(height: 16),
-                  Text(
-                    'Optimizing 3D Model...',
-                    style: TextStyle(
-                      color: Color(0xFF1E3A8A),
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-          // Tools Panel (Simplified for native viewer capabilities)
+          // Tools Panel
           Align(
             alignment: Alignment.bottomCenter,
             child: Container(
@@ -111,46 +84,105 @@ class _ThreeDViewerScreenState extends State<ThreeDViewerScreen> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Row(
+                  Row(
                     children: [
-                      Icon(Icons.touch_app, color: Color(0xFF1E3A8A), size: 20),
-                      SizedBox(width: 8),
-                      Text(
-                        'Viewer Controls',
+                      const Icon(
+                        Icons.light_mode,
+                        color: Color(0xFF1E3A8A),
+                        size: 20,
+                      ),
+                      const SizedBox(width: 8),
+                      const Text(
+                        'Lighting Options',
                         style: TextStyle(
                           fontWeight: FontWeight.bold,
                           color: Color(0xFF1E3A8A),
                         ),
                       ),
+                      const Spacer(),
+                      Text(
+                        _lightingMode == LightingMode.front
+                            ? 'Frontal'
+                            : 'Side Light',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: const Color(0xFF1E3A8A).withValues(alpha: 0.7),
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
                     ],
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _buildLightingButton(
+                          mode: LightingMode.front,
+                          icon: Icons.wb_sunny_outlined,
+                          label: 'Front',
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _buildLightingButton(
+                          mode: LightingMode.leftSide,
+                          icon: Icons.wb_twilight_outlined,
+                          label: 'Left Side',
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
                   const Text(
                     'Pinch to zoom • Drag to rotate • Two fingers to pan',
                     style: TextStyle(fontSize: 12, color: Colors.grey),
-                  ),
-                  const SizedBox(height: 16),
-                  SizedBox(
-                    width: double.infinity,
-                    child: OutlinedButton.icon(
-                      onPressed: () => _controller.resetAnimation(),
-                      icon: const Icon(Icons.refresh),
-                      label: const Text('Reset Model View'),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: const Color(0xFF1E3A8A),
-                        side: const BorderSide(color: Color(0xFF1E3A8A)),
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                    ),
                   ),
                 ],
               ),
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildLightingButton({
+    required LightingMode mode,
+    required IconData icon,
+    required String label,
+  }) {
+    bool isSelected = _lightingMode == mode;
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          _lightingMode = mode;
+        });
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        decoration: BoxDecoration(
+          color: isSelected ? const Color(0xFF1E3A8A) : Colors.transparent,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFF1E3A8A), width: 1.5),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              icon,
+              size: 18,
+              color: isSelected ? Colors.white : const Color(0xFF1E3A8A),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              label,
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                color: isSelected ? Colors.white : const Color(0xFF1E3A8A),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
