@@ -5,6 +5,7 @@ import 'package:path_provider/path_provider.dart';
 import '../../models/product.dart';
 import '../../services/filebase_service.dart';
 import '../onboarding/ar_viewer_screen.dart';
+import 'three_d_viewer_screen.dart';
 
 class ProductDetailScreen extends StatefulWidget {
   final Product product;
@@ -357,66 +358,110 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                     ),
                   ),
                   const SizedBox(height: 32),
-                  // View in AR Button
-                  SizedBox(
-                    width: double.infinity,
-                    height: 56,
-                    child: ElevatedButton.icon(
-                      onPressed:
-                          (widget.product.modelUrl != null &&
-                              widget.product.modelUrl!.isNotEmpty)
-                          ? _isDownloadingModel
-                                ? null
-                                : () => _viewInAR()
-                          : null,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor:
-                            (widget.product.modelUrl != null &&
-                                widget.product.modelUrl!.isNotEmpty)
-                            ? const Color(0xFFFDB022)
-                            : Colors.grey[300],
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                      icon: _isDownloadingModel
-                          ? const SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                valueColor: AlwaysStoppedAnimation<Color>(
-                                  Colors.black,
+                  // View In AR and View 3D Buttons
+                  if (widget.product.modelUrl != null &&
+                      widget.product.modelUrl!.isNotEmpty)
+                    Row(
+                      children: [
+                        Expanded(
+                          child: SizedBox(
+                            height: 56,
+                            child: ElevatedButton.icon(
+                              onPressed: _isDownloadingModel
+                                  ? null
+                                  : () => _handleModelView(isAR: true),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFFFDB022),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
                                 ),
                               ),
-                            )
-                          : Icon(
-                              Icons.view_in_ar,
-                              color:
-                                  (widget.product.modelUrl != null &&
-                                      widget.product.modelUrl!.isNotEmpty)
-                                  ? Colors.black
-                                  : Colors.grey[500],
+                              icon: _isDownloadingModel
+                                  ? const SizedBox(
+                                      width: 20,
+                                      height: 20,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        valueColor:
+                                            AlwaysStoppedAnimation<Color>(
+                                              Colors.black,
+                                            ),
+                                      ),
+                                    )
+                                  : const Icon(
+                                      Icons.view_in_ar,
+                                      color: Colors.black,
+                                    ),
+                              label: Text(
+                                _isDownloadingModel
+                                    ? '${(_downloadProgress * 100).toInt()}%'
+                                    : 'View in AR',
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.black,
+                                ),
+                              ),
                             ),
-                      label: Text(
-                        _isDownloadingModel
-                            ? 'Downloading ${(_downloadProgress * 100).toInt()}%'
-                            : (widget.product.modelUrl != null &&
-                                  widget.product.modelUrl!.isNotEmpty)
-                            ? 'View in AR'
-                            : 'No AR Model Available',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color:
-                              (widget.product.modelUrl != null &&
-                                  widget.product.modelUrl!.isNotEmpty)
-                              ? Colors.black
-                              : Colors.grey[500],
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: SizedBox(
+                            height: 56,
+                            child: OutlinedButton.icon(
+                              onPressed: _isDownloadingModel
+                                  ? null
+                                  : () => _handleModelView(isAR: false),
+                              style: OutlinedButton.styleFrom(
+                                side: const BorderSide(
+                                  color: Color(0xFF1E3A8A),
+                                  width: 2,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                              ),
+                              icon: const Icon(
+                                Icons.rotate_right,
+                                color: Color(0xFF1E3A8A),
+                              ),
+                              label: const Text(
+                                'View 3D',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.bold,
+                                  color: Color(0xFF1E3A8A),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    )
+                  else
+                    SizedBox(
+                      width: double.infinity,
+                      height: 56,
+                      child: ElevatedButton.icon(
+                        onPressed: null,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.grey[300],
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        icon: Icon(Icons.view_in_ar, color: Colors.grey[500]),
+                        label: Text(
+                          'No AR Model Available',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.grey[500],
+                          ),
                         ),
                       ),
                     ),
-                  ),
                   const SizedBox(height: 32),
                   // Add to Cart Button
                   SizedBox(
@@ -527,8 +572,8 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     );
   }
 
-  /// View in AR with download progress
-  Future<void> _viewInAR() async {
+  /// Download/Load model and navigate to viewing screen
+  Future<void> _handleModelView({bool isAR = true}) async {
     if (widget.product.modelUrl == null || widget.product.modelUrl!.isEmpty) {
       return;
     }
@@ -575,17 +620,30 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
       });
 
       if (localPath != null && mounted) {
-        // Navigate to AR viewer
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => ARViewerScreen(
-              productName: widget.product.name,
-              modelUrl: widget.product.modelUrl!,
-              modelScale: widget.product.modelScale,
+        if (isAR) {
+          // Navigate to AR viewer
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => ARViewerScreen(
+                productName: widget.product.name,
+                modelUrl: widget.product.modelUrl!,
+                modelScale: widget.product.modelScale,
+              ),
             ),
-          ),
-        );
+          );
+        } else {
+          // Navigate to 3D Viewer
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => ThreeDViewerScreen(
+                localPath: localPath!,
+                productName: widget.product.name,
+              ),
+            ),
+          );
+        }
       } else {
         // Download failed
         if (mounted) {

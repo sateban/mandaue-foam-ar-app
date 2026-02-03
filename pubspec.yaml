@@ -54,6 +54,8 @@ dependencies:
   minio: ^3.5.8
   image: ^4.2.0
   permission_handler: ^11.3.1
+  flutter_3d_controller: ^2.3.0
+  webview_flutter: ^4.13.1
 
 dev_dependencies:
   flutter_launcher_icons: ^0.13.1
