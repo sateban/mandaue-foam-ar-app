@@ -46,7 +46,7 @@ class _ThreeDViewerScreenState extends State<ThreeDViewerScreen> {
             key: ValueKey('${widget.localPath}_${_lightingMode.index}'),
             src: 'file://${widget.localPath}',
             alt: widget.productName,
-            autoRotate: false,
+            autoRotate: true,
             cameraControls: true,
             backgroundColor: Colors.white,
             // Lighting simulation trick:
@@ -55,10 +55,10 @@ class _ThreeDViewerScreenState extends State<ThreeDViewerScreen> {
             // Since the environment lighting is fixed in the world, the light now hits the side.
             orientation: _lightingMode == LightingMode.front
                 ? "0deg 0deg 0deg"
-                : "0deg 90deg 0deg",
+                : "0deg 0deg 0deg",
             cameraOrbit: _lightingMode == LightingMode.front
                 ? "0deg 75deg auto"
-                : "-90deg 75deg auto",
+                : "0deg 75deg auto",
             exposure: _lightingMode == LightingMode.front ? 1.0 : 0.8,
             shadowIntensity: 1.0,
             shadowSoftness: 0.5,
