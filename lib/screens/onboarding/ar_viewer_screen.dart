@@ -403,15 +403,21 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
               0.0015 * (distanceFactor > 0 ? distanceFactor : 1.0);
 
           final vector.Vector3 newPos = vector.Vector3(
-            (_dragStartNodePosition!.x) + (-dx * sensitivity),
+            (_dragStartNodePosition!.x) + (dx * sensitivity),
             _dragStartNodePosition!.y,
-            (_dragStartNodePosition!.z) + (dy * sensitivity),
+            (_dragStartNodePosition!.z) - (dy * sensitivity),
           );
 
           // CRITICAL: Direct updates during drag.
-          // Note: _dragStartNodePosition is already local to the anchor.
           productNode!.position = newPos;
-          productNode!.scale = _originalScale ?? vector.Vector3.all(1.0);
+          // FORCIBLY SYNC SCALE: Using a clone to be absolutely safe
+          if (_originalScale != null) {
+            productNode!.scale = vector.Vector3.copy(_originalScale!);
+          } else {
+            final double scaleInCm = widget.modelScale ?? 50.0;
+            final double s = scaleInCm / 100.0;
+            productNode!.scale = vector.Vector3(s, s, s);
+          }
           _currentNodePosition = newPos;
         }
         return;
@@ -422,16 +428,26 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
 
       if (isDragging) {
         // SMOOTH DRAG: Update the position property relative to current anchor.
-        // If we don't subtract anchorPos, the model "doubles" its distance and looks smaller.
+        // Use anchor transformation to convert world coordinates to local space
+        // for correct movement even if the anchor is rotated.
         if (_currentAnchor != null) {
-          final anchorPos = _currentAnchor!.transformation.getTranslation();
-          productNode!.position = hitPos - anchorPos;
+          final worldToLocal = vector.Matrix4.inverted(
+            _currentAnchor!.transformation,
+          );
+          final localHitPos = worldToLocal.transformed3(hitPos);
+          productNode!.position = localHitPos;
         } else {
           productNode!.position = hitPos;
         }
 
-        // FORCIBLY SYNC SCALE to prevent shrinking
-        productNode!.scale = _originalScale ?? vector.Vector3.all(1.0);
+        // FORCIBLY SYNC SCALE: Using a clone to be absolutely safe
+        if (_originalScale != null) {
+          productNode!.scale = vector.Vector3.copy(_originalScale!);
+        } else {
+          final double scaleInCm = widget.modelScale ?? 50.0;
+          final double s = scaleInCm / 100.0;
+          productNode!.scale = vector.Vector3(s, s, s);
+        }
         _currentNodePosition = productNode!.position;
       } else {
         // FINAL DROP / TAP: Full Re-anchor
@@ -439,6 +455,10 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
 
         final oldNodeUri = productNode!.uri;
         final oldNodeType = productNode!.type;
+        // Keep a COPY of the scale we should have
+        final vector.Vector3 targetScale = _originalScale != null
+            ? vector.Vector3.copy(_originalScale!)
+            : vector.Vector3.all((widget.modelScale ?? 50.0) / 100.0);
 
         await _clearExistingModel();
 
@@ -455,7 +475,7 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
           final newNode = ARNode(
             type: oldNodeType,
             uri: oldNodeUri,
-            scale: _originalScale ?? vector.Vector3.all(1.0),
+            scale: targetScale,
             position: vector.Vector3.zero(),
             rotation: vector.Vector4(quat.x, quat.y, quat.z, quat.w),
           );
@@ -468,6 +488,8 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
           if (didAdd == true) {
             productNode = newNode;
             _currentAnchor = newAnchor;
+            // Ensure _originalScale is preserved
+            _originalScale = vector.Vector3.copy(targetScale);
           }
         }
 
@@ -878,12 +900,19 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
               'Updating model position from ${productNode!.position} to $newPosition',
             );
 
-            // PRESERVE: Update the position property directly. This triggers the
-            // transformationChanged listener in ARObjectManager, which is much
-            // more efficient than replacing the entire ARNode object.
+            // PRESERVE: Update the position property directly.
             productNode!.position = newPosition;
 
-            _logger.d('✅ Model position synced after pan');
+            // FORCIBLY SYNC SCALE: Prevent any native-side shrinking from persisting
+            if (_originalScale != null) {
+              productNode!.scale = vector.Vector3.copy(_originalScale!);
+            } else {
+              final double scaleInCm = widget.modelScale ?? 50.0;
+              final double s = scaleInCm / 100.0;
+              productNode!.scale = vector.Vector3(s, s, s);
+            }
+
+            _logger.d('✅ Model position and scale synced after pan');
           }
         });
       }
