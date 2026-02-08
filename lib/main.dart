@@ -46,6 +46,7 @@ import 'services/firebase_service.dart';
 import 'services/filebase_service.dart';
 import 'providers/product_provider.dart';
 import 'providers/cart_provider.dart';
+import 'providers/user_provider.dart';
 import 'models/order.dart';
 import 'package:provider/provider.dart';
 
@@ -89,8 +90,13 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
+        ChangeNotifierProvider(create: (context) => UserProvider()),
         ChangeNotifierProvider(create: (context) => ProductProvider()),
-        ChangeNotifierProvider(create: (context) => CartProvider()),
+        ChangeNotifierProxyProvider<UserProvider, CartProvider>(
+          create: (context) => CartProvider(),
+          update: (context, userProvider, cartProvider) =>
+              cartProvider!..updateUser(userProvider),
+        ),
       ],
       child: MaterialApp(
         title: 'Mandaue Foam',
@@ -415,7 +421,6 @@ class ThreeDViewerDashboard extends StatefulWidget {
 class _ThreeDViewerDashboardState extends State<ThreeDViewerDashboard> {
   ARSessionManager? arSessionManager;
   ARObjectManager? arObjectManager;
-  ARAnchorManager? arAnchorManager;
 
   ARNode? astronautNode;
 
@@ -513,8 +518,6 @@ class _ThreeDViewerDashboardState extends State<ThreeDViewerDashboard> {
   ) {
     this.arSessionManager = arSessionManager;
     this.arObjectManager = arObjectManager;
-    this.arAnchorManager = arAnchorManager;
-
     this.arSessionManager!.onInitialize(
       showFeaturePoints: false,
       showPlanes: true,
@@ -522,9 +525,6 @@ class _ThreeDViewerDashboardState extends State<ThreeDViewerDashboard> {
       handleTaps: true,
     );
     this.arObjectManager!.onInitialize();
-
-    // Set up plane tap handler for manual placement
-    this.arSessionManager!.onPlaneOrPointTap = onPlaneOrPointTapped;
 
     // Force model placement immediately without waiting for AR detection
     _addModel();
@@ -535,52 +535,6 @@ class _ThreeDViewerDashboardState extends State<ThreeDViewerDashboard> {
     //     _addModel();
     //   }
     // });
-  }
-
-  void onPlaneOrPointTapped(List<ARHitTestResult> hitTestResults) async {
-    if (astronautNode != null) return; // Already placed
-
-    var singleHitTestResult = hitTestResults.firstOrNull;
-    if (singleHitTestResult != null) {
-      var newAnchor = ARPlaneAnchor(
-        transformation: singleHitTestResult.worldTransform,
-      );
-      bool? didAddAnchor = await arAnchorManager!.addAnchor(newAnchor);
-
-      if (didAddAnchor == true) {
-        _addModelAtAnchor(newAnchor);
-      }
-    }
-  }
-
-  Future<void> _addModelAtAnchor(ARPlaneAnchor anchor) async {
-    if (astronautNode != null) return;
-
-    try {
-      var newNode = ARNode(
-        type: NodeType.fileSystemAppFolderGLB,
-        uri: 'Astronaut.glb',
-        scale: vector.Vector3(0.2, 0.2, 0.2),
-        position: vector.Vector3(0, 0, 0), // Position relative to anchor
-        rotation: vector.Vector4(1, 0, 0, 0),
-      );
-
-      bool? didAddNode = await arObjectManager!.addNode(
-        newNode,
-        planeAnchor: anchor,
-      );
-
-      if (didAddNode == true && mounted) {
-        setState(() {
-          astronautNode = newNode;
-        });
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Model placed on surface!')),
-        );
-      }
-    } catch (e) {
-      debugPrint('Error adding model at anchor: $e');
-    }
   }
 
   Future<void> _addModel() async {

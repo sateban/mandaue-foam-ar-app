@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'dart:async';
-import 'dart:typed_data';
 import 'package:provider/provider.dart';
 import '../../data/dummy_data.dart' show categories, categoryImageUrls;
 import '../../providers/product_provider.dart';
@@ -14,6 +13,7 @@ import 'profile_screen.dart';
 import 'product_detail_screen.dart';
 import 'shop_shell_scope.dart';
 import 'package:logger/logger.dart';
+import '../../widgets/authenticated_image.dart';
 
 var l = Logger();
 
@@ -703,10 +703,19 @@ class _HomeScreenState extends State<HomeScreen> {
                                           borderRadius: BorderRadius.circular(
                                             8,
                                           ),
-                                          child: _AuthenticatedCategoryImage(
+                                          child: AuthenticatedImage(
                                             imageUrl:
                                                 categoryImageUrls[categories[index]] ??
                                                 '',
+                                            fit: BoxFit.cover,
+                                            placeholder: const Center(
+                                              child: CircularProgressIndicator(
+                                                valueColor:
+                                                    AlwaysStoppedAnimation(
+                                                      Color(0xFFFDB022),
+                                                    ),
+                                              ),
+                                            ),
                                           ),
                                         ),
                                       ),
@@ -1548,129 +1557,4 @@ Future<void> showNotificationPanel(BuildContext context) {
       );
     },
   );
-}
-
-/// Widget to load images with AWS Signature V4 authentication
-class AuthenticatedImage extends StatefulWidget {
-  final String imageUrl;
-  final BoxFit fit;
-  final double? width;
-  final double? height;
-
-  const AuthenticatedImage({
-    required this.imageUrl,
-    this.fit = BoxFit.cover,
-    this.width,
-    this.height,
-    super.key,
-  });
-
-  @override
-  State<AuthenticatedImage> createState() => _AuthenticatedImageState();
-}
-
-class _AuthenticatedImageState extends State<AuthenticatedImage> {
-  late Future<Uint8List?> _imageFuture;
-
-  @override
-  void initState() {
-    super.initState();
-    _imageFuture = FilebaseService().getImageBytes(widget.imageUrl);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return FutureBuilder<Uint8List?>(
-      future: _imageFuture,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return Center(
-            child: CircularProgressIndicator(color: Colors.grey[400]),
-          );
-        }
-
-        if (snapshot.hasError || snapshot.data == null) {
-          print('❌ Image load error: ${snapshot.error}');
-          return Center(
-            child: Icon(Icons.image_outlined, color: Colors.grey, size: 48),
-          );
-        }
-
-        return Image.memory(
-          snapshot.data!,
-          fit: widget.fit,
-          width: widget.width,
-          height: widget.height,
-        );
-      },
-    );
-  }
-}
-
-/// Authenticated image widget for categories that fetches images from Filebase
-/// Caches the fetch Future so parent rebuilds (e.g., carousel slide) won't re-trigger downloads.
-class _AuthenticatedCategoryImage extends StatefulWidget {
-  final String imageUrl;
-
-  const _AuthenticatedCategoryImage({required this.imageUrl});
-
-  @override
-  State<_AuthenticatedCategoryImage> createState() =>
-      _AuthenticatedCategoryImageState();
-}
-
-class _AuthenticatedCategoryImageState
-    extends State<_AuthenticatedCategoryImage> {
-  late Future<Uint8List?> _imageFuture;
-
-  @override
-  void initState() {
-    super.initState();
-    _imageFuture = FilebaseService().getImageBytes(widget.imageUrl);
-  }
-
-  @override
-  void didUpdateWidget(covariant _AuthenticatedCategoryImage oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.imageUrl != widget.imageUrl) {
-      _imageFuture = FilebaseService().getImageBytes(widget.imageUrl);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return FutureBuilder<Uint8List?>(
-      future: _imageFuture,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(
-            child: CircularProgressIndicator(
-              valueColor: AlwaysStoppedAnimation(Color(0xFFFDB022)),
-            ),
-          );
-        }
-
-        if (snapshot.hasData && snapshot.data != null) {
-          return Image.memory(snapshot.data!, fit: BoxFit.cover);
-        }
-
-        // Fallback: render a network image (public) or placeholder
-        if (widget.imageUrl.isNotEmpty) {
-          return Image.network(
-            widget.imageUrl,
-            fit: BoxFit.cover,
-            errorBuilder: (context, error, stackTrace) {
-              return const Center(
-                child: Icon(Icons.image_outlined, color: Colors.grey, size: 24),
-              );
-            },
-          );
-        }
-
-        return const Center(
-          child: Icon(Icons.image_outlined, color: Colors.grey, size: 24),
-        );
-      },
-    );
-  }
 }

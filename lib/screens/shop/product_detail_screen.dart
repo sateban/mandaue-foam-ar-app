@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'dart:typed_data';
 import 'dart:io';
 import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
@@ -8,6 +7,7 @@ import '../../services/filebase_service.dart';
 import '../../providers/cart_provider.dart';
 import '../onboarding/ar_viewer_screen.dart';
 import 'three_d_viewer_screen.dart';
+import '../../widgets/authenticated_image.dart';
 
 class ProductDetailScreen extends StatefulWidget {
   final Product product;
@@ -702,61 +702,5 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
         );
       }
     }
-  }
-}
-
-/// Authenticated image loader with Firebase/Filebase caching and MinIO support
-class AuthenticatedImage extends StatefulWidget {
-  final String imageUrl;
-  final BoxFit fit;
-  final double? width;
-  final double? height;
-
-  const AuthenticatedImage({
-    required this.imageUrl,
-    this.fit = BoxFit.cover,
-    this.width,
-    this.height,
-    super.key,
-  });
-
-  @override
-  State<AuthenticatedImage> createState() => _AuthenticatedImageState();
-}
-
-class _AuthenticatedImageState extends State<AuthenticatedImage> {
-  late Future<Uint8List?> _imageFuture;
-
-  @override
-  void initState() {
-    super.initState();
-    _imageFuture = FilebaseService().getImageBytes(widget.imageUrl);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return FutureBuilder<Uint8List?>(
-      future: _imageFuture,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return Center(
-            child: CircularProgressIndicator(color: Colors.grey[400]),
-          );
-        }
-
-        if (snapshot.hasError || snapshot.data == null) {
-          return Center(
-            child: Icon(Icons.image_outlined, color: Colors.grey, size: 48),
-          );
-        }
-
-        return Image.memory(
-          snapshot.data!,
-          fit: widget.fit,
-          width: widget.width,
-          height: widget.height,
-        );
-      },
-    );
   }
 }
