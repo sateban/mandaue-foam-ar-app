@@ -43,39 +43,70 @@ class PaymentSuccessScreen extends StatelessWidget {
               const Text(
                 'Your order has been placed successfully.\nWe will deliver your furniture soon.',
                 textAlign: TextAlign.center,
-                height: 50,
+                style: TextStyle(fontSize: 16, color: Colors.grey, height: 1.5),
+              ),
+              const SizedBox(height: 48),
+              SizedBox(
+                width: double.infinity,
                 child: ElevatedButton(
                   onPressed: () {
-                    Navigator.pushNamed(context, '/order-receipt');
+                    if (orderId != null) {
+                      Navigator.pushNamed(
+                        context,
+                        '/order-receipt',
+                        arguments: orderId,
+                      );
+                    } else {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text(
+                            'Order details not available for receipt.',
+                          ),
+                        ),
+                      );
+                    }
                   },
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFFDB022),
-                    foregroundColor: Colors.white,
+                    backgroundColor: Colors.white,
+                    foregroundColor: const Color(0xFF1E3A8A),
+                    padding: const EdgeInsets.symmetric(vertical: 16),
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(25),
+                      borderRadius: BorderRadius.circular(12),
+                      side: const BorderSide(color: Color(0xFF1E3A8A)),
                     ),
+                    elevation: 0,
                   ),
                   child: const Text(
                     'View E-Receipt',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                   ),
                 ),
               ),
               const SizedBox(height: 16),
-              TextButton(
-                onPressed: () {
-                  Navigator.pushNamedAndRemoveUntil(
-                    context,
-                    '/home',
-                    (route) => false,
-                  );
-                },
-                child: const Text(
-                  'Back to Home',
-                  style: TextStyle(color: Color(0xFF1E3A8A), fontSize: 16),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () {
+                    Navigator.pushNamedAndRemoveUntil(
+                      context,
+                      '/home',
+                      (route) => false,
+                    );
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFFDB022),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: const Text(
+                    'Back to Home',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
                 ),
               ),
-              const SizedBox(height: 32),
             ],
           ),
         ),
