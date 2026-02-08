@@ -1488,7 +1488,7 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
                             gradient: LinearGradient(
                               colors: [
                                 Colors.transparent,
-                                const Color(0xFFFDB022).withOpacity(0.5),
+                                const Color(0xFFFDB022).withValues(alpha: 0.5),
                                 Colors.transparent,
                               ],
                               stops: const [0.0, 0.5, 1.0],
@@ -1503,7 +1503,7 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
                               (index) => Container(
                                 width: 2,
                                 height: index % 3 == 0 ? 25 : 12,
-                                color: Colors.white.withOpacity(0.8),
+                                color: Colors.white.withValues(alpha: 0.8),
                               ),
                             ),
                           ),
@@ -1546,9 +1546,11 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
                   child: Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: Colors.black.withOpacity(0.7),
+                      color: Colors.black.withValues(alpha: 0.7),
                       borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: Colors.white.withOpacity(0.2)),
+                      border: Border.all(
+                        color: Colors.white.withValues(alpha: 0.2),
+                      ),
                     ),
                     child: Column(
                       mainAxisSize: MainAxisSize.min,

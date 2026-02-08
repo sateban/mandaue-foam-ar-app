@@ -35,7 +35,7 @@ class _PaymentSuccessScreenState extends State<PaymentSuccessScreen> {
                 height: 200,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: Colors.green.withOpacity(0.1),
+                  color: Colors.green.withValues(alpha: 0.1),
                 ),
                 child: const Center(
                   child: Icon(
