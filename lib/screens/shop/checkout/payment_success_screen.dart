@@ -1,25 +1,15 @@
 import 'package:flutter/material.dart';
 
-class PaymentSuccessScreen extends StatefulWidget {
+class PaymentSuccessScreen extends StatelessWidget {
   const PaymentSuccessScreen({super.key});
 
   @override
-  State<PaymentSuccessScreen> createState() => _PaymentSuccessScreenState();
-}
-
-class _PaymentSuccessScreenState extends State<PaymentSuccessScreen> {
-  @override
-  void initState() {
-    super.initState();
-    Future.delayed(const Duration(seconds: 3), () {
-      if (mounted) {
-        Navigator.pushNamedAndRemoveUntil(context, '/home', (route) => false);
-      }
-    });
-  }
-
-  @override
   Widget build(BuildContext context) {
+    // Retrieve the Order object passed from arguments
+    final args =
+        ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+    final orderId = args?['orderId'] as String?;
+
     return Scaffold(
       backgroundColor: Colors.white,
       body: SafeArea(
@@ -28,42 +18,31 @@ class _PaymentSuccessScreenState extends State<PaymentSuccessScreen> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Spacer(),
-              // Success animation
               Container(
-                width: 200,
-                height: 200,
-                decoration: BoxDecoration(
+                padding: const EdgeInsets.all(20),
+                decoration: const BoxDecoration(
                   shape: BoxShape.circle,
-                  color: Colors.green.withValues(alpha: 0.1),
+                  color: Color(0xFFE8F5E9),
                 ),
-                child: const Center(
-                  child: Icon(
-                    Icons.check_circle,
-                    size: 120,
-                    color: Colors.green,
-                  ),
+                child: const Icon(
+                  Icons.check_circle,
+                  size: 80,
+                  color: Color(0xFF43A047),
                 ),
               ),
-              const SizedBox(height: 48),
+              const SizedBox(height: 32),
               const Text(
                 'Payment Successful!',
                 style: TextStyle(
-                  fontSize: 28,
+                  fontSize: 24,
                   fontWeight: FontWeight.bold,
                   color: Color(0xFF1E3A8A),
                 ),
               ),
               const SizedBox(height: 16),
               const Text(
-                'Your order has been placed successfully. You will receive a confirmation email shortly.',
+                'Your order has been placed successfully.\nWe will deliver your furniture soon.',
                 textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 14, color: Colors.grey),
-              ),
-              const Spacer(),
-              // View E-Receipt button
-              SizedBox(
-                width: double.infinity,
                 height: 50,
                 child: ElevatedButton(
                   onPressed: () {
