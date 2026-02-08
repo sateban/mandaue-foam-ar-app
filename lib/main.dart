@@ -28,6 +28,7 @@ import 'screens/auth/sign_in_screen.dart';
 import 'screens/auth/sign_up_screen.dart';
 import 'screens/shop/checkout/shipping_address_screen.dart';
 import 'screens/shop/checkout/address_list_screen.dart';
+import 'screens/shop/checkout/add_address_screen.dart';
 import 'screens/shop/checkout/payment_method_screen.dart';
 import 'screens/shop/checkout/payment_success_screen.dart';
 import 'screens/shop/profile/edit_profile_screen.dart';
@@ -152,6 +153,7 @@ class MyApp extends StatelessWidget {
           // Checkout routes
           '/shipping-address': (context) => const ShippingAddressScreen(),
           '/address-list': (context) => const AddressListScreen(),
+          '/add-address': (context) => const AddAddressScreen(),
           '/payment-method': (context) => const PaymentMethodScreen(),
           '/payment-success': (context) => const PaymentSuccessScreen(),
 
