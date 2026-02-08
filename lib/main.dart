@@ -45,6 +45,7 @@ import 'firebase_options.dart';
 import 'services/firebase_service.dart';
 import 'services/filebase_service.dart';
 import 'providers/product_provider.dart';
+import 'providers/cart_provider.dart';
 import 'models/order.dart';
 import 'package:provider/provider.dart';
 
@@ -86,8 +87,11 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider(
-      create: (context) => ProductProvider(),
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (context) => ProductProvider()),
+        ChangeNotifierProvider(create: (context) => CartProvider()),
+      ],
       child: MaterialApp(
         title: 'Mandaue Foam',
         debugShowCheckedModeBanner: false,
@@ -451,11 +455,9 @@ class _ThreeDViewerDashboardState extends State<ThreeDViewerDashboard> {
               child: Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: 0.5),
+                  color: Colors.black.withOpacity(0.5),
                   borderRadius: BorderRadius.circular(20),
-                  border: Border.all(
-                    color: Colors.white.withValues(alpha: 0.2),
-                  ),
+                  border: Border.all(color: Colors.white.withOpacity(0.2)),
                 ),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -480,6 +482,7 @@ class _ThreeDViewerDashboardState extends State<ThreeDViewerDashboard> {
                       ),
                     ),
                     const SizedBox(height: 12),
+
                     if (astronautNode == null)
                       ElevatedButton.icon(
                         onPressed: _addModel,

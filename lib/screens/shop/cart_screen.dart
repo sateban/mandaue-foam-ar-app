@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../../widgets/empty_state_widget.dart';
+import '../../providers/cart_provider.dart';
+import '../../models/cart_item.dart';
 
 class CartScreen extends StatefulWidget {
   const CartScreen({this.showBottomNav = true, super.key});
@@ -11,36 +14,17 @@ class CartScreen extends StatefulWidget {
 }
 
 class _CartScreenState extends State<CartScreen> {
-  final List<CartItem> _cartItems = [
-    // Mock data - replace with actual cart data
-    CartItem(
-      id: '1',
-      name: 'Crafted chair',
-      color: 'Brown',
-      price: 135.00,
-      quantity: 1,
-      imageUrl: 'assets/images/chair.png',
-    ),
-    CartItem(
-      id: '2',
-      name: 'Cozy table',
-      color: 'Brown',
-      price: 118.00,
-      quantity: 1,
-      imageUrl: 'assets/images/table.png',
-    ),
-    CartItem(
-      id: '3',
-      name: 'Cozy Couch',
-      color: 'Beige',
-      price: 190.00,
-      quantity: 1,
-      imageUrl: 'assets/images/couch.png',
-    ),
-  ];
-
   final TextEditingController _promoController = TextEditingController();
   double _discount = 0.0;
+
+  @override
+  void initState() {
+    super.initState();
+    // Load cart when screen initializes
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<CartProvider>().loadCart();
+    });
+  }
 
   @override
   void dispose() {
@@ -48,39 +32,56 @@ class _CartScreenState extends State<CartScreen> {
     super.dispose();
   }
 
-  double get _subtotal =>
-      _cartItems.fold(0, (sum, item) => sum + (item.price * item.quantity));
   double get _shippingCharge => 8.00;
   double get _tax => 10.00;
-  double get _total => _subtotal + _shippingCharge - _discount + _tax;
 
-  void _updateQuantity(String id, int delta) {
-    setState(() {
-      final index = _cartItems.indexWhere((item) => item.id == id);
-      if (index != -1) {
-        final newQuantity = _cartItems[index].quantity + delta;
-        if (newQuantity > 0) {
-          _cartItems[index] = _cartItems[index].copyWith(quantity: newQuantity);
+  void _updateQuantity(String id, int delta, CartProvider cartProvider) async {
+    final item = cartProvider.items.firstWhere((item) => item.id == id);
+    final newQuantity = item.quantity + delta;
+
+    if (newQuantity > 0) {
+      try {
+        await cartProvider.updateQuantity(id, newQuantity);
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Error updating quantity: $e')),
+          );
         }
       }
-    });
+    }
   }
 
-  void _removeItem(String id) {
-    setState(() {
-      _cartItems.removeWhere((item) => item.id == id);
-    });
+  void _removeItem(String id, CartProvider cartProvider) async {
+    try {
+      await cartProvider.removeItem(id);
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Item removed from cart')));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error removing item: $e')));
+      }
+    }
   }
 
-  void _applyPromoCode() {
+  void _applyPromoCode(double subtotal) {
     // Mock promo code logic
     if (_promoController.text.toLowerCase() == 'save10') {
       setState(() {
-        _discount = _subtotal * 0.1;
+        _discount = subtotal * 0.1;
       });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Promo code applied! 10% discount')),
+      );
+    } else if (_promoController.text.isNotEmpty) {
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('Promo code applied!')));
+      ).showSnackBar(const SnackBar(content: Text('Invalid promo code')));
     }
   }
 
@@ -105,8 +106,47 @@ class _CartScreenState extends State<CartScreen> {
         ),
         centerTitle: true,
       ),
-      body: _cartItems.isEmpty
-          ? EmptyStateWidget(
+      body: Consumer<CartProvider>(
+        builder: (context, cartProvider, child) {
+          if (cartProvider.isLoading) {
+            return const Center(
+              child: CircularProgressIndicator(color: Color(0xFFFDB022)),
+            );
+          }
+
+          if (cartProvider.error != null) {
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.error_outline, size: 64, color: Colors.red[300]),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Error loading cart',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.grey[800],
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    cartProvider.error!,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: Colors.grey[600]),
+                  ),
+                  const SizedBox(height: 24),
+                  ElevatedButton(
+                    onPressed: () => cartProvider.loadCart(),
+                    child: const Text('Retry'),
+                  ),
+                ],
+              ),
+            );
+          }
+
+          if (cartProvider.items.isEmpty) {
+            return EmptyStateWidget(
               icon: Icons.shopping_cart_outlined,
               title: 'Oops! Cart Looks Empty',
               message:
@@ -115,25 +155,35 @@ class _CartScreenState extends State<CartScreen> {
               onButtonPressed: () {
                 Navigator.pop(context);
               },
-            )
-          : Column(
-              children: [
-                Expanded(
-                  child: ListView.builder(
-                    padding: const EdgeInsets.all(16),
-                    itemCount: _cartItems.length,
-                    itemBuilder: (context, index) {
-                      return _buildCartItem(_cartItems[index]);
-                    },
-                  ),
+            );
+          }
+
+          final subtotal = cartProvider.subtotal;
+          final total = subtotal + _shippingCharge - _discount + _tax;
+
+          return Column(
+            children: [
+              Expanded(
+                child: ListView.builder(
+                  padding: const EdgeInsets.all(16),
+                  itemCount: cartProvider.items.length,
+                  itemBuilder: (context, index) {
+                    return _buildCartItem(
+                      cartProvider.items[index],
+                      cartProvider,
+                    );
+                  },
                 ),
-                _buildSummary(),
-              ],
-            ),
+              ),
+              _buildSummary(subtotal, total, cartProvider),
+            ],
+          );
+        },
+      ),
     );
   }
 
-  Widget _buildCartItem(CartItem item) {
+  Widget _buildCartItem(CartItem item, CartProvider cartProvider) {
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.all(12),
@@ -193,19 +243,19 @@ class _CartScreenState extends State<CartScreen> {
           Row(
             children: [
               IconButton(
-                onPressed: () => _updateQuantity(item.id, -1),
+                onPressed: () => _updateQuantity(item.id, -1, cartProvider),
                 icon: const Icon(Icons.remove_circle_outline),
                 color: Colors.grey,
               ),
               Text(
-                '${item.quantity.toString().padLeft(2, '0')}',
+                item.quantity.toString().padLeft(2, '0'),
                 style: const TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w600,
                 ),
               ),
               IconButton(
-                onPressed: () => _updateQuantity(item.id, 1),
+                onPressed: () => _updateQuantity(item.id, 1, cartProvider),
                 icon: const Icon(Icons.add_circle),
                 color: const Color(0xFFFDB022),
               ),
@@ -213,7 +263,7 @@ class _CartScreenState extends State<CartScreen> {
           ),
           // Delete button
           IconButton(
-            onPressed: () => _removeItem(item.id),
+            onPressed: () => _removeItem(item.id, cartProvider),
             icon: const Icon(Icons.delete_outline),
             color: Colors.red,
           ),
@@ -222,7 +272,11 @@ class _CartScreenState extends State<CartScreen> {
     );
   }
 
-  Widget _buildSummary() {
+  Widget _buildSummary(
+    double subtotal,
+    double total,
+    CartProvider cartProvider,
+  ) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -258,7 +312,7 @@ class _CartScreenState extends State<CartScreen> {
               ),
               const SizedBox(width: 8),
               ElevatedButton(
-                onPressed: _applyPromoCode,
+                onPressed: () => _applyPromoCode(subtotal),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.grey[200],
                   foregroundColor: Colors.black,
@@ -276,22 +330,24 @@ class _CartScreenState extends State<CartScreen> {
           ),
           const SizedBox(height: 16),
           // Price breakdown
-          _buildPriceRow('Subtotal', _subtotal),
+          _buildPriceRow('Subtotal', subtotal),
           _buildPriceRow('Shipping Charge', _shippingCharge),
           if (_discount > 0)
             _buildPriceRow('Coupon Discount', -_discount, isDiscount: true),
           _buildPriceRow('Tax', _tax),
           const Divider(height: 24),
-          _buildPriceRow('Total', _total, isTotal: true),
+          _buildPriceRow('Total', total, isTotal: true),
           const SizedBox(height: 16),
           // Checkout button
           SizedBox(
             width: double.infinity,
             height: 50,
             child: ElevatedButton(
-              onPressed: () {
-                Navigator.pushNamed(context, '/shipping-address');
-              },
+              onPressed: cartProvider.items.isEmpty
+                  ? null
+                  : () {
+                      Navigator.pushNamed(context, '/shipping-address');
+                    },
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFFFDB022),
                 foregroundColor: Colors.white,
@@ -345,42 +401,6 @@ class _CartScreenState extends State<CartScreen> {
           ),
         ],
       ),
-    );
-  }
-}
-
-class CartItem {
-  final String id;
-  final String name;
-  final String color;
-  final double price;
-  final int quantity;
-  final String imageUrl;
-
-  CartItem({
-    required this.id,
-    required this.name,
-    required this.color,
-    required this.price,
-    required this.quantity,
-    required this.imageUrl,
-  });
-
-  CartItem copyWith({
-    String? id,
-    String? name,
-    String? color,
-    double? price,
-    int? quantity,
-    String? imageUrl,
-  }) {
-    return CartItem(
-      id: id ?? this.id,
-      name: name ?? this.name,
-      color: color ?? this.color,
-      price: price ?? this.price,
-      quantity: quantity ?? this.quantity,
-      imageUrl: imageUrl ?? this.imageUrl,
     );
   }
 }

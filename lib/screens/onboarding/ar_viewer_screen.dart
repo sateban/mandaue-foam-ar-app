@@ -13,7 +13,11 @@ import 'dart:io';
 import 'package:path_provider/path_provider.dart';
 import 'package:ar_flutter_plugin_updated/models/ar_hittest_result.dart';
 import 'package:ar_flutter_plugin_updated/models/ar_anchor.dart';
+import 'package:ar_flutter_plugin_updated/datatypes/hittest_result_types.dart';
 import 'package:logger/logger.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:image/image.dart' as img;
+import 'package:flutter/services.dart';
 import '../../services/filebase_service.dart';
 
 class ARViewerScreen extends StatefulWidget {
@@ -70,10 +74,24 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
   Offset? _dragStartScreen;
   vector.Vector3? _dragStartNodePosition;
   ARPlaneAnchor? _currentAnchor;
+
+  // --- AR State & Timing ---
   DateTime? _lastMoveAt;
-  final Duration _moveThrottle = const Duration(milliseconds: 100); // throttle rapid hit tests
-  bool _isUpdatingNodePosition = false; // prevent overlapping updates
-  // ------------------------------------
+  final Duration _moveThrottle = const Duration(milliseconds: 32);
+  bool _isUpdatingNodePosition = false;
+  bool _canPlaceAtCenter = false;
+  Timer? _centerHitTestTimer;
+  vector.Matrix4? _centerHitTransform;
+  bool _isCapturing = false;
+  // -------------------------
+  @override
+  void initState() {
+    super.initState();
+    // Check permissions immediately on screen load
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkInitialPermissions();
+    });
+  }
 
   /// Explicitly hide native hand/plane overlays. Must be called before dispose
   /// and when leaving the screen to prevent the overlay from persisting.
@@ -85,12 +103,33 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
         showFeaturePoints: false,
         showPlanes: false,
         showWorldOrigin: false,
-        handlePans: false, 
+        handlePans: false,
         handleRotation: false,
         handleTaps: false,
       );
     } catch (e) {
       _logger.w('Error hiding native overlays: $e');
+    }
+  }
+
+  /// Removes any existing node and its associated anchor from the scene.
+  Future<void> _clearExistingModel() async {
+    _logger.d('🧹 Clearing existing model and anchors...');
+    if (productNode != null) {
+      try {
+        await arObjectManager?.removeNode(productNode!);
+      } catch (e) {
+        _logger.w('Error removing node: $e');
+      }
+      productNode = null;
+    }
+    if (_currentAnchor != null) {
+      try {
+        await arAnchorManager?.removeAnchor(_currentAnchor!);
+      } catch (e) {
+        _logger.w('Error removing anchor: $e');
+      }
+      _currentAnchor = null;
     }
   }
 
@@ -127,7 +166,28 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
     } catch (e) {
       _logger.w('Error during AR dispose: $e');
     }
+    _centerHitTestTimer?.cancel();
     super.dispose();
+  }
+
+  Future<void> _checkInitialPermissions() async {
+    _logger.d('Checking storage permissions...');
+    if (Platform.isAndroid) {
+      // Request multiple permissions to cover different Android versions
+      Map<Permission, PermissionStatus> statuses = await [
+        Permission.storage,
+        Permission.photos,
+        Permission.manageExternalStorage,
+      ].request();
+
+      _logger.d('Permission statuses: $statuses');
+
+      if (statuses[Permission.storage]!.isPermanentlyDenied ||
+          statuses[Permission.photos]!.isPermanentlyDenied) {
+        // Only show message if we really need it
+        _logger.w('Permissions permanently denied');
+      }
+    }
   }
 
   void onARViewCreated(
@@ -141,21 +201,17 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
       this.arObjectManager = arObjectManager;
       this.arAnchorManager = arAnchorManager;
 
-      // Attach plane tap callback to session manager so taps on planes are
-      // routed to our in-widget handler (plugin versions expose this on the
-      // session manager rather than via a named ARView parameter).
-      try {
-        this.arSessionManager?.onPlaneOrPointTap = onPlaneOrPointTapped;
-      } catch (_) {
-        // Some versions may use a different callback name; leaving it optional
-      }
+      // We rely on the GestureDetector in the build method for tap handling
+      // because it allows us to handle coordinate scaling (DPI) correctly.
+      // this.arSessionManager?.onPlaneOrPointTap = onPlaneOrPointTapped;
 
       this.arSessionManager?.onInitialize(
         showAnimatedGuide: false,
         showFeaturePoints: false,
         showPlanes: true, // Show plane detection overlay (dotted grid)
         showWorldOrigin: false,
-        handlePans: false, // Panning handled by overlay to support swipe-anywhere
+        handlePans:
+            false, // Panning handled by overlay to support swipe-anywhere
         handleRotation: false,
         handleTaps: true,
       );
@@ -167,124 +223,82 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
       this.arObjectManager?.onPanEnd = onPanEnd;
 
       _downloadModel();
+      _startCenterHitTestTimer();
+      _checkInitialPermissions();
     } catch (e, st) {
       _logger.w('Error in onARViewCreated: $e', error: e, stackTrace: st);
     }
   }
 
-  Future<void> onPlaneOrPointTapped(
-    List<ARHitTestResult> hitTestResults,
-  ) async {
-    if (_isModelPlaced || _isBusy) return;
+  void _startCenterHitTestTimer() {
+    _centerHitTestTimer?.cancel();
+    _centerHitTestTimer = Timer.periodic(const Duration(milliseconds: 250), (
+      timer,
+    ) async {
+      if (!mounted || _isModelPlaced || _isBusy || arSessionManager == null)
+        return;
 
-    if (_localModelPath == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Downloading model... please wait')),
-      );
-      return;
-    }
+      final size = MediaQuery.of(context).size;
+      final center = Offset(size.width / 2, size.height / 2);
 
-    var singleHitTestResult = hitTestResults.firstOrNull;
-    if (singleHitTestResult != null) {
-      setState(() {
-        _isBusy = true;
-      });
-
-      var newAnchor = ARPlaneAnchor(
-        transformation: singleHitTestResult.worldTransform,
-      );
-      bool? didAddAnchor = await arAnchorManager!.addAnchor(newAnchor);
-
-      if (didAddAnchor == true) {
-        // Store as current anchor so subsequent move operations can reuse it
-        _currentAnchor = newAnchor;
-        await _addModelAtAnchor(newAnchor);
+      final results = await _performHitTestAt(center);
+      if (results != null && results.isNotEmpty) {
+        if (mounted) {
+          setState(() {
+            _canPlaceAtCenter = true;
+            _centerHitTransform = results.first.worldTransform;
+          });
+        }
       } else {
-        setState(() {
-          _isBusy = false;
-        });
+        if (mounted && _canPlaceAtCenter) {
+          setState(() {
+            _canPlaceAtCenter = false;
+            _centerHitTransform = null;
+          });
+        }
       }
-    }
+    });
   }
 
-  /// Perform a dynamic hit test at the given screen point. Uses multiple
-  /// fallbacks (arObjectManager, arSessionManager) invoked dynamically so
-  /// we can call into the plugin even if a strongly typed method isn't
-  /// available in all versions.
-  Future<List<dynamic>?> _performHitTestAt(Offset screenPoint) async {
+  /// Utility to perform hit test at a specific screen point
+  Future<List<ARHitTestResult>?> _performHitTestAt(Offset screenPoint) async {
+    if (arSessionManager == null) return null;
+
     try {
       final size = MediaQuery.of(context).size;
-      final double px = screenPoint.dx.clamp(0.0, size.width);
-      final double py = screenPoint.dy.clamp(0.0, size.height);
-      final double nx = (screenPoint.dx / size.width).clamp(0.0, 1.0);
-      final double ny = (screenPoint.dy / size.height).clamp(0.0, 1.0);
+      double px = screenPoint.dx.clamp(0.0, size.width);
+      double py = screenPoint.dy.clamp(0.0, size.height);
 
-      List<dynamic>? results;
-
-      // 1) Try pixel-based hit tests (many ARCore bindings expect raw pixels)
-      try {
-        if (arObjectManager != null) {
-          results = await (arObjectManager as dynamic).performHitTest(px, py);
-          if (results != null && results.isNotEmpty) {
-            _logger.d('Hit test (objectManager.performHitTest) succeeded at px,py: $px,$py');
-            return results;
-          }
-        }
-      } catch (e) {
-        _logger.d('objectManager.performHitTest failed: $e');
+      // On Android, the native hitTest often expects physical pixels.
+      // Flutter's screenPoint and size are in logical pixels.
+      if (Platform.isAndroid) {
+        final devicePixelRatio = MediaQuery.of(context).devicePixelRatio;
+        px *= devicePixelRatio;
+        py *= devicePixelRatio;
       }
 
-      try {
-        if (arSessionManager != null) {
-          results = await (arSessionManager as dynamic).performHitTest(px, py);
-          if (results != null && results.isNotEmpty) {
-            _logger.d('Hit test (sessionManager.performHitTest) succeeded at px,py: $px,$py');
-            return results;
-          }
-        }
-      } catch (e) {
-        _logger.d('sessionManager.performHitTest failed: $e');
-      }
+      // Use the newly implemented native hit test method
+      final results = await arSessionManager!.hitTest(px, py);
 
-      try {
-        if (arSessionManager != null) {
-          results = await (arSessionManager as dynamic).hitTest(px, py);
-          if (results != null && results.isNotEmpty) {
-            _logger.d('Hit test (sessionManager.hitTest) succeeded at px,py: $px,$py');
-            return results;
-          }
-        }
-      } catch (e) {
-        _logger.d('sessionManager.hitTest(px,py) failed: $e');
-      }
+      if (results.isNotEmpty) {
+        // FILTER: Only allow Plane hits and ignore results that are too far away (> 5m)
+        // to prevent the model from "going out" or disappearing into the distance.
+        final List<ARHitTestResult> planeHits = results.where((hit) {
+          return hit.type == ARHitTestResultType.plane && hit.distance < 5.0;
+        }).toList();
 
-      // 2) Try normalized fallback (some bindings use normalized coordinates)
-      try {
-        if (arObjectManager != null) {
-          results = await (arObjectManager as dynamic).performHitTest(nx, ny);
-          if (results != null && results.isNotEmpty) {
-            _logger.d('Hit test (objectManager.performHitTest normalized) succeeded');
-            return results;
-          }
+        if (planeHits.isEmpty) {
+          _logger.d(
+            'No suitable nearby plane hits found at logical ${screenPoint.dx},${screenPoint.dy}',
+          );
+          return null;
         }
-      } catch (e) {
-        _logger.d('objectManager.performHitTest(normalized) failed: $e');
-      }
 
-      try {
-        if (arObjectManager != null) {
-          results = await (arObjectManager as dynamic).hitTest(nx, ny);
-          if (results != null && results.isNotEmpty) {
-            _logger.d('Hit test (objectManager.hitTest normalized) succeeded');
-            return results;
-          }
-        }
-      } catch (e) {
-        _logger.d('objectManager.hitTest(normalized) failed: $e');
+        _logger.d(
+          'Hit test succeeded at logical ${screenPoint.dx},${screenPoint.dy} -> px,py: $px,$py. Found ${planeHits.length} suitable plane hits.',
+        );
+        return planeHits;
       }
-
-      // No hits
-      _logger.d('No hit test results at ($px,$py) / normalized ($nx,$ny)');
       return null;
     } catch (e, st) {
       _logger.w('Hit test failed: $e', error: e, stackTrace: st);
@@ -295,7 +309,37 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
   /// Handle a tap on the screen: place model (if not placed) or move model
   /// to the tapped plane if it already exists.
   Future<void> _handleTapToPlace(Offset screenPoint) async {
-    if (_isBusy || _localModelPath == null) return;
+    if (_isBusy) return;
+
+    // Verify model is ready before allowing placement
+    if (_localModelPath == null) {
+      _logger.w('⚠️ Cannot place model: still downloading');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Please wait, model is downloading...'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+      return;
+    }
+
+    // Verify file exists
+    final file = File(_localModelPath!);
+    if (!await file.exists()) {
+      _logger.e('❌ Model file missing, cannot place');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Model file missing. Please restart the app.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+      return;
+    }
+
     setState(() => _isBusy = true);
 
     try {
@@ -311,6 +355,8 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
         }
         return;
       }
+
+      await _clearExistingModel(); // Clear existing model before placing a new one
 
       final dynamic hit = results.first;
       final newAnchor = ARPlaneAnchor(transformation: hit.worldTransform);
@@ -340,148 +386,162 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
     }
   }
 
-  /// Try to move the currently placed node by performing a hit test at the
-  /// provided screen point and re-anchoring the node at the hit location.
-  Future<void> _tryMoveNodeToScreenPoint(Offset screenPoint) async {
-    if (productNode == null || arAnchorManager == null || arObjectManager == null) return;
+  /// Try to move the currently placed node.
+  /// If [isDragging] is true, we ONLY update the node's local position for feedback.
+  /// If [isDragging] is false (e.g. a tap or pan end), we re-anchor for persistence.
+  Future<void> _tryMoveNodeToScreenPoint(
+    Offset screenPoint, {
+    bool isDragging = false,
+  }) async {
+    if (productNode == null ||
+        arAnchorManager == null ||
+        arObjectManager == null) {
+      return;
+    }
 
     // Throttle to avoid spamming native
     final now = DateTime.now();
-    if (_lastMoveAt != null && now.difference(_lastMoveAt!) < _moveThrottle) return;
+    if (_lastMoveAt != null && now.difference(_lastMoveAt!) < _moveThrottle) {
+      return;
+    }
     _lastMoveAt = now;
 
     if (_isUpdatingNodePosition) return;
     _isUpdatingNodePosition = true;
 
+    // Show loading only for heavy re-anchor operations, not smooth dragging
+    if (!isDragging) setState(() => _isBusy = true);
+
     try {
       final results = await _performHitTestAt(screenPoint);
+
       if (results == null || results.isEmpty) {
-        // Fallback: if hit test yields nothing, translate node locally based on
-        // screen delta (pan) to provide a reasonable swipe-to-move UX.
+        // Fallback: Screen-delta translation
         if (_dragStartScreen != null && _dragStartNodePosition != null) {
-          _logger.d('Using fallback screen-delta translation (no hit results)');
           final dx = screenPoint.dx - _dragStartScreen!.dx;
           final dy = screenPoint.dy - _dragStartScreen!.dy;
 
-          // Estimate distance factor from anchor translation if available
           double distanceFactor = 1.0;
           try {
             final t = _currentAnchor?.transformation;
             if (t != null) {
-              final vector.Vector3? trans = (t is vector.Matrix4) ? t.getTranslation() : null;
-              if (trans != null) distanceFactor = trans.length;
+              distanceFactor = t.getTranslation().length;
             }
           } catch (_) {}
 
-          // Sensitivity tuned experimentally: pixels -> meters
-          final double sensitivity = 0.0015 * (distanceFactor > 0 ? distanceFactor : 1.0);
+          final double sensitivity =
+              0.0015 * (distanceFactor > 0 ? distanceFactor : 1.0);
 
           final vector.Vector3 newPos = vector.Vector3(
-            (_dragStartNodePosition!.x) + (-dx * sensitivity),
+            (_dragStartNodePosition!.x) + (dx * sensitivity),
             _dragStartNodePosition!.y,
-            (_dragStartNodePosition!.z) + (dy * sensitivity),
+            (_dragStartNodePosition!.z) - (dy * sensitivity),
           );
 
-          final oldNode = productNode!;
-          final dynamic oldRotation = oldNode.rotation;
-          final vector.Vector4 rotationVector = (oldRotation is vector.Vector4)
-              ? oldRotation
-              : vector.Vector4(1, 0, 0, 0);
-
-          final newNode = ARNode(
-            type: oldNode.type,
-            uri: oldNode.uri,
-            scale: _originalScale ?? oldNode.scale,
-            position: newPos,
-            rotation: rotationVector,
-          );
-
-          bool? removed = await arObjectManager?.removeNode(oldNode);
-          bool? didAdd = false;
-          if (removed == true) {
-            didAdd = await arObjectManager?.addNode(newNode, planeAnchor: _currentAnchor);
+          // CRITICAL: Direct updates during drag.
+          productNode!.position = newPos;
+          // FORCIBLY SYNC SCALE: Using a clone to be absolutely safe
+          if (_originalScale != null) {
+            productNode!.scale = vector.Vector3.copy(_originalScale!);
           } else {
-            didAdd = await arObjectManager?.addNode(newNode, planeAnchor: _currentAnchor);
+            final double scaleInCm = widget.modelScale ?? 50.0;
+            final double s = scaleInCm / 100.0;
+            productNode!.scale = vector.Vector3(s, s, s);
           }
-
-          if (didAdd == true) {
-            productNode = newNode;
-            setState(() {
-              _isModelPlaced = true;
-            });
-          } else {
-            _logger.w('Fallback move failed - could not add new node');
-          }
+          _currentNodePosition = newPos;
         }
-        _isUpdatingNodePosition = false;
         return;
       }
 
       final dynamic hit = results.first;
-      final newAnchor = ARPlaneAnchor(transformation: hit.worldTransform);
+      final vector.Vector3 hitPos = hit.worldTransform.getTranslation();
 
-      // Remove previous anchor (if any) to avoid orphaned anchors piling up
-      try {
+      if (isDragging) {
+        // SMOOTH DRAG: Update the position property relative to current anchor.
+        // Use anchor transformation to convert world coordinates to local space
+        // for correct movement even if the anchor is rotated.
         if (_currentAnchor != null) {
-          await arAnchorManager?.removeAnchor(_currentAnchor!);
+          final worldToLocal = vector.Matrix4.inverted(
+            _currentAnchor!.transformation,
+          );
+          final localHitPos = worldToLocal.transformed3(hitPos);
+          productNode!.position = localHitPos;
+        } else {
+          productNode!.position = hitPos;
         }
-      } catch (e) {
-        // Non-fatal
-        _logger.w('Failed to remove previous anchor: $e');
-      }
 
-      final added = await arAnchorManager?.addAnchor(newAnchor);
-      if (added != true) {
-        _isUpdatingNodePosition = false;
-        return;
-      }
-
-      // Remove old node, then add a new one attached to the new anchor
-      final oldNode = productNode!;
-      // Ensure rotation matches the expected Vector4 type. Some plugin
-      // versions may return a Matrix3 - fall back to identity in that case.
-      final dynamic oldRotation = oldNode.rotation;
-      final vector.Vector4 rotationVector = (oldRotation is vector.Vector4)
-          ? oldRotation
-          : vector.Vector4(1, 0, 0, 0);
-
-      final newNode = ARNode(
-        type: oldNode.type,
-        uri: oldNode.uri,
-        scale: _originalScale ?? oldNode.scale,
-        position: vector.Vector3(0.0, 0.0, 0.0),
-        rotation: rotationVector,
-      );
-
-      bool? removed = await arObjectManager?.removeNode(oldNode);
-      bool? didAdd = false;
-      if (removed == true) {
-        didAdd = await arObjectManager?.addNode(newNode, planeAnchor: newAnchor);
+        // FORCIBLY SYNC SCALE: Using a clone to be absolutely safe
+        if (_originalScale != null) {
+          productNode!.scale = vector.Vector3.copy(_originalScale!);
+        } else {
+          final double scaleInCm = widget.modelScale ?? 50.0;
+          final double s = scaleInCm / 100.0;
+          productNode!.scale = vector.Vector3(s, s, s);
+        }
+        _currentNodePosition = productNode!.position;
       } else {
-        // If removal failed, try adding new node anyway
-        didAdd = await arObjectManager?.addNode(newNode, planeAnchor: newAnchor);
-      }
+        // FINAL DROP / TAP: Full Re-anchor
+        _logger.i('📍 Finalizing model drop at new anchor');
 
-      if (didAdd == true) {
-        productNode = newNode;
-        _currentAnchor = newAnchor;
+        final oldNodeUri = productNode!.uri;
+        final oldNodeType = productNode!.type;
+        // Keep a COPY of the scale we should have
+        final vector.Vector3 targetScale = _originalScale != null
+            ? vector.Vector3.copy(_originalScale!)
+            : vector.Vector3.all((widget.modelScale ?? 50.0) / 100.0);
+
+        await _clearExistingModel();
+
+        final newAnchor = ARPlaneAnchor(transformation: hit.worldTransform);
+        final added = await arAnchorManager?.addAnchor(newAnchor);
+
+        if (added == true) {
+          // Recreate rotation quaternion from current state
+          final vector.Quaternion quat = vector.Quaternion.axisAngle(
+            vector.Vector3(0, 1, 0),
+            _rotation,
+          );
+
+          final newNode = ARNode(
+            type: oldNodeType,
+            uri: oldNodeUri,
+            scale: targetScale,
+            position: vector.Vector3.zero(),
+            rotation: vector.Vector4(quat.x, quat.y, quat.z, quat.w),
+          );
+
+          bool? didAdd = await arObjectManager?.addNode(
+            newNode,
+            planeAnchor: newAnchor,
+          );
+
+          if (didAdd == true) {
+            productNode = newNode;
+            _currentAnchor = newAnchor;
+            // Ensure _originalScale is preserved
+            _originalScale = vector.Vector3.copy(targetScale);
+          }
+        }
+
         setState(() {
-          _isModelPlaced = true;
-          _showCoachingOverlay = false;
+          _isModelPlaced = (productNode != null);
         });
-      } else {
-        _logger.w('Failed to move node to new anchor');
       }
     } catch (e, st) {
       _logger.e('Move node error: $e', error: e, stackTrace: st);
     } finally {
-      _isUpdatingNodePosition = false;
+      if (mounted) {
+        setState(() {
+          _isUpdatingNodePosition = false;
+          _isBusy = false;
+        });
+      }
     }
   }
 
   /// Place model at screen center (button-triggered placement)
   Future<void> _placeModelAtCenter() async {
-    if (_isModelPlaced || _isBusy || _localModelPath == null) return;
+    if (_isModelPlaced || _isBusy) return;
 
     setState(() {
       _isBusy = true;
@@ -489,42 +549,105 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
     });
 
     try {
+      // CRITICAL: Verify model file exists before attempting placement
+      if (_localModelPath == null) {
+        _logger.w('⚠️ Model not downloaded yet, attempting download...');
+        final downloadedPath = await _downloadModel();
+        if (downloadedPath == null) {
+          throw Exception('Failed to download model');
+        }
+      }
+
+      // Double-check file exists on disk
+      final file = File(_localModelPath!);
+      if (!await file.exists()) {
+        _logger.e('❌ Model file missing from cache, re-downloading...');
+        // Clear the cached path and force re-download
+        _localModelPath = null;
+        final downloadedPath = await _downloadModel();
+        if (downloadedPath == null) {
+          throw Exception('Failed to re-download missing model');
+        }
+      }
+
       _logger.i('📍 Placing model at screen center...');
+
+      // Perform a fresh hit test at the exact center of the screen right now
+      // for maximum precision, rather than relying on the timer-updated transform.
+      final size = MediaQuery.of(context).size;
+      final center = Offset(size.width / 2, size.height / 2);
+      final results = await _performHitTestAt(center);
+
+      vector.Matrix4? targetTransform = _centerHitTransform;
+      if (results != null && results.isNotEmpty) {
+        targetTransform = results.first.worldTransform;
+      }
+
       // modelScale from Firebase is in centimeters, convert to meters for AR
       final double scaleInCm = widget.modelScale ?? 50.0;
       final double scaleValue = scaleInCm / 100.0; // Convert CM to meters
       final fileName = _localModelPath!.split('/').last;
 
       _logger.d('🎯 Placing AR Model:');
+      _logger.d('   File: $fileName');
       _logger.d('   Full Path: $_localModelPath');
-      _logger.d('   File Name: $fileName');
       _logger.d('   Scale (CM): $scaleInCm -> (Meters): $scaleValue');
 
-      // Verify file exists
-      final file = File(_localModelPath!);
-      final exists = await file.exists();
-      final size = exists ? await file.length() : 0;
-      _logger.d('   File Exists: $exists');
-      _logger.d('   File Size: $size bytes');
+      final vector.Vector4 rotationVector = vector.Vector4(1, 0, 0, 0);
 
-      final newNode = ARNode(
+      ARNode nodeToPlace = ARNode(
         type: NodeType.fileSystemAppFolderGLB,
         uri: fileName,
         scale: vector.Vector3(scaleValue, scaleValue, scaleValue),
-        position: vector.Vector3(0.0, -1.0, -2.0), // 2m in front, 1m down
-        rotation: vector.Vector4(1, 0, 0, 0),
+        position: vector.Vector3(
+          0.0,
+          -1.0,
+          -2.0,
+        ), // Fallback: 2m in front, 1m down
+        rotation: rotationVector,
       );
 
-      _logger.d('   Node Type: ${newNode.type}');
-      _logger.d('   Node URI: ${newNode.uri}');
       _logger.i('🚀 Adding node to AR scene...');
 
-      bool? didAddNode = await arObjectManager?.addNode(newNode);
+      bool? didAddNode;
+      if (targetTransform != null) {
+        _logger.i('📍 Using detected plane at center for placement');
+
+        // Ensure scene is clear before adding
+        await _clearExistingModel();
+
+        var newAnchor = ARPlaneAnchor(transformation: targetTransform);
+        bool? didAddAnchor = await arAnchorManager!.addAnchor(newAnchor);
+        if (didAddAnchor == true) {
+          _currentAnchor = newAnchor;
+          nodeToPlace = ARNode(
+            type: nodeToPlace.type,
+            uri: nodeToPlace.uri,
+            scale: nodeToPlace.scale,
+            position: vector.Vector3(0, 0, 0), // At the anchor
+            rotation: rotationVector,
+          );
+          didAddNode = await arObjectManager?.addNode(
+            nodeToPlace,
+            planeAnchor: newAnchor,
+          );
+        } else {
+          _logger.w(
+            'Failed to add anchor for center placement, falling back to world coordinates',
+          );
+          didAddNode = await arObjectManager?.addNode(nodeToPlace);
+        }
+      } else {
+        _logger.w(
+          'No plane detected at center, using fixed world coordinates (floating risk)',
+        );
+        didAddNode = await arObjectManager?.addNode(nodeToPlace);
+      }
 
       _logger.i('   Result: ${didAddNode == true ? "SUCCESS" : "FAILED"}');
 
       if (didAddNode ?? false) {
-        productNode = newNode;
+        productNode = nodeToPlace;
         _originalScale = vector.Vector3(scaleValue, scaleValue, scaleValue);
         _logger.i('Model placed successfully with scale: $_originalScale');
         setState(() {
@@ -535,7 +658,6 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
           _showCoachingOverlay = false;
           // Re-enable manual mode to allow swiping
           _isManualPlacement = true;
-          _showGuide = true;
         });
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -548,7 +670,9 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
         }
         // Keep AR session stable for model display; overlay handles panning
         if (arSessionManager != null) {
-          _logger.d('Configuring AR session after model placement (overlay-driven pans)');
+          _logger.d(
+            'Configuring AR session after model placement (overlay-driven pans)',
+          );
           arSessionManager?.onInitialize(
             showAnimatedGuide: false,
             showFeaturePoints: false,
@@ -591,6 +715,24 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
 
   Future<void> _addModelAtAnchor(ARPlaneAnchor anchor) async {
     try {
+      // CRITICAL: Verify model is downloaded before attempting to add
+      if (_localModelPath == null) {
+        _logger.e('❌ Cannot add model: _localModelPath is null');
+        throw Exception('Model not downloaded');
+      }
+
+      // Verify file exists on disk
+      final file = File(_localModelPath!);
+      if (!await file.exists()) {
+        _logger.e('❌ Model file missing: $_localModelPath');
+        // Attempt to re-download
+        _localModelPath = null;
+        final downloadedPath = await _downloadModel();
+        if (downloadedPath == null) {
+          throw Exception('Failed to re-download missing model');
+        }
+      }
+
       // modelScale from Firebase is in centimeters, convert to meters for AR
       final double scaleInCm = widget.modelScale ?? 50.0;
       final double scaleValue = scaleInCm / 100.0; // Convert CM to meters
@@ -602,11 +744,14 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
       _logger.d('   Scale (CM): $scaleInCm -> (Meters): $scaleValue');
 
       // Verify file exists
-      final file = File(_localModelPath!);
       final exists = await file.exists();
       final size = exists ? await file.length() : 0;
       _logger.d('   File Exists: $exists');
       _logger.d('   File Size: $size bytes');
+
+      if (!exists || size == 0) {
+        throw Exception('Model file is invalid or empty');
+      }
 
       final newNode = ARNode(
         type: NodeType.fileSystemAppFolderGLB,
@@ -644,7 +789,6 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
           _showCoachingOverlay = false;
           // Re-enable manual mode to allow swiping
           _isManualPlacement = true;
-          _showGuide = true;
         });
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -657,7 +801,9 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
         }
         // Keep AR session stable for model display; overlay handles panning
         if (arSessionManager != null) {
-          _logger.d('Configuring AR session after node placed (overlay-driven pans)');
+          _logger.d(
+            'Configuring AR session after node placed (overlay-driven pans)',
+          );
           arSessionManager?.onInitialize(
             showAnimatedGuide: false,
             showFeaturePoints: false,
@@ -701,14 +847,25 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
   /// Download and cache the 3D model from URL
   Future<String?> _downloadModel() async {
     try {
-      if (_localModelPath != null) return _localModelPath;
+      // Check if we have a cached path but the file is missing (cache cleared)
+      if (_localModelPath != null) {
+        final cachedFile = File(_localModelPath!);
+        if (await cachedFile.exists()) {
+          print('📦 Using existing cached model: $_localModelPath');
+          return _localModelPath;
+        } else {
+          print('⚠️ Cached path exists but file missing, will re-download');
+          _localModelPath = null; // Clear invalid cache path
+        }
+      }
 
       print('🔍 Model URL received: ${widget.modelUrl}');
       final fileName = widget.modelUrl.split('/').last;
 
-      // Use app support directory for AR plugin compatibility
-      final appSupportDir = await getApplicationSupportDirectory();
-      final filePath = '${appSupportDir.path}/$fileName';
+      // Use getApplicationDocumentsDirectory which points to 'app_flutter'
+      // This matches the path where the AR plugin's NodeType.fileSystemAppFolderGLB looks
+      final appDocDir = await getApplicationDocumentsDirectory();
+      final filePath = '${appDocDir.path}/$fileName';
       final file = File(filePath);
 
       setState(() {
@@ -819,20 +976,28 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
       _logger.d('New position extracted: $newPosition');
 
       // Update our state to track the new position
-      if (mounted && newPosition != null) {
+      if (mounted) {
         setState(() {
           _currentNodePosition = newPosition;
           // Update productNode position to sync with native AR position
           if (productNode != null) {
-            _logger.d('Updating model position from ${"productNode!.position"} to $newPosition');
-            productNode = ARNode(
-              type: productNode!.type,
-              uri: productNode!.uri,
-              scale: _originalScale ?? productNode!.scale,
-              position: newPosition,
-              rotation: vector.Vector4(1, 0, 0, 0),
+            _logger.d(
+              'Updating model position from ${productNode!.position} to $newPosition',
             );
-            _logger.d('✅ Model position synced after pan');
+
+            // PRESERVE: Update the position property directly.
+            productNode!.position = newPosition;
+
+            // FORCIBLY SYNC SCALE: Prevent any native-side shrinking from persisting
+            if (_originalScale != null) {
+              productNode!.scale = vector.Vector3.copy(_originalScale!);
+            } else {
+              final double scaleInCm = widget.modelScale ?? 50.0;
+              final double s = scaleInCm / 100.0;
+              productNode!.scale = vector.Vector3(s, s, s);
+            }
+
+            _logger.d('✅ Model position and scale synced after pan');
           }
         });
       }
@@ -885,57 +1050,34 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
   //   }
   // }
 
-  /// Graceful exit: tear down AR session then pop. Always pops even if dispose fails.
+  /// Graceful exit: fire tear-down then pop immediately.
   Future<void> _exitARView() async {
     if (_isExiting) return;
+    _isExiting = true;
     _logger.i('🔙 Exiting AR view...');
     _isDisposing = true;
 
     try {
-      // 1) Hide native overlays
-      try {
-        _hideNativeOverlays();
-      } catch (e) {
-        _logger.w('Error hiding overlays: $e');
-      }
+      // 1) Hide native overlays immediately
+      _hideNativeOverlays();
 
-      // 2) Dispose AR session (with timeout so we never hang)
+      // 2) Fire-and-forget AR session dispose
+      // We don't await this to ensure the UI pops instantly.
       final session = arSessionManager;
       arSessionManager = null;
       arObjectManager = null;
       arAnchorManager = null;
       if (session != null) {
-        try {
-          await session.dispose().timeout(
-            const Duration(seconds: 3),
-            onTimeout: () {
-              _logger.w('AR session dispose timed out');
-            },
-          );
-        } catch (e) {
-          _logger.w('Error disposing AR session: $e');
-        }
+        session.dispose().catchError((e) {
+          _logger.w('Background AR dispose error: $e');
+        });
       }
-
-      // 3) Brief delay for native cleanup
-      try {
-        await Future.delayed(const Duration(milliseconds: 200));
-      } catch (_) {}
-    } catch (e, st) {
-      _logger.w('Exit error: $e', error: e, stackTrace: st);
+    } catch (e) {
+      _logger.w('Exit cleanup error: $e');
     } finally {
-      // Always pop so user can exit even if dispose failed
-      if (!mounted) return;
-      try {
-        setState(() => _isExiting = true);
-      } catch (_) {}
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        try {
-          if (mounted) Navigator.of(context).pop();
-        } catch (e) {
-          _logger.w('Error popping: $e');
-        }
-      });
+      if (mounted) {
+        Navigator.of(context).pop();
+      }
     }
   }
 
@@ -996,42 +1138,13 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
         _rotation = angle;
       });
 
-      // Create quaternion for Y-axis rotation
-      final quaternion = vector.Quaternion.axisAngle(
-        vector.Vector3(0, 1, 0), // Y-axis (vertical)
-        angle,
-      );
+      // Update the node's rotation directly on its transform matrix.
+      // This is butter-smooth because it triggers the transformationChanged listener
+      // in the ARObjectManager without removing/re-adding the node.
+      // Using Z-axis rotation as requested.
+      productNode!.rotation = vector.Matrix3.rotationY(angle);
 
-      // Create updated node with new rotation but same position and scale
-      final updatedNode = ARNode(
-        type: productNode!.type,
-        uri: productNode!.uri,
-        scale: _originalScale ?? productNode!.scale,
-        position: productNode!.position,
-        rotation: vector.Vector4(
-          quaternion.x,
-          quaternion.y,
-          quaternion.z,
-          quaternion.w,
-        ),
-      );
-
-      // IMPORTANT: Wait for removal before adding to prevent duplication
-      arObjectManager?.removeNode(productNode!).then((removed) async {
-        if (removed == true) {
-          final success = await arObjectManager?.addNode(updatedNode);
-          if (success == true) {
-            setState(() {
-              productNode = updatedNode;
-            });
-            _logger.d('✅ Node rotated successfully');
-          } else {
-            _logger.w('⚠️ Failed to add rotated node');
-          }
-        } else {
-          _logger.w('⚠️ Failed to remove old node for rotation');
-        }
-      });
+      _logger.d('✅ Node rotation updated smoothly');
     } catch (e, stackTrace) {
       _logger.e('Error rotating node', error: e, stackTrace: stackTrace);
     }
@@ -1078,6 +1191,51 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
     );
   }
 
+  Widget _buildReticle() {
+    return Center(
+      child: AnimatedOpacity(
+        duration: const Duration(milliseconds: 300),
+        opacity: _canPlaceAtCenter ? 1.0 : 0.5,
+        child: Container(
+          width: 80,
+          height: 80,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            border: Border.all(
+              color: _canPlaceAtCenter
+                  ? const Color(0xFFFDB022)
+                  : Colors.white38,
+              width: 2,
+            ),
+          ),
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              Container(
+                width: 4,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: _canPlaceAtCenter
+                      ? const Color(0xFFFDB022)
+                      : Colors.white38,
+                  shape: BoxShape.circle,
+                ),
+              ),
+              if (!_canPlaceAtCenter)
+                const SizedBox(
+                  width: 60,
+                  height: 60,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 1,
+                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white24),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1105,6 +1263,58 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
               planeDetectionConfig: PlaneDetectionConfig.horizontalAndVertical,
             ),
 
+            // Subtle Loading Indicator for Move/Relocate actions
+            if (_isBusy && _isModelPlaced && !_isPlacingModel)
+              Positioned(
+                top: MediaQuery.of(context).padding.top + 70,
+                left: 0,
+                right: 0,
+                child: Center(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 8,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.black54,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: Colors.white24),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              Color(0xFFFDB022),
+                            ),
+                          ),
+                        ),
+                        SizedBox(width: 10),
+                        Text(
+                          'Updating...',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+
+            // Center Reticle
+            if (!_isModelPlaced &&
+                !_isPlacingModel &&
+                !_isBusy &&
+                !_showCoachingOverlay)
+              _buildReticle(),
+
             // Full-screen gesture overlay (transparent). Captures pan and tap
             // and translates them into AR hit tests at runtime (dynamic call)
             // to support moving the object by swiping anywhere on screen.
@@ -1122,7 +1332,11 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
                       await _tryMoveNodeToScreenPoint(tapPos);
                     }
                   } catch (e, st) {
-                    _logger.w('Gesture overlay tap error: $e', error: e, stackTrace: st);
+                    _logger.w(
+                      'Gesture overlay tap error: $e',
+                      error: e,
+                      stackTrace: st,
+                    );
                   }
                 },
                 onPanStart: (details) {
@@ -1135,14 +1349,24 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
                 onPanUpdate: (details) async {
                   if (!_isSwipingAnywhere || productNode == null) return;
                   _lastPanScreenPosition = details.localPosition;
-                  // First try precise hit-test re-anchoring; if no hit, fall back
-                  // to a screen-delta based local translation that feels natural.
-                  await _tryMoveNodeToScreenPoint(details.localPosition);
+                  // Only update position during drag for smoothness and crash prevention
+                  await _tryMoveNodeToScreenPoint(
+                    details.localPosition,
+                    isDragging: true,
+                  );
                 },
-                onPanEnd: (details) {
+                onPanEnd: (details) async {
+                  if (_lastPanScreenPosition != null) {
+                    // Final re-anchor at the end of the swipe
+                    await _tryMoveNodeToScreenPoint(
+                      _lastPanScreenPosition!,
+                      isDragging: false,
+                    );
+                  }
                   _isSwipingAnywhere = false;
                   _dragStartScreen = null;
                   _dragStartNodePosition = null;
+                  _lastPanScreenPosition = null;
                 },
                 child: const SizedBox.expand(),
               ),
@@ -1177,41 +1401,42 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
-                        // Manual Placement Toggle - HIDDEN: Manual mode now requires explicit toggle
-                        // Container(
-                        //   padding: const EdgeInsets.symmetric(
-                        //     horizontal: 8,
-                        //     vertical: 4,
-                        //   ),
-                        //   decoration: BoxDecoration(
-                        //     color: _isManualPlacement
-                        //         ? const Color(0xFFFDB022).withValues(alpha: 0.9)
-                        //         : Colors.black54,
-                        //     borderRadius: BorderRadius.circular(20),
-                        //   ),
-                        //   child: Row(
-                        //     mainAxisSize: MainAxisSize.min,
-                        //     children: [
-                        //       const Text(
-                        //         'Manual',
-                        //         style: TextStyle(
-                        //           color: Colors.white,
-                        //           fontSize: 12,
-                        //         ),
-                        //       ),
-                        //       Switch(
-                        //         value: _isManualPlacement,
-                        //         onChanged: _toggleManualPlacement,
-                        //         activeThumbColor: Colors.white,
-                        //         activeTrackColor: Colors.orange,
-                        //         inactiveThumbColor: Colors.grey,
-                        //         inactiveTrackColor: Colors.grey[800],
-                        //         materialTapTargetSize:
-                        //             MaterialTapTargetSize.shrinkWrap,
-                        //       ),
-                        //     ],
-                        //   ),
-                        // ),
+                        if (_isModelPlaced) ...[
+                          if (_isCapturing)
+                            const SizedBox(
+                              width: 40,
+                              height: 40,
+                              child: Padding(
+                                padding: EdgeInsets.all(10.0),
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Color(0xFFFDB022),
+                                ),
+                              ),
+                            )
+                          else
+                            IconButton(
+                              icon: const Icon(
+                                Icons.camera_alt,
+                                color: Colors.white,
+                              ),
+                              onPressed: _takeSnapshot,
+                              tooltip: 'Save Photo',
+                            ),
+                          IconButton(
+                            icon: Icon(
+                              _isPreviewMode
+                                  ? Icons.visibility_off
+                                  : Icons.visibility,
+                              color: Colors.white,
+                            ),
+                            onPressed: () {
+                              setState(() {
+                                _isPreviewMode = !_isPreviewMode;
+                              });
+                            },
+                          ),
+                        ],
                       ],
                     ),
                   ),
@@ -1226,67 +1451,64 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
               Positioned(
                 bottom:
                     MediaQuery.of(context).padding.bottom +
-                    100, // Above bottom panel
+                    200, // Moved up to clear bottom panel
                 left: 0,
                 right: 0,
-                child: Center(
-                  child: GestureDetector(
-                    onPanUpdate: (details) {
-                      _rotateNode(_rotation + details.delta.dx * 0.01);
-                    },
-                    child: Container(
-                      width: 200,
-                      height: 50,
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [
-                            Colors.transparent,
-                            const Color(0xFFFDB022).withOpacity(0.5),
-                            Colors.transparent,
-                          ],
-                          stops: const [0.0, 0.5, 1.0],
-                        ),
-                        borderRadius: BorderRadius.circular(25),
-                        border: Border.all(color: Colors.white30),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      "Rotate: ${(_rotation * 57.2958).toInt()}°",
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                        shadows: [Shadow(blurRadius: 4, color: Colors.black)],
                       ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                        children: List.generate(
-                          10,
-                          (index) => Container(
-                            width: 2,
-                            height: index % 2 == 0 ? 20 : 10,
-                            color: Colors.white,
+                    ),
+                    const SizedBox(height: 12),
+                    Center(
+                      child: GestureDetector(
+                        onPanUpdate: (details) {
+                          _rotateNode(_rotation + details.delta.dx * 0.01);
+                        },
+                        child: Container(
+                          width: 240,
+                          height: 60,
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [
+                                Colors.transparent,
+                                const Color(0xFFFDB022).withOpacity(0.5),
+                                Colors.transparent,
+                              ],
+                              stops: const [0.0, 0.5, 1.0],
+                            ),
+                            borderRadius: BorderRadius.circular(30),
+                            border: Border.all(color: Colors.white24),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                            children: List.generate(
+                              12,
+                              (index) => Container(
+                                width: 2,
+                                height: index % 3 == 0 ? 25 : 12,
+                                color: Colors.white.withOpacity(0.8),
+                              ),
+                            ),
                           ),
                         ),
                       ),
                     ),
-                  ),
+                  ],
                 ),
               ),
 
-            // Debug Text for Rotation
-            if (_isManualPlacement && _isModelPlaced && !_isPreviewMode)
+            // Preview Toggle - Floating for Preview Mode only
+            if (_isModelPlaced && !_showGuide && _isPreviewMode)
               Positioned(
-                bottom: MediaQuery.of(context).padding.bottom + 160,
-                left: 0,
-                right: 0,
-                child: Text(
-                  "Rotate: ${(_rotation * 57.2958).toInt()}°", // Rad to Deg
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    shadows: [Shadow(blurRadius: 2, color: Colors.black)],
-                  ),
-                ),
-              ),
-
-            // Preview Toggle (Only when model is placed)
-            if (_isModelPlaced && !_showGuide)
-              Positioned(
-                top: _isPreviewMode
-                    ? MediaQuery.of(context).padding.top + 10
-                    : MediaQuery.of(context).padding.top + 60,
+                top: MediaQuery.of(context).padding.top + 10,
                 right: 16,
                 child: IconButton(
                   onPressed: () {
@@ -1294,11 +1516,7 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
                       _isPreviewMode = !_isPreviewMode;
                     });
                   },
-                  icon: Icon(
-                    _isPreviewMode ? Icons.visibility_off : Icons.visibility,
-                    color: Colors.white,
-                  ),
-                  tooltip: _isPreviewMode ? "Exit Preview" : "Preview",
+                  icon: const Icon(Icons.visibility_off, color: Colors.white),
                   style: IconButton.styleFrom(backgroundColor: Colors.black45),
                 ),
               ),
@@ -1367,7 +1585,7 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
                           )
                         else if (!_isModelPlaced) ...[
                           const Text(
-                            'Point camera at the floor and tap on a detected plane to place the item.',
+                            'Point camera at the floor and wait for the reticle to appear.',
                             textAlign: TextAlign.center,
                             style: TextStyle(
                               color: Colors.white70,
@@ -1379,26 +1597,44 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
                             width: double.infinity,
                             height: 52,
                             child: ElevatedButton.icon(
-                              onPressed: (_localModelPath != null && !_isBusy)
+                              onPressed:
+                                  (_localModelPath != null &&
+                                      !_isBusy &&
+                                      _canPlaceAtCenter)
                                   ? _placeModelAtCenter
                                   : null,
                               style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFFFDB022),
-                                disabledBackgroundColor: Colors.grey,
+                                backgroundColor: _canPlaceAtCenter
+                                    ? const Color(0xFFFDB022)
+                                    : Colors.grey[700],
+                                disabledBackgroundColor: Colors.grey[800],
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(12),
                                 ),
                               ),
-                              icon: const Icon(
-                                Icons.add_location,
-                                color: Colors.black,
-                              ),
-                              label: const Text(
-                                'Place Item',
+                              icon: _canPlaceAtCenter
+                                  ? const Icon(
+                                      Icons.add_location,
+                                      color: Colors.black,
+                                    )
+                                  : const SizedBox(
+                                      width: 20,
+                                      height: 20,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color: Colors.white54,
+                                      ),
+                                    ),
+                              label: Text(
+                                _canPlaceAtCenter
+                                    ? 'Place Item'
+                                    : 'Scanning for Floor...',
                                 style: TextStyle(
                                   fontSize: 16,
                                   fontWeight: FontWeight.bold,
-                                  color: Colors.black,
+                                  color: _canPlaceAtCenter
+                                      ? Colors.black
+                                      : Colors.white54,
                                 ),
                               ),
                             ),
@@ -1412,6 +1648,46 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
                               color: Colors.greenAccent,
                               fontSize: 14,
                               fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          SizedBox(
+                            width: double.infinity,
+                            child: OutlinedButton.icon(
+                              onPressed: () async {
+                                _logger.i(
+                                  '🔄 User requested manual reset/relocation',
+                                );
+                                if (productNode != null) {
+                                  await arObjectManager?.removeNode(
+                                    productNode!,
+                                  );
+                                }
+                                if (_currentAnchor != null) {
+                                  await arAnchorManager?.removeAnchor(
+                                    _currentAnchor!,
+                                  );
+                                }
+                                setState(() {
+                                  productNode = null;
+                                  _currentAnchor = null;
+                                  _isModelPlaced = false;
+                                  _isManualPlacement = false;
+                                });
+                                _logger.d('✅ AR state reset successfully');
+                              },
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: Colors.white,
+                                side: const BorderSide(color: Colors.white30),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 12,
+                                ),
+                              ),
+                              icon: const Icon(Icons.refresh, size: 18),
+                              label: const Text('Remove & Relocate'),
                             ),
                           ),
                         ],
@@ -1433,7 +1709,8 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
                       const Icon(Icons.videocam, color: Colors.white, size: 64),
                       const SizedBox(height: 24),
                       const Text(
-                        'Welcome to AR View',
+                        'Mandaue Foam AR View',
+                        textAlign: TextAlign.center,
                         style: TextStyle(
                           color: Colors.white,
                           fontSize: 28,
@@ -1463,17 +1740,22 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
                           children: [
                             _buildCoachingStep(
                               '1',
-                              'Point your camera at the floor or a flat surface',
+                              'Scan: Slowly move your phone to detect the floor or surface.',
                             ),
                             const SizedBox(height: 12),
                             _buildCoachingStep(
                               '2',
-                              'Tap on a detected plane to place the product',
+                              'Focus: Align the center reticle where you want the item to be.',
                             ),
                             const SizedBox(height: 12),
                             _buildCoachingStep(
                               '3',
-                              'Swipe to move • Rotate wheel to spin',
+                              'Place: Tap "Place Item" to drop the 3D model into your room.',
+                            ),
+                            const SizedBox(height: 12),
+                            _buildCoachingStep(
+                              '4',
+                              'Adjust: Swipe to reposition or use the wheel to rotate the item.',
                             ),
                           ],
                         ),
@@ -1570,5 +1852,138 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
         ),
       ),
     );
+  }
+
+  Future<void> _takeSnapshot() async {
+    if (arSessionManager == null || _isCapturing) return;
+
+    // 1. Check Permissions (Robust check for Android 13+)
+    bool hasPermission = false;
+    if (Platform.isAndroid) {
+      final storage = await Permission.storage.status;
+      final photos = await Permission.photos.status;
+      final manage = await Permission.manageExternalStorage.status;
+
+      hasPermission = storage.isGranted || photos.isGranted || manage.isGranted;
+
+      if (!hasPermission) {
+        // Request both to cover all Android versions
+        final statuses = await [
+          Permission.storage,
+          Permission.photos,
+        ].request();
+        hasPermission =
+            statuses[Permission.storage]!.isGranted ||
+            statuses[Permission.photos]!.isGranted;
+      }
+    } else {
+      // iOS
+      hasPermission = (await Permission.photos.request()).isGranted;
+    }
+
+    if (!hasPermission) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Permission required to save photos. Please check app settings.',
+            ),
+          ),
+        );
+      }
+      return;
+    }
+
+    setState(() => _isCapturing = true);
+
+    try {
+      _logger.i('📸 Taking AR snapshot...');
+
+      // Note: ar_session_manager.dart's snapshot() returns Future<ImageProvider>
+      // and it uses MemoryImage(result!) where result is Uint8List.
+      final imageProvider = await arSessionManager!.snapshot();
+      if (imageProvider is! MemoryImage) {
+        throw Exception('Snapshot failed - unexpected image type');
+      }
+      final Uint8List imageBytes = imageProvider.bytes;
+
+      _logger.d('Snapshot captured: ${imageBytes.length} bytes');
+
+      // 2. Process Image (Watermark)
+      _logger.d('Applying watermark...');
+      final img.Image? baseImage = img.decodeImage(imageBytes);
+      if (baseImage == null) throw Exception('Failed to decode captured image');
+
+      // Load Logo Watermark
+      img.Image? logoImg;
+      try {
+        final logoData = await rootBundle.load('assets/images/logo.png');
+        logoImg = img.decodeImage(logoData.buffer.asUint8List());
+      } catch (e) {
+        _logger.w('Logo asset not found for watermark: $e');
+      }
+
+      if (logoImg != null) {
+        // Resize logo to be ~15% of the image width
+        final watermarkWidth = (baseImage.width * 0.15).toInt();
+        final resizedLogo = img.copyResize(logoImg, width: watermarkWidth);
+
+        // Position at bottom-right with 40px margin
+        final x = baseImage.width - resizedLogo.width - 40;
+        final y = baseImage.height - resizedLogo.height - 40;
+
+        img.compositeImage(baseImage, resizedLogo, dstX: x, dstY: y);
+      }
+
+      // 3. Save to /Pictures/MandaueFoam
+      String savePath = '';
+      if (Platform.isAndroid) {
+        final directory = Directory('/storage/emulated/0/Pictures/MandaueFoam');
+        if (!await directory.exists()) {
+          await directory.create(recursive: true);
+        }
+        final timestamp = DateTime.now().millisecondsSinceEpoch;
+        savePath = '${directory.path}/MandaueFoam_AR_$timestamp.jpg';
+      } else {
+        // iOS/Other fallback
+        final directory = await getApplicationDocumentsDirectory();
+        savePath =
+            '${directory.path}/AR_${DateTime.now().millisecondsSinceEpoch}.jpg';
+      }
+
+      final File file = File(savePath);
+      await file.writeAsBytes(img.encodeJpg(baseImage, quality: 95));
+
+      _logger.i('✅ Image saved to: $savePath');
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.check_circle, color: Colors.white),
+                const SizedBox(width: 12),
+                Expanded(child: Text('Photo saved to $savePath')),
+              ],
+            ),
+            backgroundColor: Colors.green.shade700,
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
+    } catch (e, st) {
+      _logger.e('Failed to take snapshot: $e', error: e, stackTrace: st);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error saving photo: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isCapturing = false);
+    }
   }
 }

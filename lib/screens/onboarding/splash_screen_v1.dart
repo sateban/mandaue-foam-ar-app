@@ -14,8 +14,8 @@ class _SplashScreenV1State extends State<SplashScreenV1> {
     super.initState();
     Timer(const Duration(seconds: 1), () {
       if (mounted) {
-        // Navigator.pushReplacementNamed(context, '/welcome');
-        Navigator.pushReplacementNamed(context, '/home');
+        Navigator.pushReplacementNamed(context, '/welcome');
+        // Navigator.pushReplacementNamed(context, '/home'); // Skip to dashboard for testing
       }
     });
   }
