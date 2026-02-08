@@ -22,7 +22,7 @@ class _ShopShellState extends State<ShopShell> {
   final List<Widget> _pages = const [
     HomeScreen(showBottomNav: false),
     CartScreen(showBottomNav: false),
-    OrdersScreen(showBottomNav: false),
+    OrdersScreen(),
     ProfileScreen(showBottomNav: false),
   ];
 
