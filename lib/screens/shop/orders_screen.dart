@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
-import '../../widgets/empty_state_widget.dart';
+import 'package:provider/provider.dart';
 import '../../models/order.dart';
+import '../../services/firebase_service.dart';
+import '../../providers/user_provider.dart';
+import '../../widgets/empty_state_widget.dart';
 
 class OrdersScreen extends StatefulWidget {
-  const OrdersScreen({this.showBottomNav = true, super.key});
-
-  final bool showBottomNav;
+  const OrdersScreen({super.key});
 
   @override
   State<OrdersScreen> createState() => _OrdersScreenState();
@@ -14,42 +15,6 @@ class OrdersScreen extends StatefulWidget {
 class _OrdersScreenState extends State<OrdersScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
-
-  final List<Order> _pendingOrders = [
-    Order(
-      id: '1',
-      userId: 'dummy_user_id',
-      orderNumber: 'ORD-2024-001',
-      orderDate: DateTime.now().subtract(const Duration(days: 2)),
-      status: OrderStatus.pending,
-      items: [
-        OrderItem(
-          productId: '1',
-          productName: 'Crafted chair',
-          imageUrl: 'assets/images/chair.png',
-          quantity: 1,
-          price: 135.00,
-          color: 'Brown',
-        ),
-        OrderItem(
-          productId: '2',
-          productName: 'Cozy couch',
-          imageUrl: 'assets/images/couch.png',
-          quantity: 1,
-          price: 190.00,
-          color: 'Beige',
-        ),
-      ],
-      subtotal: 325.00,
-      shippingCharge: 8.00,
-      discount: 0.00,
-      tax: 10.00,
-      trackingNumber: 'TRK123456789',
-    ),
-  ];
-
-  final List<Order> _completedOrders = [];
-  final List<Order> _cancelledOrders = [];
 
   @override
   void initState() {
@@ -65,9 +30,24 @@ class _OrdersScreenState extends State<OrdersScreen>
 
   @override
   Widget build(BuildContext context) {
+    final userProvider = Provider.of<UserProvider>(context);
+    final userId = userProvider.userId;
+
+    if (!userProvider.isAuthenticated) {
+      return const Scaffold(
+        backgroundColor: Colors.white,
+        body: Center(child: Text('Please log in to view your orders.')),
+      );
+    }
+
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
+        title: const Text(
+          'My Orders',
+          style: TextStyle(color: Color(0xFF1E3A8A)),
+        ),
+        centerTitle: true,
         backgroundColor: Colors.white,
         elevation: 0,
         leading: Navigator.canPop(context)
@@ -76,22 +56,15 @@ class _OrdersScreenState extends State<OrdersScreen>
                 onPressed: () => Navigator.maybePop(context),
               )
             : null,
-        title: const Text(
-          'My Orders',
-          style: TextStyle(
-            color: Color(0xFF1E3A8A),
-            fontWeight: FontWeight.w600,
-            fontSize: 18,
-          ),
-        ),
-        centerTitle: true,
         bottom: TabBar(
           controller: _tabController,
-          labelColor: Colors.white,
+          labelColor: const Color(0xFF1E3A8A),
           unselectedLabelColor: Colors.grey,
-          indicator: BoxDecoration(
-            color: const Color(0xFFFDB022),
-            borderRadius: BorderRadius.circular(25),
+          indicatorColor: const Color(0xFFFDB022),
+          indicatorWeight: 3,
+          labelStyle: const TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 16,
           ),
           tabs: const [
             Tab(text: 'Pending'),
@@ -100,83 +73,141 @@ class _OrdersScreenState extends State<OrdersScreen>
           ],
         ),
       ),
-      body: TabBarView(
-        controller: _tabController,
-        children: [
-          _buildOrderList(_pendingOrders, OrderStatus.pending),
-          _buildOrderList(_completedOrders, OrderStatus.delivered),
-          _buildOrderList(_cancelledOrders, OrderStatus.cancelled),
-        ],
+      body: StreamBuilder<List<Map<String, dynamic>>>(
+        stream: FirebaseService.getOrders(userId),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(
+              child: CircularProgressIndicator(color: Color(0xFFFDB022)),
+            );
+          }
+
+          if (snapshot.hasError) {
+            return Center(child: Text('Error: ${snapshot.error}'));
+          }
+
+          final orderMaps = snapshot.data ?? [];
+          final allOrders = orderMaps.map((m) {
+            // Fix for dynamic maps from Firebase
+            final typedMap = Map<String, dynamic>.from(m);
+            if (typedMap['items'] != null) {
+              typedMap['items'] = (typedMap['items'] as List)
+                  .map((item) => Map<String, dynamic>.from(item as Map))
+                  .toList();
+            }
+            if (typedMap['shippingAddress'] != null) {
+              typedMap['shippingAddress'] = Map<String, dynamic>.from(
+                typedMap['shippingAddress'] as Map,
+              );
+            }
+            return Order.fromMap(typedMap);
+          }).toList();
+
+          final pendingOrders = allOrders
+              .where(
+                (o) =>
+                    o.status == OrderStatus.pending ||
+                    o.status == OrderStatus.processing ||
+                    o.status == OrderStatus.shipped,
+              )
+              .toList();
+
+          final completedOrders = allOrders
+              .where((o) => o.status == OrderStatus.delivered)
+              .toList();
+
+          final cancelledOrders = allOrders
+              .where((o) => o.status == OrderStatus.cancelled)
+              .toList();
+
+          return TabBarView(
+            controller: _tabController,
+            children: [
+              _buildOrderList(pendingOrders),
+              _buildOrderList(completedOrders),
+              _buildOrderList(cancelledOrders),
+            ],
+          );
+        },
       ),
     );
   }
 
-  Widget _buildOrderList(List<Order> orders, OrderStatus status) {
+  Widget _buildOrderList(List<Order> orders) {
     if (orders.isEmpty) {
-      return _buildEmptyState(status);
+      return const EmptyStateWidget(
+        icon: Icons.shopping_bag_outlined,
+        title: 'No Orders Found',
+        message: 'You haven\'t placed any orders in this category yet.',
+        buttonText: '',
+        onButtonPressed: null,
+      );
     }
 
-    return ListView.builder(
+    return ListView.separated(
       padding: const EdgeInsets.all(16),
       itemCount: orders.length,
+      separatorBuilder: (context, index) => const SizedBox(height: 16),
       itemBuilder: (context, index) {
         return _buildOrderCard(orders[index]);
       },
     );
   }
 
-  Widget _buildEmptyState(OrderStatus status) {
-    String title, message, buttonText;
-
-    switch (status) {
-      case OrderStatus.pending:
-        title = 'No Pending Orders';
-        message =
-            'Looks like you haven\'t placed any orders waiting to be processed.';
-        buttonText = 'Start Shopping';
-        break;
-      case OrderStatus.delivered:
-        title = 'No Completed Orders';
-        message = 'You don\'t have any completed orders yet.';
-        buttonText = 'Start Shopping';
-        break;
-      case OrderStatus.cancelled:
-        title = 'No Cancelled Orders';
-        message = 'You don\'t have any cancelled orders.';
-        buttonText = 'Start Shopping';
-        break;
-      default:
-        title = 'No Orders';
-        message = 'You don\'t have any orders yet.';
-        buttonText = 'Start Shopping';
-    }
-
-    return EmptyStateWidget(
-      icon: Icons.hourglass_empty,
-      title: title,
-      message: message,
-      buttonText: buttonText,
-      onButtonPressed: () {
-        Navigator.pushNamedAndRemoveUntil(context, '/home', (route) => false);
-      },
-    );
-  }
-
   Widget _buildOrderCard(Order order) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
         border: Border.all(color: Colors.grey[200]!),
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                order.orderNumber,
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF1E3A8A),
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  color: _getStatusColor(order.status).withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  order.statusText,
+                  style: TextStyle(
+                    color: _getStatusColor(order.status),
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          const Divider(height: 1),
+          const SizedBox(height: 12),
           ...order.items.map(
             (item) => Padding(
-              padding: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.only(bottom: 12.0),
               child: Row(
                 children: [
                   Container(
@@ -185,11 +216,16 @@ class _OrdersScreenState extends State<OrdersScreen>
                     decoration: BoxDecoration(
                       color: Colors.grey[100],
                       borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Icon(
-                      Icons.chair_outlined,
-                      size: 30,
-                      color: Colors.grey[400],
+                      image: DecorationImage(
+                        image: AssetImage(
+                          item.imageUrl,
+                        ), // Assuming asset for now
+                        fit: BoxFit.cover,
+                        // Error builder to handle network images if we switch
+                        onError: (e, s) {
+                          // Handle error
+                        },
+                      ),
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -200,65 +236,118 @@ class _OrdersScreenState extends State<OrdersScreen>
                         Text(
                           item.productName,
                           style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                            color: Color(0xFF1E3A8A),
-                          ),
-                        ),
-                        Text(
-                          'Qty: ${item.quantity.toString().padLeft(2, '0')}',
-                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
                             fontSize: 14,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '${item.quantity} x \$${item.price.toStringAsFixed(2)}',
+                          style: TextStyle(
                             color: Colors.grey[600],
+                            fontSize: 13,
                           ),
                         ),
                       ],
                     ),
                   ),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Text(
-                        '\$${item.price.toStringAsFixed(2)}',
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFF1E3A8A),
-                        ),
-                      ),
-                      if (order.status == OrderStatus.pending)
-                        ElevatedButton(
-                          onPressed: () {
-                            Navigator.pushNamed(
-                              context,
-                              '/track-order',
-                              arguments: order,
-                            );
-                          },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFFFDB022),
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 8,
-                            ),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(20),
-                            ),
-                          ),
-                          child: const Text(
-                            'Track Order',
-                            style: TextStyle(fontSize: 12),
-                          ),
-                        ),
-                    ],
-                  ),
                 ],
               ),
             ),
           ),
+          const Divider(height: 1),
+          const SizedBox(height: 12),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                '${order.items.length} items',
+                style: TextStyle(color: Colors.grey[600]),
+              ),
+              Row(
+                children: [
+                  const Text('Total: ', style: TextStyle(color: Colors.grey)),
+                  Text(
+                    '\$${order.total.toStringAsFixed(2)}',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                      color: Color(0xFF1E3A8A),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: () {
+                    // Navigate to details
+                    // For now, let's use the receipt screen as details
+                    Navigator.pushNamed(
+                      context,
+                      '/order-receipt',
+                      arguments: order.id,
+                    );
+                  },
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFF1E3A8A),
+                    side: const BorderSide(color: Color(0xFF1E3A8A)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  child: const Text('View Details'),
+                ),
+              ),
+              if (order.status == OrderStatus.pending) ...[
+                const SizedBox(width: 12),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: () {
+                      // TODO: Implement Track Order
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Tracking not yet implemented'),
+                        ),
+                      );
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFFFDB022),
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    child: const Text('Track Order'),
+                  ),
+                ),
+              ],
+            ],
+          ),
         ],
       ),
     );
+  }
+
+  Color _getStatusColor(OrderStatus status) {
+    switch (status) {
+      case OrderStatus.pending:
+        return Colors.orange;
+      case OrderStatus.processing:
+        return Colors.blue;
+      case OrderStatus.shipped:
+        return Colors.purple;
+      case OrderStatus.delivered:
+        return Colors.green;
+      case OrderStatus.cancelled:
+        return Colors.red;
+    }
   }
 }
