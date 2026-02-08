@@ -3,6 +3,9 @@ import 'package:firebase_database/firebase_database.dart';
 class FirebaseService {
   static final FirebaseDatabase _database = FirebaseDatabase.instance;
 
+  /// Get Firebase Database instance
+  static FirebaseDatabase getDatabase() => _database;
+
   /// Read single data once
   static Future<Map<dynamic, dynamic>?> readData(String path) async {
     try {
@@ -22,18 +25,15 @@ class FirebaseService {
     try {
       final snapshot = await _database.ref(path).get();
       List<Map<String, dynamic>> list = [];
-      
+
       if (snapshot.exists) {
         final data = snapshot.value;
-        
+
         if (data is Map) {
           // Handle Map data structure (Firebase returns as Map with keys)
           data.forEach((key, value) {
             if (value is Map) {
-              list.add({
-                'id': key,
-                ...Map<String, dynamic>.from(value),
-              });
+              list.add({'id': key, ...Map<String, dynamic>.from(value)});
             }
           });
         } else if (data is List) {
@@ -71,15 +71,12 @@ class FirebaseService {
       List<Map<String, dynamic>> list = [];
       if (event.snapshot.exists) {
         final data = event.snapshot.value;
-        
+
         if (data is Map) {
           // Handle Map data structure (Firebase returns as Map with keys)
           data.forEach((key, value) {
             if (value is Map) {
-              list.add({
-                'id': key,
-                ...Map<String, dynamic>.from(value),
-              });
+              list.add({'id': key, ...Map<String, dynamic>.from(value)});
             }
           });
         } else if (data is List) {
