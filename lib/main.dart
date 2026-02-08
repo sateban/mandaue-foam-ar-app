@@ -46,6 +46,7 @@ import 'services/firebase_service.dart';
 import 'services/filebase_service.dart';
 import 'providers/product_provider.dart';
 import 'providers/cart_provider.dart';
+import 'providers/user_provider.dart';
 import 'models/order.dart';
 import 'package:provider/provider.dart';
 
@@ -89,8 +90,13 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
+        ChangeNotifierProvider(create: (context) => UserProvider()),
         ChangeNotifierProvider(create: (context) => ProductProvider()),
-        ChangeNotifierProvider(create: (context) => CartProvider()),
+        ChangeNotifierProxyProvider<UserProvider, CartProvider>(
+          create: (context) => CartProvider(),
+          update: (context, userProvider, cartProvider) =>
+              cartProvider!..updateUser(userProvider),
+        ),
       ],
       child: MaterialApp(
         title: 'Mandaue Foam',

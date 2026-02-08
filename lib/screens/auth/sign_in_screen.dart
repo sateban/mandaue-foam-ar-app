@@ -5,6 +5,8 @@ import 'package:flutter/foundation.dart';
 import 'otp_verification_screen.dart';
 import 'sign_up_screen.dart';
 import 'forgot_password_screen.dart';
+import 'package:provider/provider.dart';
+import '../../providers/user_provider.dart';
 
 class SignInScreen extends StatefulWidget {
   const SignInScreen({super.key});
@@ -182,15 +184,19 @@ class _SignInScreenState extends State<SignInScreen> {
           // Create a simple "virtual" user without Firebase Auth
           // Store user info in SharedPreferences or database
           if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(
-                  'Signing in as ${googleUser.displayName}...',
-                  style: const TextStyle(color: Colors.black),
-                ),
-                duration: const Duration(seconds: 2),
-                backgroundColor: const Color.fromARGB(255, 219, 219, 219),
-              ),
+            // Store user info in UserProvider for sessions
+            final userProvider = Provider.of<UserProvider>(
+              context,
+              listen: false,
+            );
+            final guestId = googleUser.id; // Use Google's internal ID
+            final guestEmail = googleUser.email;
+            final guestName = googleUser.displayName;
+
+            userProvider.setGuestUser(
+              id: guestId,
+              email: guestEmail,
+              name: guestName,
             );
 
             // Navigate to home screen directly

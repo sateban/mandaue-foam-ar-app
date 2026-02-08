@@ -1,8 +1,8 @@
 import 'package:flutter/foundation.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import '../models/cart_item.dart';
 import '../models/product.dart';
 import '../services/firebase_service.dart';
+import 'user_provider.dart';
 
 /// Cart Provider with Firebase Realtime Database integration
 ///
@@ -20,6 +20,21 @@ class CartProvider extends ChangeNotifier {
   List<CartItem> _items = [];
   bool _isLoading = false;
   String? _error;
+  UserProvider? _userProvider;
+
+  /// Update the internal user reference and reload cart if needed
+  void updateUser(UserProvider userProvider) {
+    if (_userProvider?.userId != userProvider.userId) {
+      print(
+        'CartProvider: User changed from ${_userProvider?.userId} to ${userProvider.userId}',
+      );
+      _userProvider = userProvider;
+      // Reload cart for the new user
+      loadCart();
+    } else {
+      _userProvider = userProvider;
+    }
+  }
 
   List<CartItem> get items => _items;
   bool get isLoading => _isLoading;
@@ -27,14 +42,9 @@ class CartProvider extends ChangeNotifier {
   int get itemCount => _items.length;
   int get totalQuantity => _items.fold(0, (sum, item) => sum + item.quantity);
 
-  /// Get current user ID from Firebase Auth
+  /// Get current user ID from the active session provider
   String? get _userId {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user != null) {
-      return user.uid;
-    }
-    // For testing/development: use a default user ID if not authenticated
-    return 'guest_user';
+    return _userProvider?.userId ?? 'guest_user';
   }
 
   /// Get the cart path for the current user
