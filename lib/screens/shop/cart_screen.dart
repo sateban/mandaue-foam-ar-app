@@ -72,7 +72,8 @@ class _CartScreenState extends State<CartScreen> {
 
   void _applyPromoCode(double subtotal) {
     // Mock promo code logic
-    if (_promoController.text.toLowerCase() == 'save10') {
+    final code = _promoController.text.toUpperCase();
+    if (code == 'SAVE10') {
       setState(() {
         _discount = subtotal * 0.1;
       });
@@ -324,6 +325,13 @@ class _CartScreenState extends State<CartScreen> {
                       vertical: 12,
                     ),
                   ),
+                  textCapitalization: TextCapitalization.characters,
+                  onChanged: (value) {
+                    _promoController.value = TextEditingValue(
+                      text: value.toUpperCase(),
+                      selection: _promoController.selection,
+                    );
+                  },
                 ),
               ),
               const SizedBox(width: 8),

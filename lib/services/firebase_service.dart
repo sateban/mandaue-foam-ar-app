@@ -121,4 +121,94 @@ class FirebaseService {
       print('Error deleting data: $e');
     }
   }
+
+  /// Delete data
+  // Address Management
+  static Future<void> saveAddress(
+    String userId,
+    Map<String, dynamic> addressData,
+  ) async {
+    try {
+      final String? addressId = addressData['id'];
+      if (addressId == null || addressId.isEmpty) {
+        // Create new
+        final newRef = _database.ref('users/$userId/addresses').push();
+        addressData['id'] = newRef.key;
+        await newRef.set(addressData);
+      } else {
+        // Update existing
+        await _database
+            .ref('users/$userId/addresses/$addressId')
+            .set(addressData);
+      }
+    } catch (e) {
+      print('Error saving address: $e');
+      rethrow;
+    }
+  }
+
+  static Stream<List<Map<String, dynamic>>> getAddresses(String userId) {
+    return _database.ref('users/$userId/addresses').onValue.map((event) {
+      List<Map<String, dynamic>> list = [];
+      if (event.snapshot.exists && event.snapshot.value != null) {
+        final data = event.snapshot.value;
+        if (data is Map) {
+          data.forEach((key, value) {
+            if (value is Map) {
+              list.add(Map<String, dynamic>.from(value));
+            }
+          });
+        }
+      }
+      return list;
+    });
+  }
+
+  static Future<void> deleteAddress(String userId, String addressId) async {
+    try {
+      await _database.ref('users/$userId/addresses/$addressId').remove();
+    } catch (e) {
+      print('Error deleting address: $e');
+      rethrow;
+    }
+  }
+
+  // Order Management
+  static Future<void> createOrder(
+    String userId,
+    Map<String, dynamic> orderData,
+  ) async {
+    try {
+      final newRef = _database.ref('users/$userId/orders').push();
+      orderData['id'] = newRef.key; // Ensure ID matches key
+      await newRef.set(orderData);
+    } catch (e) {
+      print('Error creating order: $e');
+      rethrow;
+    }
+  }
+
+  static Stream<List<Map<String, dynamic>>> getOrders(String userId) {
+    return _database.ref('users/$userId/orders').onValue.map((event) {
+      List<Map<String, dynamic>> list = [];
+      if (event.snapshot.exists && event.snapshot.value != null) {
+        final data = event.snapshot.value;
+        if (data is Map) {
+          data.forEach((key, value) {
+            if (value is Map) {
+              list.add(Map<String, dynamic>.from(value));
+            }
+          });
+        }
+      }
+      // Sort by date, newest first
+      list.sort((a, b) {
+        DateTime? dateA = DateTime.tryParse(a['orderDate'] ?? '');
+        DateTime? dateB = DateTime.tryParse(b['orderDate'] ?? '');
+        if (dateA == null || dateB == null) return 0;
+        return dateB.compareTo(dateA);
+      });
+      return list;
+    });
+  }
 }
