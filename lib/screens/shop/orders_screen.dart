@@ -18,6 +18,7 @@ class _OrdersScreenState extends State<OrdersScreen>
   final List<Order> _pendingOrders = [
     Order(
       id: '1',
+      userId: 'dummy_user_id',
       orderNumber: 'ORD-2024-001',
       orderDate: DateTime.now().subtract(const Duration(days: 2)),
       status: OrderStatus.pending,
