@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../widgets/empty_state_widget.dart';
+import '../../widgets/authenticated_image.dart';
 import '../../providers/cart_provider.dart';
 import '../../models/cart_item.dart';
 
@@ -202,10 +203,23 @@ class _CartScreenState extends State<CartScreen> {
               color: Colors.grey[100],
               borderRadius: BorderRadius.circular(8),
             ),
-            child: Icon(
-              Icons.chair_outlined,
-              size: 40,
-              color: Colors.grey[400],
+            clipBehavior: Clip.antiAlias,
+            child: AuthenticatedImage(
+              imageUrl: item.imageUrl,
+              fit: BoxFit.cover,
+              placeholder: Center(
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: const Color(0xFFFDB022),
+                ),
+              ),
+              errorWidget: Center(
+                child: Icon(
+                  Icons.broken_image_outlined,
+                  size: 30,
+                  color: Colors.grey[400],
+                ),
+              ),
             ),
           ),
           const SizedBox(width: 12),
