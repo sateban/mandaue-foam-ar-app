@@ -61,17 +61,21 @@ class Address {
     };
   }
 
+  Map<String, dynamic> toMap() => toJson();
+
   factory Address.fromJson(Map<String, dynamic> json) {
     return Address(
-      id: json['id'] as String,
-      name: json['name'] as String,
-      street: json['street'] as String,
-      city: json['city'] as String,
-      state: json['state'] as String,
-      zipCode: json['zipCode'] as String,
-      country: json['country'] as String,
-      phoneNumber: json['phoneNumber'] as String,
+      id: json['id'] as String? ?? '',
+      name: json['name'] as String? ?? '',
+      street: json['street'] as String? ?? '',
+      city: json['city'] as String? ?? '',
+      state: json['state'] as String? ?? '',
+      zipCode: json['zipCode'] as String? ?? '',
+      country: json['country'] as String? ?? '',
+      phoneNumber: json['phoneNumber'] as String? ?? '',
       isDefault: json['isDefault'] as bool? ?? false,
     );
   }
+
+  factory Address.fromMap(Map<String, dynamic> map) => Address.fromJson(map);
 }
