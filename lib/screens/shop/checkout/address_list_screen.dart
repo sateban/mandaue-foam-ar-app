@@ -16,9 +16,9 @@ class _AddressListScreenState extends State<AddressListScreen> {
   @override
   Widget build(BuildContext context) {
     final userProvider = Provider.of<UserProvider>(context);
-    final userId = userProvider.user?.uid;
+    final userId = userProvider.userId;
 
-    if (userId == null) {
+    if (!userProvider.isAuthenticated) {
       return const Scaffold(
         body: Center(child: Text('Please log in to manage addresses.')),
       );

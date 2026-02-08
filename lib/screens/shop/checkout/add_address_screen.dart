@@ -60,9 +60,9 @@ class _AddAddressScreenState extends State<AddAddressScreen> {
 
     try {
       final userProvider = Provider.of<UserProvider>(context, listen: false);
-      final userId = userProvider.user?.uid;
+      final userId = userProvider.userId;
 
-      if (userId == null) {
+      if (!userProvider.isAuthenticated) {
         throw Exception('User not logged in');
       }
 
