@@ -862,9 +862,10 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
       print('🔍 Model URL received: ${widget.modelUrl}');
       final fileName = widget.modelUrl.split('/').last;
 
-      // Use app support directory for AR plugin compatibility
-      final appSupportDir = await getApplicationSupportDirectory();
-      final filePath = '${appSupportDir.path}/$fileName';
+      // Use getApplicationDocumentsDirectory which points to 'app_flutter'
+      // This matches the path where the AR plugin's NodeType.fileSystemAppFolderGLB looks
+      final appDocDir = await getApplicationDocumentsDirectory();
+      final filePath = '${appDocDir.path}/$fileName';
       final file = File(filePath);
 
       setState(() {
