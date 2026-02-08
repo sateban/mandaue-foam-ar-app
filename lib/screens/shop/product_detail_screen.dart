@@ -125,7 +125,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                           vertical: 6,
                         ),
                         decoration: BoxDecoration(
-                          color: const Color(0xFFFDB022).withOpacity(0.2),
+                          color: const Color(0xFFFDB022).withValues(alpha: 0.2),
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: Text(
@@ -144,7 +144,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                           vertical: 6,
                         ),
                         decoration: BoxDecoration(
-                          color: Colors.green.withOpacity(0.2),
+                          color: Colors.green.withValues(alpha: 0.2),
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: const Text(
@@ -165,7 +165,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                             vertical: 6,
                           ),
                           decoration: BoxDecoration(
-                            color: Colors.blue.withOpacity(0.1),
+                            color: Colors.blue.withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: const Row(
@@ -619,9 +619,10 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     try {
       // Check if model is already cached
       final fileName = widget.product.modelUrl!.split('/').last;
-      // Use app support directory for AR plugin compatibility
-      final appSupportDir = await getApplicationSupportDirectory();
-      final filePath = '${appSupportDir.path}/$fileName';
+      // Use getApplicationDocumentsDirectory which points to 'app_flutter'
+      // This matches the path where the AR plugin's NodeType.fileSystemAppFolderGLB looks
+      final appDocDir = await getApplicationDocumentsDirectory();
+      final filePath = '${appDocDir.path}/$fileName';
       final file = File(filePath);
 
       String? localPath;
@@ -662,6 +663,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                 productName: widget.product.name,
                 modelUrl: widget.product.modelUrl!,
                 modelScale: widget.product.modelScale,
+                localModelPath: localPath, // Pass the downloaded path
               ),
             ),
           );

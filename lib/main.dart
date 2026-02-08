@@ -119,7 +119,7 @@ class MyApp extends StatelessWidget {
           '/walkthrough': (context) => const WalkthroughScreen(),
 
           // Authentication routes
-          '/lets-you-in': (context) => const LetsYouInScreen(),
+          // '/lets-you-in': (context) => const LetsYouInScreen(),
           '/sign-in': (context) => const SignInScreen(),
           '/sign-up': (context) => const SignUpScreen(),
           '/fill-profile': (context) => const FillProfileScreen(),
@@ -455,9 +455,11 @@ class _ThreeDViewerDashboardState extends State<ThreeDViewerDashboard> {
               child: Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(0.5),
+                  color: Colors.black.withValues(alpha: 0.5),
                   borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: Colors.white.withOpacity(0.2)),
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.2),
+                  ),
                 ),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,

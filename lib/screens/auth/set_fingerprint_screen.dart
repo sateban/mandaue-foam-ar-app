@@ -42,7 +42,7 @@ class SetFingerprintScreen extends StatelessWidget {
                 height: 200,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: const Color(0xFFFDB022).withOpacity(0.1),
+                  color: const Color(0xFFFDB022).withValues(alpha: 0.1),
                 ),
                 child: const Center(
                   child: Icon(

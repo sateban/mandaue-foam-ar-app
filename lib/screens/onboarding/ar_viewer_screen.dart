@@ -24,12 +24,14 @@ class ARViewerScreen extends StatefulWidget {
   final String productName;
   final String modelUrl;
   final double? modelScale;
+  final String? localModelPath; // Optional pre-downloaded path
 
   const ARViewerScreen({
     super.key,
     required this.productName,
     required this.modelUrl,
     this.modelScale,
+    this.localModelPath,
   });
 
   @override
@@ -87,6 +89,8 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
   @override
   void initState() {
     super.initState();
+    _localModelPath =
+        widget.localModelPath; // Use pre-downloaded path if available
     // Check permissions immediately on screen load
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _checkInitialPermissions();
@@ -868,22 +872,27 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
       final filePath = '${appDocDir.path}/$fileName';
       final file = File(filePath);
 
-      setState(() {
-        _isDownloading = true;
-        _downloadProgress = 0.0;
-      });
-
       if (await file.exists()) {
         print('📦 Using cached model: $filePath');
         final fileSize = await file.length();
         print('   File size: $fileSize bytes');
 
-        setState(() {
-          _isDownloading = false;
-          _downloadProgress = 1.0;
-          _localModelPath = filePath;
-        });
+        if (mounted) {
+          setState(() {
+            _isDownloading = false;
+            _downloadProgress = 1.0;
+            _localModelPath = filePath;
+          });
+        }
         return filePath; // Return full path
+      }
+
+      // ONLY THEN show downloading state if we actually need to download
+      if (mounted) {
+        setState(() {
+          _isDownloading = true;
+          _downloadProgress = 0.0;
+        });
       }
 
       print('⬇️  Downloading 3D model from: ${widget.modelUrl}');
@@ -1479,7 +1488,7 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
                             gradient: LinearGradient(
                               colors: [
                                 Colors.transparent,
-                                const Color(0xFFFDB022).withOpacity(0.5),
+                                const Color(0xFFFDB022).withValues(alpha: 0.5),
                                 Colors.transparent,
                               ],
                               stops: const [0.0, 0.5, 1.0],
@@ -1494,7 +1503,7 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
                               (index) => Container(
                                 width: 2,
                                 height: index % 3 == 0 ? 25 : 12,
-                                color: Colors.white.withOpacity(0.8),
+                                color: Colors.white.withValues(alpha: 0.8),
                               ),
                             ),
                           ),
@@ -1537,9 +1546,11 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
                   child: Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: Colors.black.withOpacity(0.7),
+                      color: Colors.black.withValues(alpha: 0.7),
                       borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: Colors.white.withOpacity(0.2)),
+                      border: Border.all(
+                        color: Colors.white.withValues(alpha: 0.2),
+                      ),
                     ),
                     child: Column(
                       mainAxisSize: MainAxisSize.min,

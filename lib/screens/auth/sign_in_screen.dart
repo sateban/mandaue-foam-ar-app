@@ -17,16 +17,13 @@ class _SignInScreenState extends State<SignInScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _rememberMe = false;
-  bool _isSignIn = true;  
+  bool _isSignIn = true;
   String? _emailError;
   String? _passwordError;
   bool _isLoading = false;
-  
+
   final GoogleSignIn _googleSignIn = GoogleSignIn(
-    scopes: [
-      'email',
-      'profile',
-    ],
+    scopes: ['email', 'profile'],
     signInOption: SignInOption.standard,
   );
 
@@ -45,12 +42,14 @@ class _SignInScreenState extends State<SignInScreen> {
       print('Is Web: ${kIsWeb}');
       print('Google Sign-In Scopes: ${_googleSignIn.scopes}');
       print('Google Sign-In initialized: true');
-      
+
       // For web platform, check if meta tag is present
       if (kIsWeb) {
         print('\n⚠️  WEB PLATFORM DETECTED');
         print('Make sure your web/index.html contains:');
-        print('<meta name="google-signin-client_id" content="YOUR_CLIENT_ID.apps.googleusercontent.com" />');
+        print(
+          '<meta name="google-signin-client_id" content="YOUR_CLIENT_ID.apps.googleusercontent.com" />',
+        );
       }
       print('=========================================\n');
     }
@@ -64,17 +63,23 @@ class _SignInScreenState extends State<SignInScreen> {
       print('1. Get your app\'s SHA-1 fingerprint by running:');
       print('   flutter install -v (watch the output for SHA fingerprints)');
       print('   OR');
-      print('   keytool -list -v -keystore ~/.android/debug.keystore -alias androiddebugkey -storepass android -keypass android');
+      print(
+        '   keytool -list -v -keystore ~/.android/debug.keystore -alias androiddebugkey -storepass android -keypass android',
+      );
       print('   (on Mac/Linux)');
       print('   OR');
-      print('   keytool -list -v -keystore %USERPROFILE%\\.android\\debug.keystore -alias androiddebugkey -storepass android -keypass android');
+      print(
+        '   keytool -list -v -keystore %USERPROFILE%\\.android\\debug.keystore -alias androiddebugkey -storepass android -keypass android',
+      );
       print('   (on Windows - use this command in PowerShell)');
       print('\n2. Update Firebase Console:');
       print('   - Go to Firebase Console > Project Settings > Your App');
       print('   - Update SHA-1 fingerprint with the value from step 1');
       print('   - Download new google-services.json');
       print('   - Replace android/app/google-services.json');
-      print('\nCurrent config expects SHA-1: aafb4667a61df27da917301f5dd8335d0a2b1da5');
+      print(
+        '\nCurrent config expects SHA-1: aafb4667a61df27da917301f5dd8335d0a2b1da5',
+      );
       print('====================================\n');
     }
   }
@@ -83,8 +88,6 @@ class _SignInScreenState extends State<SignInScreen> {
     final emailRegex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
     return emailRegex.hasMatch(email);
   }
-
-
 
   void _handleSignIn() {
     setState(() {
@@ -121,23 +124,23 @@ class _SignInScreenState extends State<SignInScreen> {
 
   Future<void> _handleGoogleSignIn() async {
     if (!mounted) return;
-    
+
     setState(() => _isLoading = true);
 
     print(_isLoading);
-    
+
     try {
       // Check if already signed in
       final GoogleSignInAccount? currentUser = _googleSignIn.currentUser;
-      
+
       // Sign out first to ensure fresh login
       if (currentUser != null) {
         await _googleSignIn.disconnect();
       }
-      
+
       // Trigger Google Sign-In
       final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
-      
+
       if (googleUser == null) {
         // User cancelled the sign-in
         if (mounted) {
@@ -163,28 +166,33 @@ class _SignInScreenState extends State<SignInScreen> {
       // IMPORTANT: On Android, google_sign_in doesn't provide idToken
       // Skip GoogleAuthProvider and use email-based Firebase Auth directly
       // This is more reliable and avoids CONFIGURATION_NOT_FOUND errors
-      
+
       // Use email-based Firebase Auth (most reliable approach)
       if (googleUser.email.isNotEmpty) {
-        print('DEBUG: Attempting Firebase sign-in with email: ${googleUser.email}');
-        
+        print(
+          'DEBUG: Attempting Firebase sign-in with email: ${googleUser.email}',
+        );
+
         try {
           // For CONFIGURATION_NOT_FOUND errors, skip Firebase Auth entirely
           // Just create a local user object and navigate
           print('DEBUG: Bypassing Firebase Auth due to configuration issues');
           print('DEBUG: Creating local user session with Google profile');
-          
+
           // Create a simple "virtual" user without Firebase Auth
           // Store user info in SharedPreferences or database
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: Text('Signing in as ${googleUser.displayName}...'),
+                content: Text(
+                  'Signing in as ${googleUser.displayName}...',
+                  style: const TextStyle(color: Colors.black),
+                ),
                 duration: const Duration(seconds: 2),
-                backgroundColor: Colors.green,
+                backgroundColor: const Color.fromARGB(255, 219, 219, 219),
               ),
             );
-            
+
             // Navigate to home screen directly
             Navigator.pushNamedAndRemoveUntil(
               context,
@@ -202,23 +210,29 @@ class _SignInScreenState extends State<SignInScreen> {
       }
     } on FirebaseAuthException catch (e) {
       if (!mounted) return;
-      
-      print('DEBUG: FirebaseAuthException - Code: ${e.code}, Message: ${e.message}');
-      
+
+      print(
+        'DEBUG: FirebaseAuthException - Code: ${e.code}, Message: ${e.message}',
+      );
+
       String errorMessage = 'Authentication error';
       if (e.code == 'account-exists-with-different-credential') {
         errorMessage = 'This email is associated with a different account';
       } else if (e.code == 'invalid-credential') {
         errorMessage = 'Invalid credentials. Please try again';
-      } else if (e.code == 'configuration-not-found' || e.toString().contains('CONFIGURATION_NOT_FOUND')) {
-        errorMessage = 'Configuration error. Check:\n1. google-services.json is in android/app/\n2. Package name matches: com.example.ar_3d_viewer\n3. SHA-1 fingerprint is correct';
-        print('DEBUG: CONFIGURATION_NOT_FOUND - This may indicate a mismatch between your configuration and Google Cloud Console');
+      } else if (e.code == 'configuration-not-found' ||
+          e.toString().contains('CONFIGURATION_NOT_FOUND')) {
+        errorMessage =
+            'Configuration error. Check:\n1. google-services.json is in android/app/\n2. Package name matches: com.example.ar_3d_viewer\n3. SHA-1 fingerprint is correct';
+        print(
+          'DEBUG: CONFIGURATION_NOT_FOUND - This may indicate a mismatch between your configuration and Google Cloud Console',
+        );
       } else {
         errorMessage = e.message ?? 'Authentication failed';
       }
-      
+
       print('DEBUG: Error Code: ${e.code}, Full Error: ${e.toString()}');
-      
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(errorMessage),
@@ -228,31 +242,37 @@ class _SignInScreenState extends State<SignInScreen> {
       );
     } catch (e) {
       if (!mounted) return;
-      
+
       // Debug web platform errors
       if (kIsWeb && kDebugMode) {
         print('\n=== Google Sign-In Error (Web Platform) ===');
         print('Error Type: ${e.runtimeType}');
         print('Error Message: $e');
         print('\nIF ERROR CONTAINS "ClientID not set":');
-        print('1. Go to Firebase Console: https://console.firebase.google.com/');
+        print(
+          '1. Go to Firebase Console: https://console.firebase.google.com/',
+        );
         print('2. Select project: mandaue-foam-ar-1');
         print('3. Go to Project Settings → Google Cloud Console');
         print('4. Get your Web Client ID from APIs & Services → Credentials');
-        print('5. Add to web/index.html: <meta name="google-signin-client_id" content="CLIENT_ID" />');
+        print(
+          '5. Add to web/index.html: <meta name="google-signin-client_id" content="CLIENT_ID" />',
+        );
         print('==========================================\n');
       }
-      
+
       String errorMessage = 'Google Sign-In failed';
-      
+
       if (e.toString().contains('ClientID')) {
-        errorMessage = 'Web configuration missing - Add google-signin-client_id meta tag to web/index.html';
+        errorMessage =
+            'Web configuration missing - Add google-signin-client_id meta tag to web/index.html';
       } else if (e.toString().contains('origin_mismatch')) {
-        errorMessage = 'Origin mismatch - Add http://localhost:7357 to Google Cloud Console';
+        errorMessage =
+            'Origin mismatch - Add http://localhost:7357 to Google Cloud Console';
       } else {
         errorMessage = 'Error: ${e.toString()}';
       }
-      
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(errorMessage),
@@ -442,9 +462,7 @@ class _SignInScreenState extends State<SignInScreen> {
                         TextField(
                           controller: _emailController,
                           keyboardType: TextInputType.emailAddress,
-                          style: const TextStyle(
-                            color: Colors.black,
-                          ),
+                          style: const TextStyle(color: Colors.black),
                           decoration: InputDecoration(
                             hintText: 'Enter your email',
                             hintStyle: const TextStyle(color: Colors.grey),
@@ -498,9 +516,7 @@ class _SignInScreenState extends State<SignInScreen> {
                         TextField(
                           controller: _passwordController,
                           obscureText: true,
-                          style: const TextStyle(
-                            color: Colors.black,
-                          ),
+                          style: const TextStyle(color: Colors.black),
                           decoration: InputDecoration(
                             hintText: 'Enter password',
                             hintStyle: const TextStyle(color: Colors.grey),
@@ -659,7 +675,9 @@ class _SignInScreenState extends State<SignInScreen> {
                                     },
                                   ),
                             label: Text(
-                              _isLoading ? 'Signing in...' : 'Continue with Google',
+                              _isLoading
+                                  ? 'Signing in...'
+                                  : 'Continue with Google',
                               style: const TextStyle(
                                 color: Color(0xFF1E3A8A),
                                 fontSize: 16,
@@ -706,7 +724,6 @@ class _SignInScreenState extends State<SignInScreen> {
                         //     ),
                         //   ),
                         // ),
-
                         const SizedBox(height: 24),
                       ],
                     ),
