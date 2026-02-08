@@ -309,7 +309,37 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
   /// Handle a tap on the screen: place model (if not placed) or move model
   /// to the tapped plane if it already exists.
   Future<void> _handleTapToPlace(Offset screenPoint) async {
-    if (_isBusy || _localModelPath == null) return;
+    if (_isBusy) return;
+
+    // Verify model is ready before allowing placement
+    if (_localModelPath == null) {
+      _logger.w('⚠️ Cannot place model: still downloading');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Please wait, model is downloading...'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+      return;
+    }
+
+    // Verify file exists
+    final file = File(_localModelPath!);
+    if (!await file.exists()) {
+      _logger.e('❌ Model file missing, cannot place');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Model file missing. Please restart the app.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+      return;
+    }
+
     setState(() => _isBusy = true);
 
     try {
@@ -511,7 +541,7 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
 
   /// Place model at screen center (button-triggered placement)
   Future<void> _placeModelAtCenter() async {
-    if (_isModelPlaced || _isBusy || _localModelPath == null) return;
+    if (_isModelPlaced || _isBusy) return;
 
     setState(() {
       _isBusy = true;
@@ -519,6 +549,27 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
     });
 
     try {
+      // CRITICAL: Verify model file exists before attempting placement
+      if (_localModelPath == null) {
+        _logger.w('⚠️ Model not downloaded yet, attempting download...');
+        final downloadedPath = await _downloadModel();
+        if (downloadedPath == null) {
+          throw Exception('Failed to download model');
+        }
+      }
+
+      // Double-check file exists on disk
+      final file = File(_localModelPath!);
+      if (!await file.exists()) {
+        _logger.e('❌ Model file missing from cache, re-downloading...');
+        // Clear the cached path and force re-download
+        _localModelPath = null;
+        final downloadedPath = await _downloadModel();
+        if (downloadedPath == null) {
+          throw Exception('Failed to re-download missing model');
+        }
+      }
+
       _logger.i('📍 Placing model at screen center...');
 
       // Perform a fresh hit test at the exact center of the screen right now
@@ -538,6 +589,8 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
       final fileName = _localModelPath!.split('/').last;
 
       _logger.d('🎯 Placing AR Model:');
+      _logger.d('   File: $fileName');
+      _logger.d('   Full Path: $_localModelPath');
       _logger.d('   Scale (CM): $scaleInCm -> (Meters): $scaleValue');
 
       final vector.Vector4 rotationVector = vector.Vector4(1, 0, 0, 0);
@@ -662,6 +715,24 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
 
   Future<void> _addModelAtAnchor(ARPlaneAnchor anchor) async {
     try {
+      // CRITICAL: Verify model is downloaded before attempting to add
+      if (_localModelPath == null) {
+        _logger.e('❌ Cannot add model: _localModelPath is null');
+        throw Exception('Model not downloaded');
+      }
+
+      // Verify file exists on disk
+      final file = File(_localModelPath!);
+      if (!await file.exists()) {
+        _logger.e('❌ Model file missing: $_localModelPath');
+        // Attempt to re-download
+        _localModelPath = null;
+        final downloadedPath = await _downloadModel();
+        if (downloadedPath == null) {
+          throw Exception('Failed to re-download missing model');
+        }
+      }
+
       // modelScale from Firebase is in centimeters, convert to meters for AR
       final double scaleInCm = widget.modelScale ?? 50.0;
       final double scaleValue = scaleInCm / 100.0; // Convert CM to meters
@@ -673,11 +744,14 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
       _logger.d('   Scale (CM): $scaleInCm -> (Meters): $scaleValue');
 
       // Verify file exists
-      final file = File(_localModelPath!);
       final exists = await file.exists();
       final size = exists ? await file.length() : 0;
       _logger.d('   File Exists: $exists');
       _logger.d('   File Size: $size bytes');
+
+      if (!exists || size == 0) {
+        throw Exception('Model file is invalid or empty');
+      }
 
       final newNode = ARNode(
         type: NodeType.fileSystemAppFolderGLB,
@@ -773,7 +847,17 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
   /// Download and cache the 3D model from URL
   Future<String?> _downloadModel() async {
     try {
-      if (_localModelPath != null) return _localModelPath;
+      // Check if we have a cached path but the file is missing (cache cleared)
+      if (_localModelPath != null) {
+        final cachedFile = File(_localModelPath!);
+        if (await cachedFile.exists()) {
+          print('📦 Using existing cached model: $_localModelPath');
+          return _localModelPath;
+        } else {
+          print('⚠️ Cached path exists but file missing, will re-download');
+          _localModelPath = null; // Clear invalid cache path
+        }
+      }
 
       print('🔍 Model URL received: ${widget.modelUrl}');
       final fileName = widget.modelUrl.split('/').last;
