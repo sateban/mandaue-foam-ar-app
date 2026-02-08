@@ -619,9 +619,10 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     try {
       // Check if model is already cached
       final fileName = widget.product.modelUrl!.split('/').last;
-      // Use app support directory for AR plugin compatibility
-      final appSupportDir = await getApplicationSupportDirectory();
-      final filePath = '${appSupportDir.path}/$fileName';
+      // Use getApplicationDocumentsDirectory which points to 'app_flutter'
+      // This matches the path where the AR plugin's NodeType.fileSystemAppFolderGLB looks
+      final appDocDir = await getApplicationDocumentsDirectory();
+      final filePath = '${appDocDir.path}/$fileName';
       final file = File(filePath);
 
       String? localPath;
@@ -662,6 +663,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                 productName: widget.product.name,
                 modelUrl: widget.product.modelUrl!,
                 modelScale: widget.product.modelScale,
+                localModelPath: localPath, // Pass the downloaded path
               ),
             ),
           );
