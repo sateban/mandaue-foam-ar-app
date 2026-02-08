@@ -122,7 +122,8 @@ class _WalkthroughScreenState extends State<WalkthroughScreen> {
                     const SizedBox(height: 16),
                     TextButton(
                       onPressed: () {
-                        Navigator.pushReplacementNamed(context, '/lets-you-in');
+                        // Navigator.pushReplacementNamed(context, '/lets-you-in');
+                        Navigator.pushReplacementNamed(context, '/sign-in');
                       },
                       child: const Text(
                         'Skip',

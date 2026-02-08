@@ -119,7 +119,7 @@ class MyApp extends StatelessWidget {
           '/walkthrough': (context) => const WalkthroughScreen(),
 
           // Authentication routes
-          '/lets-you-in': (context) => const LetsYouInScreen(),
+          // '/lets-you-in': (context) => const LetsYouInScreen(),
           '/sign-in': (context) => const SignInScreen(),
           '/sign-up': (context) => const SignUpScreen(),
           '/fill-profile': (context) => const FillProfileScreen(),
