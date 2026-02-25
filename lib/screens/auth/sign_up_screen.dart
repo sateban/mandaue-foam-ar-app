@@ -621,22 +621,22 @@ class _SignUpScreenState extends State<SignUpScreen> {
                         const SizedBox(height: 16),
 
                         // Remember me
-                        Row(
-                          children: [
-                            Checkbox(
-                              value: _rememberMe,
-                              onChanged: (value) {
-                                setState(() => _rememberMe = value ?? false);
-                              },
-                              activeColor: const Color(0xFF1E3A8A),
-                              checkColor: Colors.white,
-                            ),
-                            const Text(
-                              'Remember me',
-                              style: TextStyle(color: Colors.grey),
-                            ),
-                          ],
-                        ),
+                        // Row(
+                        //   children: [
+                        //     Checkbox(
+                        //       value: _rememberMe,
+                        //       onChanged: (value) {
+                        //         setState(() => _rememberMe = value ?? false);
+                        //       },
+                        //       activeColor: const Color(0xFF1E3A8A),
+                        //       checkColor: Colors.white,
+                        //     ),
+                        //     const Text(
+                        //       'Remember me',
+                        //       style: TextStyle(color: Colors.grey),
+                        //     ),
+                        //   ],
+                        // ),
 
                         const SizedBox(height: 24),
 
