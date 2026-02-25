@@ -5,8 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'otp_verification_screen.dart';
 import 'sign_up_screen.dart';
 import 'forgot_password_screen.dart';
-import 'package:provider/provider.dart';
-import '../../providers/user_provider.dart';
+import '../../services/firebase_service.dart';
 
 class SignInScreen extends StatefulWidget {
   const SignInScreen({super.key});
@@ -91,7 +90,7 @@ class _SignInScreenState extends State<SignInScreen> {
     return emailRegex.hasMatch(email);
   }
 
-  void _handleSignIn() {
+  Future<void> _handleSignIn() async {
     setState(() {
       _emailError = null;
       _passwordError = null;
@@ -112,15 +111,96 @@ class _SignInScreenState extends State<SignInScreen> {
       isValid = false;
     }
 
-    if (isValid) {
-      // Navigate to OTP verification
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) =>
-              OTPVerificationScreen(email: _emailController.text),
+    if (!isValid) {
+      return;
+    }
+
+    // Begin Firebase sign-in
+    if (!mounted) return;
+    setState(() => _isLoading = true);
+
+    try {
+      print('DEBUG: Attempting Firebase sign-in with: ${_emailController.text}');
+      
+      final User? user = await FirebaseService.signInWithEmailPassword(
+        email: _emailController.text,
+        password: _passwordController.text,
+      );
+
+      if (!mounted) return;
+
+      if (user != null) {
+        print('DEBUG: Sign-in successful for user: ${user.email}');
+        
+        // Show success message
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Welcome back, ${user.displayName ?? 'User'}!'),
+            duration: const Duration(seconds: 2),
+            backgroundColor: Colors.green,
+          ),
+        );
+
+        // Navigate to home screen
+        Navigator.pushNamedAndRemoveUntil(
+          context,
+          '/home',
+          (route) => false,
+        );
+      }
+    } on FirebaseAuthException catch (e) {
+      if (!mounted) return;
+
+      print('DEBUG: FirebaseAuthException - Code: ${e.code}, Message: ${e.message}');
+
+      String errorMessage = 'Authentication error';
+      
+      switch (e.code) {
+        case 'user-not-found':
+          errorMessage = 'No account found with this email address. Please sign up first.';
+          break;
+        case 'wrong-password':
+          errorMessage = 'Incorrect password. Please try again.';
+          break;
+        case 'invalid-credential':
+          errorMessage = 'Invalid email or password. Please check and try again.';
+          break;
+        case 'user-disabled':
+          errorMessage = 'This account has been disabled. Contact support.';
+          break;
+        case 'too-many-requests':
+          errorMessage = 'Too many login attempts. Please try again later.';
+          break;
+        case 'operation-not-allowed':
+          errorMessage = 'Email/password authentication is not enabled.';
+          break;
+        default:
+          errorMessage = e.message ?? 'Authentication failed. Please try again.';
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(errorMessage),
+          duration: const Duration(seconds: 4),
+          backgroundColor: Colors.red,
         ),
       );
+
+      setState(() => _isLoading = false);
+    } catch (e) {
+      if (!mounted) return;
+
+      print('DEBUG: Unexpected error during sign-in: $e');
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('An unexpected error occurred. Please try again.'),
+          duration: const Duration(seconds: 4),
+          backgroundColor: Colors.red,
+        ),
+      );
+
+      setState(() => _isLoading = false);
     }
   }
 
@@ -177,28 +257,11 @@ class _SignInScreenState extends State<SignInScreen> {
 
         try {
           // For CONFIGURATION_NOT_FOUND errors, skip Firebase Auth entirely
-          // Just create a local user object and navigate
+          // Just navigate to home screen
           print('DEBUG: Bypassing Firebase Auth due to configuration issues');
-          print('DEBUG: Creating local user session with Google profile');
+          print('DEBUG: Navigating to home with Google profile');
 
-          // Create a simple "virtual" user without Firebase Auth
-          // Store user info in SharedPreferences or database
           if (mounted) {
-            // Store user info in UserProvider for sessions
-            final userProvider = Provider.of<UserProvider>(
-              context,
-              listen: false,
-            );
-            final guestId = googleUser.id; // Use Google's internal ID
-            final guestEmail = googleUser.email;
-            final guestName = googleUser.displayName;
-
-            userProvider.setGuestUser(
-              id: guestId,
-              email: guestEmail,
-              name: guestName,
-            );
-
             // Navigate to home screen directly
             Navigator.pushNamedAndRemoveUntil(
               context,
@@ -614,7 +677,7 @@ class _SignInScreenState extends State<SignInScreen> {
                           width: double.infinity,
                           height: 56,
                           child: ElevatedButton(
-                            onPressed: _handleSignIn,
+                            onPressed: _isLoading ? null : _handleSignIn,
                             style: ElevatedButton.styleFrom(
                               backgroundColor: const Color(0xFFFDB022),
                               foregroundColor: Colors.white,
@@ -622,14 +685,26 @@ class _SignInScreenState extends State<SignInScreen> {
                                 borderRadius: BorderRadius.circular(28),
                               ),
                               elevation: 0,
+                              disabledBackgroundColor: Colors.grey[300],
                             ),
-                            child: const Text(
-                              'Sign in',
-                              style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
+                            child: _isLoading
+                                ? const SizedBox(
+                                    height: 24,
+                                    width: 24,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      valueColor: AlwaysStoppedAnimation<Color>(
+                                        Colors.white,
+                                      ),
+                                    ),
+                                  )
+                                : const Text(
+                                    'Sign in',
+                                    style: TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
                           ),
                         ),
 

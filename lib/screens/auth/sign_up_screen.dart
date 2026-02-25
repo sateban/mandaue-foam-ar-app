@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'otp_verification_screen.dart';
+import 'sign_in_screen.dart';
+import '../../services/firebase_service.dart';
 
 class SignUpScreen extends StatefulWidget {
   const SignUpScreen({super.key});
@@ -16,20 +19,46 @@ class _SignUpScreenState extends State<SignUpScreen> {
   final _passwordController = TextEditingController();
   bool _rememberMe = false;
   bool _obscurePassword = true;
+  bool _isLoading = false;
+  
+  String? _firstNameError;
+  String? _lastNameError;
   String? _emailError;
+  String? _passwordError;
 
   bool _validateEmail(String email) {
     final emailRegex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
     return emailRegex.hasMatch(email);
   }
 
-  void _handleSignUp() {
+  bool _validatePassword(String password) {
+    // At least 6 characters
+    return password.length >= 6;
+  }
+
+  Future<void> _handleSignUp() async {
     setState(() {
+      _firstNameError = null;
+      _lastNameError = null;
       _emailError = null;
+      _passwordError = null;
     });
 
     bool isValid = true;
 
+    // Validate first name
+    if (_firstNameController.text.isEmpty) {
+      setState(() => _firstNameError = 'First name is required');
+      isValid = false;
+    }
+
+    // Validate last name
+    if (_lastNameController.text.isEmpty) {
+      setState(() => _lastNameError = 'Last name is required');
+      isValid = false;
+    }
+
+    // Validate email
     if (_emailController.text.isEmpty) {
       setState(() => _emailError = 'Email is required');
       isValid = false;
@@ -38,15 +67,129 @@ class _SignUpScreenState extends State<SignUpScreen> {
       isValid = false;
     }
 
-    if (isValid) {
-      // Navigate to OTP verification
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) =>
-              OTPVerificationScreen(email: _emailController.text),
+    // Validate password
+    if (_passwordController.text.isEmpty) {
+      setState(() => _passwordError = 'Password is required');
+      isValid = false;
+    } else if (!_validatePassword(_passwordController.text)) {
+      setState(() => _passwordError = 'Password must be at least 6 characters');
+      isValid = false;
+    }
+
+    if (!isValid) {
+      return;
+    }
+
+    // Begin Firebase registration
+    if (!mounted) return;
+    setState(() => _isLoading = true);
+
+    try {
+      print('DEBUG: Attempting Firebase registration with: ${_emailController.text}');
+      
+      // Check if email is already registered
+      final bool emailExists = await FirebaseService.isEmailRegistered(
+        _emailController.text,
+      );
+
+      if (emailExists) {
+        if (!mounted) return;
+        
+        setState(() => _isLoading = false);
+        
+        setState(() => _emailError = 'Email is already registered. Please sign in instead.');
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Email is already registered. Please sign in instead.'),
+            duration: Duration(seconds: 3),
+            backgroundColor: Colors.red,
+          ),
+        );
+        
+        return;
+      }
+
+      // Register user
+      final User? user = await FirebaseService.registerWithEmailPassword(
+        email: _emailController.text,
+        password: _passwordController.text,
+        firstName: _firstNameController.text,
+        lastName: _lastNameController.text,
+        phoneNumber: _phoneController.text,
+      );
+
+      if (!mounted) return;
+
+      if (user != null) {
+        print('DEBUG: Registration successful for user: ${user.email}');
+        
+        // Show success message
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Account created successfully!'),
+            duration: Duration(seconds: 2),
+            backgroundColor: Colors.green,
+          ),
+        );
+
+        // Navigate to home screen
+        Navigator.pushNamedAndRemoveUntil(
+          context,
+          '/home',
+          (route) => false,
+        );
+      }
+    } on FirebaseAuthException catch (e) {
+      if (!mounted) return;
+
+      print('DEBUG: FirebaseAuthException - Code: ${e.code}, Message: ${e.message}');
+
+      String errorMessage = 'Registration error';
+      
+      switch (e.code) {
+        case 'weak-password':
+          errorMessage = 'The password provided is too weak. Please use a stronger password.';
+          setState(() => _passwordError = errorMessage);
+          break;
+        case 'email-already-in-use':
+          errorMessage = 'An account with this email already exists. Please sign in instead.';
+          setState(() => _emailError = errorMessage);
+          break;
+        case 'invalid-email':
+          errorMessage = 'The email address is invalid.';
+          setState(() => _emailError = errorMessage);
+          break;
+        case 'operation-not-allowed':
+          errorMessage = 'Email/password accounts are not enabled.';
+          break;
+        default:
+          errorMessage = e.message ?? 'Registration failed. Please try again.';
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(errorMessage),
+          duration: const Duration(seconds: 4),
+          backgroundColor: Colors.red,
         ),
       );
+
+      setState(() => _isLoading = false);
+    } catch (e) {
+      if (!mounted) return;
+
+      print('DEBUG: Unexpected error during registration: $e');
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('An unexpected error occurred. Please try again.'),
+          duration: const Duration(seconds: 4),
+          backgroundColor: Colors.red,
+        ),
+      );
+
+      setState(() => _isLoading = false);
     }
   }
 
@@ -126,7 +269,12 @@ class _SignUpScreenState extends State<SignUpScreen> {
                             children: [
                               Expanded(
                                 child: GestureDetector(
-                                  onTap: () => Navigator.pop(context),
+                                  onTap: () => Navigator.pushReplacement(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) => const SignInScreen(),
+                                    ),
+                                  ),
                                   child: Container(
                                     padding: const EdgeInsets.symmetric(
                                       vertical: 16,
@@ -199,24 +347,35 @@ class _SignUpScreenState extends State<SignUpScreen> {
                                       hintStyle: const TextStyle(
                                         color: Colors.grey,
                                       ),
+                                      errorText: _firstNameError,
+                                      errorStyle: const TextStyle(
+                                        color: Colors.red,
+                                        fontSize: 12,
+                                      ),
                                       filled: true,
                                       fillColor: Colors.white,
                                       border: OutlineInputBorder(
                                         borderRadius: BorderRadius.circular(12),
-                                        borderSide: const BorderSide(
-                                          color: Color(0xFFE0E0E0),
+                                        borderSide: BorderSide(
+                                          color: _firstNameError != null
+                                              ? Colors.red
+                                              : const Color(0xFFE0E0E0),
                                         ),
                                       ),
                                       enabledBorder: OutlineInputBorder(
                                         borderRadius: BorderRadius.circular(12),
-                                        borderSide: const BorderSide(
-                                          color: Color(0xFFE0E0E0),
+                                        borderSide: BorderSide(
+                                          color: _firstNameError != null
+                                              ? Colors.red
+                                              : const Color(0xFFE0E0E0),
                                         ),
                                       ),
                                       focusedBorder: OutlineInputBorder(
                                         borderRadius: BorderRadius.circular(12),
-                                        borderSide: const BorderSide(
-                                          color: Color(0xFF1E3A8A),
+                                        borderSide: BorderSide(
+                                          color: _firstNameError != null
+                                              ? Colors.red
+                                              : const Color(0xFF1E3A8A),
                                           width: 2,
                                         ),
                                       ),
@@ -249,24 +408,35 @@ class _SignUpScreenState extends State<SignUpScreen> {
                                       hintStyle: const TextStyle(
                                         color: Colors.grey,
                                       ),
+                                      errorText: _lastNameError,
+                                      errorStyle: const TextStyle(
+                                        color: Colors.red,
+                                        fontSize: 12,
+                                      ),
                                       filled: true,
                                       fillColor: Colors.white,
                                       border: OutlineInputBorder(
                                         borderRadius: BorderRadius.circular(12),
-                                        borderSide: const BorderSide(
-                                          color: Color(0xFFE0E0E0),
+                                        borderSide: BorderSide(
+                                          color: _lastNameError != null
+                                              ? Colors.red
+                                              : const Color(0xFFE0E0E0),
                                         ),
                                       ),
                                       enabledBorder: OutlineInputBorder(
                                         borderRadius: BorderRadius.circular(12),
-                                        borderSide: const BorderSide(
-                                          color: Color(0xFFE0E0E0),
+                                        borderSide: BorderSide(
+                                          color: _lastNameError != null
+                                              ? Colors.red
+                                              : const Color(0xFFE0E0E0),
                                         ),
                                       ),
                                       focusedBorder: OutlineInputBorder(
                                         borderRadius: BorderRadius.circular(12),
-                                        borderSide: const BorderSide(
-                                          color: Color(0xFF1E3A8A),
+                                        borderSide: BorderSide(
+                                          color: _lastNameError != null
+                                              ? Colors.red
+                                              : const Color(0xFF1E3A8A),
                                           width: 2,
                                         ),
                                       ),
@@ -400,6 +570,11 @@ class _SignUpScreenState extends State<SignUpScreen> {
                           decoration: InputDecoration(
                             hintText: 'Enter your password',
                             hintStyle: const TextStyle(color: Colors.grey),
+                            errorText: _passwordError,
+                            errorStyle: const TextStyle(
+                              color: Colors.red,
+                              fontSize: 12,
+                            ),
                             filled: true,
                             fillColor: Colors.white,
                             suffixIcon: IconButton(
@@ -417,20 +592,26 @@ class _SignUpScreenState extends State<SignUpScreen> {
                             ),
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(12),
-                              borderSide: const BorderSide(
-                                color: Color(0xFFE0E0E0),
+                              borderSide: BorderSide(
+                                color: _passwordError != null
+                                    ? Colors.red
+                                    : const Color(0xFFE0E0E0),
                               ),
                             ),
                             enabledBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(12),
-                              borderSide: const BorderSide(
-                                color: Color(0xFFE0E0E0),
+                              borderSide: BorderSide(
+                                color: _passwordError != null
+                                    ? Colors.red
+                                    : const Color(0xFFE0E0E0),
                               ),
                             ),
                             focusedBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(12),
-                              borderSide: const BorderSide(
-                                color: Color(0xFF1E3A8A),
+                              borderSide: BorderSide(
+                                color: _passwordError != null
+                                    ? Colors.red
+                                    : const Color(0xFF1E3A8A),
                                 width: 2,
                               ),
                             ),
@@ -464,7 +645,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                           width: double.infinity,
                           height: 56,
                           child: ElevatedButton(
-                            onPressed: _handleSignUp,
+                            onPressed: _isLoading ? null : _handleSignUp,
                             style: ElevatedButton.styleFrom(
                               backgroundColor: const Color(0xFFFDB022),
                               foregroundColor: Colors.white,
@@ -472,14 +653,26 @@ class _SignUpScreenState extends State<SignUpScreen> {
                                 borderRadius: BorderRadius.circular(28),
                               ),
                               elevation: 0,
+                              disabledBackgroundColor: Colors.grey[300],
                             ),
-                            child: const Text(
-                              'Sign up',
-                              style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
+                            child: _isLoading
+                                ? const SizedBox(
+                                    height: 24,
+                                    width: 24,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      valueColor: AlwaysStoppedAnimation<Color>(
+                                        Colors.white,
+                                      ),
+                                    ),
+                                  )
+                                : const Text(
+                                    'Sign up',
+                                    style: TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
                           ),
                         ),
 

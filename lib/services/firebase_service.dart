@@ -1,10 +1,224 @@
 import 'package:firebase_database/firebase_database.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class FirebaseService {
   static final FirebaseDatabase _database = FirebaseDatabase.instance;
+  static final FirebaseAuth _auth = FirebaseAuth.instance;
 
   /// Get Firebase Database instance
   static FirebaseDatabase getDatabase() => _database;
+
+  /// Get Firebase Auth instance
+  static FirebaseAuth getAuth() => _auth;
+
+  /// Get current user
+  static User? getCurrentUser() => _auth.currentUser;
+
+  // ==================== AUTHENTICATION METHODS ====================
+
+  /// Register user with email and password
+  static Future<User?> registerWithEmailPassword({
+    required String email,
+    required String password,
+    required String firstName,
+    required String lastName,
+    String? phoneNumber,
+  }) async {
+    try {
+      print('DEBUG: Attempting to register user with email: $email');
+      
+      // Create user account
+      final UserCredential userCredential = await _auth.createUserWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
+
+      final User? user = userCredential.user;
+      
+      if (user != null) {
+        // Update user profile
+        await user.updateDisplayName('$firstName $lastName');
+        
+        // Save additional user data to Realtime Database
+        await writeData('users/${user.uid}', {
+          'uid': user.uid,
+          'email': email,
+          'firstName': firstName,
+          'lastName': lastName,
+          'phoneNumber': phoneNumber ?? '',
+          'displayName': '$firstName $lastName',
+          'createdAt': DateTime.now().toIso8601String(),
+          'emailVerified': user.emailVerified,
+        });
+
+        print('DEBUG: User registered successfully: ${user.email}');
+        return user;
+      }
+      
+      return null;
+    } on FirebaseAuthException catch (e) {
+      print('DEBUG: FirebaseAuthException during registration - Code: ${e.code}');
+      print('DEBUG: Error Message: ${e.message}');
+      rethrow;
+    } catch (e) {
+      print('DEBUG: Unexpected error during registration: $e');
+      rethrow;
+    }
+  }
+
+  /// Sign in user with email and password
+  static Future<User?> signInWithEmailPassword({
+    required String email,
+    required String password,
+  }) async {
+    try {
+      print('DEBUG: Attempting to sign in user with email: $email');
+      
+      final UserCredential userCredential = await _auth.signInWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
+
+      final User? user = userCredential.user;
+      
+      if (user != null) {
+        print('DEBUG: User signed in successfully: ${user.email}');
+        
+        // Update last login timestamp
+        await updateData('users/${user.uid}', {
+          'lastLogin': DateTime.now().toIso8601String(),
+        });
+      }
+      
+      return user;
+    } on FirebaseAuthException catch (e) {
+      print('DEBUG: FirebaseAuthException during sign-in - Code: ${e.code}');
+      print('DEBUG: Error Message: ${e.message}');
+      rethrow;
+    } catch (e) {
+      print('DEBUG: Unexpected error during sign-in: $e');
+      rethrow;
+    }
+  }
+
+  /// Sign out current user
+  static Future<void> signOut() async {
+    try {
+      print('DEBUG: Signing out user...');
+      await _auth.signOut();
+      print('DEBUG: User signed out successfully');
+    } catch (e) {
+      print('DEBUG: Error signing out: $e');
+      rethrow;
+    }
+  }
+
+  /// Send password reset email
+  static Future<void> sendPasswordResetEmail(String email) async {
+    try {
+      print('DEBUG: Sending password reset email to: $email');
+      await _auth.sendPasswordResetEmail(email: email);
+      print('DEBUG: Password reset email sent successfully');
+    } on FirebaseAuthException catch (e) {
+      print('DEBUG: FirebaseAuthException during password reset - Code: ${e.code}');
+      print('DEBUG: Error Message: ${e.message}');
+      rethrow;
+    } catch (e) {
+      print('DEBUG: Unexpected error sending password reset email: $e');
+      rethrow;
+    }
+  }
+
+  /// Update user password
+  static Future<void> updatePassword(String newPassword) async {
+    try {
+      final User? user = _auth.currentUser;
+      if (user == null) {
+        throw Exception('No user is currently logged in');
+      }
+
+      print('DEBUG: Updating password for user: ${user.email}');
+      await user.updatePassword(newPassword);
+      print('DEBUG: Password updated successfully');
+    } on FirebaseAuthException catch (e) {
+      print('DEBUG: FirebaseAuthException during password update - Code: ${e.code}');
+      print('DEBUG: Error Message: ${e.message}');
+      rethrow;
+    } catch (e) {
+      print('DEBUG: Unexpected error updating password: $e');
+      rethrow;
+    }
+  }
+
+  /// Update user profile
+  static Future<void> updateUserProfile({
+    String? firstName,
+    String? lastName,
+    String? phoneNumber,
+  }) async {
+    try {
+      final User? user = _auth.currentUser;
+      if (user == null) {
+        throw Exception('No user is currently logged in');
+      }
+
+      print('DEBUG: Updating profile for user: ${user.email}');
+
+      // Update display name if provided
+      if (firstName != null || lastName != null) {
+        final displayName = '${firstName ?? ''} ${lastName ?? ''}'.trim();
+        await user.updateDisplayName(displayName);
+      }
+
+      // Update user data in Realtime Database
+      final Map<String, dynamic> updateData = {};
+      if (firstName != null) updateData['firstName'] = firstName;
+      if (lastName != null) updateData['lastName'] = lastName;
+      if (phoneNumber != null) updateData['phoneNumber'] = phoneNumber;
+      if (firstName != null || lastName != null) {
+        updateData['displayName'] = '${firstName ?? ''} ${lastName ?? ''}'.trim();
+      }
+
+      if (updateData.isNotEmpty) {
+        await FirebaseService.updateData('users/${user.uid}', updateData);
+      }
+
+      print('DEBUG: Profile updated successfully');
+    } on FirebaseAuthException catch (e) {
+      print('DEBUG: FirebaseAuthException during profile update - Code: ${e.code}');
+      print('DEBUG: Error Message: ${e.message}');
+      rethrow;
+    } catch (e) {
+      print('DEBUG: Unexpected error updating profile: $e');
+      rethrow;
+    }
+  }
+
+  /// Check if email exists
+  static Future<bool> isEmailRegistered(String email) async {
+    try {
+      final list = await _auth.fetchSignInMethodsForEmail(email);
+      return list.isNotEmpty;
+    } catch (e) {
+      print('DEBUG: Error checking email: $e');
+      return false;
+    }
+  }
+
+  /// Get user data from Realtime Database
+  static Future<Map<dynamic, dynamic>?> getUserData(String userId) async {
+    try {
+      return await readData('users/$userId');
+    } catch (e) {
+      print('Error getting user data: $e');
+      return null;
+    }
+  }
+
+  /// Stream user data in real-time
+  static Stream<Map<dynamic, dynamic>> streamUserData(String userId) {
+    return streamData('users/$userId');
+  }
 
   /// Read single data once
   static Future<Map<dynamic, dynamic>?> readData(String path) async {
