@@ -1,5 +1,6 @@
 import 'package:firebase_database/firebase_database.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 
 class FirebaseService {
   static final FirebaseDatabase _database = FirebaseDatabase.instance;
@@ -202,6 +203,71 @@ class FirebaseService {
     } catch (e) {
       print('DEBUG: Error checking email: $e');
       return false;
+    }
+  }
+
+  /// Sign in with Google and create/update user profile
+  static Future<User?> signInWithGoogle(GoogleSignInAccount googleUser) async {
+    try {
+      print('DEBUG: Attempting Firebase authentication with Google');
+      
+      // Get Google Sign-In authentication
+      final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+      
+      // Create credential using ID token and access token
+      final AuthCredential credential = GoogleAuthProvider.credential(
+        idToken: googleAuth.idToken,
+        accessToken: googleAuth.accessToken,
+      );
+      
+      print('DEBUG: Created Google credential');
+      
+      // Sign in with Firebase using the credential
+      final UserCredential userCredential = await _auth.signInWithCredential(credential);
+      final User? user = userCredential.user;
+      
+      if (user != null) {
+        print('DEBUG: Successfully signed in with Firebase via Google: ${user.email}');
+        
+        // Check if user data exists in database
+        final existingData = await readData('users/${user.uid}');
+        
+        if (existingData == null) {
+          // Create new user profile in database
+          await writeData('users/${user.uid}', {
+            'uid': user.uid,
+            'email': user.email ?? googleUser.email,
+            'firstName': googleUser.displayName?.split(' ').first ?? 'User',
+            'lastName': googleUser.displayName?.split(' ').skip(1).join(' ') ?? '',
+            'displayName': user.displayName ?? googleUser.displayName ?? 'Google User',
+            'photoUrl': user.photoURL ?? googleUser.photoUrl,
+            'authProvider': 'google',
+            'createdAt': DateTime.now().toIso8601String(),
+          });
+          
+          print('DEBUG: Created new Google user profile');
+        } else {
+          // Update existing user profile with latest info
+          await updateData('users/${user.uid}', {
+            'lastLogin': DateTime.now().toIso8601String(),
+            'displayName': user.displayName ?? googleUser.displayName,
+            'photoUrl': user.photoURL ?? googleUser.photoUrl,
+          });
+          
+          print('DEBUG: Updated existing Google user profile');
+        }
+        
+        return user;
+      }
+      
+      return null;
+    } on FirebaseAuthException catch (e) {
+      print('DEBUG: FirebaseAuthException during Google sign-in - Code: ${e.code}');
+      print('DEBUG: Error Message: ${e.message}');
+      rethrow;
+    } catch (e) {
+      print('DEBUG: Unexpected error during Google sign-in: $e');
+      rethrow;
     }
   }
 

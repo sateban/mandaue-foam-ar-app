@@ -85,6 +85,42 @@ void main() async {
   runApp(const MyApp());
 }
 
+/// Widget that checks authentication state and routes accordingly
+class AuthenticationWrapper extends StatelessWidget {
+  const AuthenticationWrapper({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<User?>(
+      stream: FirebaseAuth.instance.authStateChanges(),
+      builder: (context, snapshot) {
+        // Handle connection states
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          // While checking auth state, show splash screen
+          print('DEBUG: Checking authentication state...');
+          return const SplashScreenV1();
+        }
+
+        // If there's an error, show splash screen
+        if (snapshot.hasError) {
+          print('DEBUG: Authentication error: ${snapshot.error}');
+          return const SplashScreenV1();
+        }
+
+        // If user is authenticated, show home screen
+        if (snapshot.hasData && snapshot.data != null) {
+          print('DEBUG: User authenticated, navigating to home');
+          return const ShopShell();
+        }
+
+        // If no user is authenticated, show splash screen
+        print('DEBUG: No user authenticated, showing splash screen');
+        return const SplashScreenV1();
+      },
+    );
+  }
+}
+
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
@@ -110,7 +146,7 @@ class MyApp extends StatelessWidget {
           ),
           useMaterial3: true,
         ),
-        home: const SplashScreenV1(),
+        home: const AuthenticationWrapper(),
         onGenerateRoute: (settings) {
           // Handle routes that need arguments
           if (settings.name == '/track-order') {

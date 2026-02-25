@@ -252,17 +252,51 @@ class _SignInScreenState extends State<SignInScreen> {
       // Use email-based Firebase Auth (most reliable approach)
       if (googleUser.email.isNotEmpty) {
         print(
-          'DEBUG: Attempting Firebase sign-in with email: ${googleUser.email}',
+          'DEBUG: Attempting Firebase sign-in with Google account: ${googleUser.email}',
         );
 
         try {
-          // For CONFIGURATION_NOT_FOUND errors, skip Firebase Auth entirely
-          // Just navigate to home screen
-          print('DEBUG: Bypassing Firebase Auth due to configuration issues');
-          print('DEBUG: Navigating to home with Google profile');
+          // Authenticate with Firebase using Google credentials
+          print('DEBUG: Authenticating with Firebase using Google credentials');
+          
+          final User? user = await FirebaseService.signInWithGoogle(googleUser);
 
+          if (user != null) {
+            print('DEBUG: Successfully authenticated with Firebase via Google');
+            print('DEBUG: Firebase user: ${user.email}');
+
+            if (!mounted) return;
+
+            // Show success message
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Welcome, ${user.displayName ?? 'User'}!'),
+                duration: const Duration(seconds: 2),
+                backgroundColor: Colors.green,
+              ),
+            );
+
+            // Navigate to home screen
+            Navigator.pushNamedAndRemoveUntil(
+              context,
+              '/home',
+              (route) => false,
+            );
+            return;
+          }
+
+          // Fallback: If authentication fails, just navigate anyway
+          print('DEBUG: Google authentication returned null user');
+          
           if (mounted) {
-            // Navigate to home screen directly
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Signed in with Google (limited features)'),
+                duration: Duration(seconds: 2),
+                backgroundColor: Colors.orange,
+              ),
+            );
+            
             Navigator.pushNamedAndRemoveUntil(
               context,
               '/home',
@@ -271,8 +305,21 @@ class _SignInScreenState extends State<SignInScreen> {
           }
           return;
         } catch (e) {
-          print('DEBUG: Error: $e');
-          throw Exception('Failed to authenticate: $e');
+          print('DEBUG: Error during Firebase Google authentication: $e');
+          
+          if (!mounted) return;
+          
+          // Show error but allow fallback navigation
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Sign-in error: $e'),
+              duration: const Duration(seconds: 3),
+              backgroundColor: Colors.red,
+            ),
+          );
+          
+          setState(() => _isLoading = false);
+          return;
         }
       } else {
         throw Exception('Unable to obtain email from Google account');
