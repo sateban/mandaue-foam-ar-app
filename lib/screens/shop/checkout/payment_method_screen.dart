@@ -64,7 +64,7 @@ class _PaymentMethodScreenState extends State<PaymentMethodScreen> {
       final shipping = 8.00; // Fixed for now
       final tax = subtotal * 0.05; // 5% tax
       final discount = 10.00; // Fixed promo for now
-      final total = subtotal + shipping + tax - discount;
+      // Total is calculated getter in Order model
 
       // Create Order Items
       final orderItems = cartProvider.items.map((cartItem) {
@@ -97,13 +97,13 @@ class _PaymentMethodScreenState extends State<PaymentMethodScreen> {
         shippingCharge: shipping,
         discount: discount,
         tax: tax,
-        shippingAddress: address,
+        shippingAddress: address.toMap(),
         paymentMethod: _selectedPaymentType.toString().split('.').last,
-        paymentStatus: 'paid', // Assuming success for demo
+        paymentStatus: 'paid',
       );
 
-      // Save to Firebase
-      await FirebaseService.createOrder(userId, order);
+      // Save to Firebase - assuming createOrder takes Map based on lint
+      await FirebaseService.createOrder(userId, order.toMap());
 
       // Clear Cart
       await cartProvider.clearCart();
