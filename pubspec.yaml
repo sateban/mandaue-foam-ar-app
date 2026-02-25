@@ -65,10 +65,10 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
 
-flutter_launcher_icns:
+flutter_launcher_icons:
   android: true
   ios: true
-  image_path: "assets/images/mandaue-icon.png"
+  image_path: "assets/images/Logo.png"
 
   # The "flutter_lints" package below contains a set of recommended lints to
   # encourage good coding practices. The lint set provided by the package is
