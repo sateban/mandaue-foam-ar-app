@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../services/firebase_service.dart';
 
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({this.showBottomNav = true, super.key});
@@ -152,23 +153,80 @@ class ProfileScreen extends StatelessWidget {
   void _showLogoutDialog(BuildContext context) {
     showDialog(
       context: context,
-      builder: (BuildContext context) {
+      builder: (BuildContext dialogContext) {
         return AlertDialog(
           title: const Text('Log Out'),
           content: const Text('Are you sure you want to log out?'),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(context),
+              onPressed: () => Navigator.pop(dialogContext),
               child: const Text('Cancel'),
             ),
             TextButton(
-              onPressed: () {
-                Navigator.pop(context);
-                Navigator.pushNamedAndRemoveUntil(
-                  context,
-                  '/lets-you-in',
-                  (route) => false,
-                );
+              onPressed: () async {
+                Navigator.pop(dialogContext);
+                
+                try {
+                  print('DEBUG: Attempting to sign out...');
+                  
+                  // Show loading dialog using the outer context
+                  if (context.mounted) {
+                    showDialog(
+                      context: context,
+                      barrierDismissible: false,
+                      builder: (BuildContext loadingContext) {
+                        return const Center(
+                          child: CircularProgressIndicator(),
+                        );
+                      },
+                    );
+                  }
+                  
+                  // Sign out from Firebase
+                  await FirebaseService.signOut();
+                  
+                  print('DEBUG: Sign out successful');
+                  
+                  if (context.mounted) {
+                    // Close loading dialog
+                    Navigator.pop(context);
+                    
+                    // Navigate to sign in screen using the outer context
+                    Navigator.pushNamedAndRemoveUntil(
+                      context,
+                      '/sign-in',
+                      (route) => false,
+                    );
+                    
+                    // Show success message
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Successfully logged out'),
+                        duration: Duration(seconds: 2),
+                        backgroundColor: Colors.green,
+                      ),
+                    );
+                  }
+                } catch (e) {
+                  print('DEBUG: Error during sign out: $e');
+                  
+                  if (context.mounted) {
+                    // Close loading dialog if still open
+                    try {
+                      Navigator.pop(context);
+                    } catch (_) {
+                      // Dialog might not be open
+                    }
+                    
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Error logging out: $e'),
+                        duration: const Duration(seconds: 3),
+                        backgroundColor: Colors.red,
+                      ),
+                    );
+                  }
+                }
               },
               child: const Text('Log Out', style: TextStyle(color: Colors.red)),
             ),
