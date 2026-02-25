@@ -138,6 +138,7 @@ class ProfileScreen extends StatelessWidget {
               child: Text(
                 title,
                 style: const TextStyle(
+                  color: Color(0xFF1E3A8A),
                   fontSize: 16,
                   fontWeight: FontWeight.w500,
                 ),
