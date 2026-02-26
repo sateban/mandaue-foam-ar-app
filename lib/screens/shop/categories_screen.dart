@@ -7,6 +7,7 @@ import '../../data/dummy_data.dart';
 import '../../providers/product_provider.dart';
 import '../../services/firebase_service.dart';
 import '../../services/filebase_service.dart';
+import 'item_category_screen.dart';
 
 class CategoriesScreen extends StatefulWidget {
   const CategoriesScreen({super.key});
@@ -18,6 +19,7 @@ class CategoriesScreen extends StatefulWidget {
 class _CategoriesScreenState extends State<CategoriesScreen> {
   late List<String> _categories;
   Map<String, String> _categoryImageUrls = Map.from(categoryImageUrls);
+  Map<String, int> _categoryQuantities = {}; // Store quantity counts by category
   StreamSubscription<List<Map<String, dynamic>>>? _categoriesSubscription;
 
   @override
@@ -25,6 +27,37 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
     super.initState();
     _categories = List.from(categories);
     _loadFirebaseCategories();
+    // Load products immediately
+    Future.microtask(() {
+      final productProvider = context.read<ProductProvider>();
+      print('ProductProvider initial products: ${productProvider.products.length}');
+      if (productProvider.products.isEmpty) {
+        print('Loading products from Firebase...');
+        productProvider.loadProducts();
+      }
+      // Calculate category stocks from products
+      _calculateCategoryStocks(productProvider.products);
+    });
+  }
+
+  void _calculateCategoryStocks(List<Map<String, dynamic>> products) {
+    final Map<String, int> categoryQuantities = {};
+    
+    // Get quantity from first product in each category
+    for (final product in products) {
+      final category = product['category'] as String? ?? 'Other';
+      // Only set if not already set (first product in category)
+      if (!categoryQuantities.containsKey(category)) {
+        final quantity = product['quantity'] as int? ?? 0;
+        categoryQuantities[category] = quantity;
+      }
+    }
+    
+    setState(() {
+      _categoryQuantities = categoryQuantities;
+    });
+    
+    print('✅ Category quantities calculated: $_categoryQuantities');
   }
 
   @override
@@ -50,37 +83,40 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
       ),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
-        child: GridView.builder(
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 2,
-            childAspectRatio: 0.85,
-            crossAxisSpacing: 12,
-            mainAxisSpacing: 12,
-          ),
-          itemCount: _categories.length,
-          itemBuilder: (context, index) {
-            return _buildCategoryCard(_categories[index]);
+        child: Consumer<ProductProvider>(
+          builder: (context, productProvider, child) {
+            return GridView.builder(
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 2,
+                childAspectRatio: 0.85,
+                crossAxisSpacing: 12,
+                mainAxisSpacing: 12,
+              ),
+              itemCount: _categories.length,
+              itemBuilder: (context, index) {
+                return _buildCategoryCard(_categories[index], productProvider);
+              },
+            );
           },
         ),
       ),
     );
   }
 
-  Widget _buildCategoryCard(String category) {
-    // Get products from ProductProvider
-    final productProvider = context.read<ProductProvider>();
-    final productCount = productProvider.products
-        .where((p) => p['category'] == category)
-        .length;
+  Widget _buildCategoryCard(String category, ProductProvider productProvider) {
+    // Get quantity count directly from category data
+    final productCount = _categoryQuantities[category] ?? 0;
+    
+    print('🔍 Category: $category | Total quantity: $productCount');
 
     return GestureDetector(
       onTap: () {
-        // ScaffoldMessenger.of(context).showSnackBar(
-        //   SnackBar(
-        //     content: Text('Selected: $category ($productCount items)'),
-        //     duration: const Duration(seconds: 1),
-        //   ),
-        // );
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => ItemCategoryScreen(categoryName: category),
+          ),
+        );
       },
       child: Container(
         decoration: BoxDecoration(
@@ -177,9 +213,6 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
           imageUrl = filebase.buildFilebaseImageUrl(imageUrl);
         }
         firebaseMapLower[name.toLowerCase()] = imageUrl;
-        // print("cat: ${cat}");
-        // print("imageUrl: ${imageUrl}");
-
       }
 
       setState(() {
@@ -200,40 +233,14 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
         });
       });
 
-      // subscribe to real-time updates
-      _categoriesSubscription?.cancel();
-      _categoriesSubscription = FirebaseService.streamListData('/categories').listen(
-        (list) {
-          final Map<String, String> newMapLower = {};
-          final fbase = FilebaseService();
-          for (final cat in list) {
-            final name = (cat['name'] ?? cat['title'] ?? cat['id'])?.toString() ?? '';
-            var imageUrl = _extractImageUrl(cat);
-            if (imageUrl.isEmpty) continue;
-            if (!imageUrl.startsWith('http')) {
-              imageUrl = fbase.buildFilebaseImageUrl(imageUrl);
-            }
-            newMapLower[name.toLowerCase()] = imageUrl;
-          }
+      // Listen to products stream and recalculate stocks whenever they change
+      FirebaseService.streamListData('/products').listen(
+        (products) {
           if (!mounted) return;
-          setState(() {
-            for (final categoryName in _categories) {
-              final lower = categoryName.toLowerCase();
-              if (newMapLower.containsKey(lower)) {
-                _categoryImageUrls[categoryName] = newMapLower[lower]!;
-              }
-            }
-            newMapLower.forEach((lowerName, url) {
-              if (!_categories.any((c) => c.toLowerCase() == lowerName)) {
-                final cap = _capitalize(lowerName);
-                _categories.add(cap);
-                _categoryImageUrls[cap] = url;
-              }
-            });
-          });
+          _calculateCategoryStocks(products);
         },
         onError: (e) {
-          print('Error streaming categories: $e');
+          print('Error streaming products: $e');
         },
       );
     } catch (e) {
