@@ -665,4 +665,71 @@ class FirebaseService {
       return list;
     });
   }
-}
+
+  // Favorites Management
+  /// Toggle product favorite status for user
+  static Future<bool> toggleFavorite(String userId, String productId) async {
+    try {
+      final favoritePath = 'users/$userId/favorites/$productId';
+      final snapshot = await _database.ref(favoritePath).get();
+      
+      if (snapshot.exists) {
+        // Remove from favorites
+        await _database.ref(favoritePath).remove();
+        print('DEBUG: Removed product $productId from favorites');
+        return false;
+      } else {
+        // Add to favorites
+        await _database.ref(favoritePath).set({
+          'productId': productId,
+          'addedAt': DateTime.now().toIso8601String(),
+        });
+        print('DEBUG: Added product $productId to favorites');
+        return true;
+      }
+    } catch (e) {
+      print('Error toggling favorite: $e');
+      rethrow;
+    }
+  }
+
+  /// Check if a product is in user's favorites
+  static Future<bool> isFavorite(String userId, String productId) async {
+    try {
+      final snapshot = await _database.ref('users/$userId/favorites/$productId').get();
+      return snapshot.exists;
+    } catch (e) {
+      print('Error checking favorite status: $e');
+      return false;
+    }
+  }
+
+  /// Get user's favorite products
+  static Future<List<String>> getFavoriteProductIds(String userId) async {
+    try {
+      final snapshot = await _database.ref('users/$userId/favorites').get();
+      List<String> favorites = [];
+      
+      if (snapshot.exists && snapshot.value is Map) {
+        final data = snapshot.value as Map;
+        favorites = data.keys.cast<String>().toList();
+      }
+      
+      return favorites;
+    } catch (e) {
+      print('Error getting favorite products: $e');
+      return [];
+    }
+  }
+
+  /// Stream user's favorite products in real-time
+  static Stream<List<String>> streamFavoriteProductIds(String userId) {
+    return _database.ref('users/$userId/favorites').onValue.map((event) {
+      List<String> favorites = [];
+      if (event.snapshot.exists && event.snapshot.value is Map) {
+        final data = event.snapshot.value as Map;
+        favorites = data.keys.cast<String>().toList();
+      }
+      return favorites;
+    });
+  }}

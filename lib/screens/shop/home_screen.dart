@@ -67,6 +67,9 @@ class _HomeScreenState extends State<HomeScreen> {
     final productProvider = context.read<ProductProvider>();
     _filteredProducts = List.from(productProvider.products);
 
+    // Load user's favorites from Firebase
+    _loadUserFavorites();
+
     // Load Firebase products
     _loadFirebaseProducts();
 
@@ -163,10 +166,18 @@ class _HomeScreenState extends State<HomeScreen> {
               // Update hero slides from products with isHeroBanner == true
               _updateHeroSlidesFromProducts(transformedStreamProducts);
 
+              // Update the ProductProvider with new products
+              final productProvider = context.read<ProductProvider>();
+              productProvider.updateProducts(transformedStreamProducts);
+
               setState(() {
                 _allFirebaseProducts = transformedStreamProducts;
                 _filteredProducts = List.from(_allFirebaseProducts);
               });
+              
+              // Reload user favorites to update isFavorite status
+              _loadUserFavorites();
+              
               // Re-run search if there's an active search query
               if (_searchController.text.isNotEmpty) {
                 _searchProducts(_searchController.text);
@@ -198,6 +209,23 @@ class _HomeScreenState extends State<HomeScreen> {
     print('   Status Code: ${result['statusCode']}');
     print('   Success: ${result['success']}');
     print('   Message: ${result['message']}');
+  }
+
+  /// Load user's favorites from Firebase and update product list
+  Future<void> _loadUserFavorites() async {
+    try {
+      final productProvider = context.read<ProductProvider>();
+      await productProvider.loadUserFavorites();
+      
+      if (mounted) {
+        setState(() {
+          _filteredProducts = List.from(productProvider.products);
+        });
+      }
+      print('✅ User favorites loaded successfully');
+    } catch (e) {
+      print('Error loading user favorites: $e');
+    }
   }
 
   @override
@@ -1314,7 +1342,55 @@ class _HomeScreenState extends State<HomeScreen> {
                     top: 8,
                     right: 8,
                     child: GestureDetector(
-                      onTap: () {},
+                      onTap: () {
+                        try {
+                          final productProvider = context.read<ProductProvider>();
+                          final wasIsFavorite = product['isFavorite'] ?? false;
+                          
+                          // Optimistic update - update UI immediately
+                          product['isFavorite'] = !wasIsFavorite;
+                          setState(() {});
+                          
+                          // Show feedback
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  product['isFavorite'] ? 'Added to favorites' : 'Removed from favorites',
+                                ),
+                                duration: const Duration(seconds: 1),
+                              ),
+                            );
+                          }
+                          
+                          // Update Firebase in background without awaiting
+                          productProvider.toggleProductFavorite(product['id']?.toString() ?? '')
+                            .catchError((e) {
+                              // Rollback on error
+                              product['isFavorite'] = wasIsFavorite;
+                              if (mounted) {
+                                setState(() {});
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('Failed to update favorites'),
+                                    duration: Duration(seconds: 2),
+                                  ),
+                                );
+                              }
+                              print('Error toggling favorite: $e');
+                            });
+                        } catch (e) {
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Please sign in to add favorites'),
+                                duration: Duration(seconds: 2),
+                              ),
+                            );
+                          }
+                          print('Error toggling favorite: $e');
+                        }
+                      },
                       child: Icon(
                         product['isFavorite']
                             ? Icons.favorite
@@ -1478,7 +1554,55 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
             GestureDetector(
-              onTap: () {},
+              onTap: () {
+                try {
+                  final productProvider = context.read<ProductProvider>();
+                  final wasIsFavorite = product['isFavorite'] ?? false;
+                  
+                  // Optimistic update - update UI immediately
+                  product['isFavorite'] = !wasIsFavorite;
+                  setState(() {});
+                  
+                  // Show feedback
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          product['isFavorite'] ? 'Added to favorites' : 'Removed from favorites',
+                        ),
+                        duration: const Duration(seconds: 1),
+                      ),
+                    );
+                  }
+                  
+                  // Update Firebase in background without awaiting
+                  productProvider.toggleProductFavorite(product['id']?.toString() ?? '')
+                    .catchError((e) {
+                      // Rollback on error
+                      product['isFavorite'] = wasIsFavorite;
+                      if (mounted) {
+                        setState(() {});
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Failed to update favorites'),
+                            duration: Duration(seconds: 2),
+                          ),
+                        );
+                      }
+                      print('Error toggling favorite: $e');
+                    });
+                } catch (e) {
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Please sign in to add favorites'),
+                        duration: Duration(seconds: 2),
+                      ),
+                    );
+                  }
+                  print('Error toggling favorite: $e');
+                }
+              },
               child: Icon(
                 product['isFavorite'] ? Icons.favorite : Icons.favorite_border,
                 color: product['isFavorite'] ? Colors.red : Colors.grey,

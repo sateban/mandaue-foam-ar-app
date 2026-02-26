@@ -127,10 +127,78 @@ class ProductProvider extends ChangeNotifier {
         .toList();
   }
 
+  /// Toggle favorite status for a product
+  Future<void> toggleProductFavorite(String productId) async {
+    try {
+      final user = FirebaseService.getCurrentUser();
+      if (user == null) {
+        throw Exception('User is not authenticated');
+      }
+
+      // Toggle on Firebase
+      final isFavorite = await FirebaseService.toggleFavorite(user.uid, productId);
+
+      // Update local product list
+      final productIndex = _products.indexWhere((p) => p['id'] == productId);
+      if (productIndex != -1) {
+        _products[productIndex]['isFavorite'] = isFavorite;
+        notifyListeners();
+        print('ProductProvider: Product $productId favorite toggled to $isFavorite');
+      }
+    } catch (e) {
+      print('ProductProvider: Error toggling favorite: $e');
+      rethrow;
+    }
+  }
+
+  /// Load favorites from Firebase for the current user
+  Future<void> loadUserFavorites() async {
+    try {
+      final user = FirebaseService.getCurrentUser();
+      if (user == null) {
+        // Not logged in, clear favorites
+        for (var product in _products) {
+          product['isFavorite'] = false;
+        }
+        notifyListeners();
+        return;
+      }
+
+      // Get user's favorite product IDs
+      final favoriteIds = await FirebaseService.getFavoriteProductIds(user.uid);
+
+      // Update product list with favorite status
+      for (var product in _products) {
+        product['isFavorite'] = favoriteIds.contains(product['id']);
+      }
+
+      notifyListeners();
+      print('ProductProvider: Loaded ${favoriteIds.length} favorites from Firebase');
+    } catch (e) {
+      print('ProductProvider: Error loading favorites: $e');
+    }
+  }
+
+  /// Stream user's favorites in real-time
+  Stream<List<String>> streamUserFavorites() {
+    final user = FirebaseService.getCurrentUser();
+    if (user == null) {
+      return Stream.value([]);
+    }
+    return FirebaseService.streamFavoriteProductIds(user.uid);
+  }
+
   /// Clear products
+
   void clearProducts() {
     _products = [];
     _error = null;
+    notifyListeners();
+  }
+
+  /// Update products list (used for real-time updates)
+  void updateProducts(List<Map<String, dynamic>> newProducts) {
+    _products = newProducts;
     notifyListeners();
   }
 

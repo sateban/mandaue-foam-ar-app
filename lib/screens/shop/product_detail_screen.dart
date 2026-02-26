@@ -4,7 +4,9 @@ import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 import '../../models/product.dart';
 import '../../services/filebase_service.dart';
+import '../../services/firebase_service.dart';
 import '../../providers/cart_provider.dart';
+import '../../providers/product_provider.dart';
 import '../onboarding/ar_viewer_screen.dart';
 import 'three_d_viewer_screen.dart';
 import '../../widgets/authenticated_image.dart';
@@ -48,19 +50,50 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
               color: Colors.red,
             ),
             onPressed: () {
-              setState(() {
-                _isFavorite = !_isFavorite;
-              });
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(
-                    _isFavorite
-                        ? 'Added to favorites'
-                        : 'Removed from favorites',
+              try {
+                final productProvider = context.read<ProductProvider>();
+                final wasFavorite = _isFavorite;
+                
+                // Optimistic update - update UI immediately
+                setState(() {
+                  _isFavorite = !_isFavorite;
+                });
+                
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      _isFavorite
+                          ? 'Added to favorites'
+                          : 'Removed from favorites',
+                    ),
+                    duration: const Duration(seconds: 1),
                   ),
-                  duration: const Duration(seconds: 1),
-                ),
-              );
+                );
+                
+                // Update Firebase in background without awaiting
+                productProvider.toggleProductFavorite(widget.product.id)
+                  .catchError((e) {
+                    // Rollback on error
+                    setState(() {
+                      _isFavorite = wasFavorite;
+                    });
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Failed to update favorites'),
+                        duration: Duration(seconds: 2),
+                      ),
+                    );
+                    print('Error toggling favorite: $e');
+                  });
+              } catch (e) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Please sign in to add favorites'),
+                    duration: Duration(seconds: 2),
+                  ),
+                );
+                print('Error toggling favorite: $e');
+              }
             },
           ),
         ],

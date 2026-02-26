@@ -1,8 +1,10 @@
 import 'dart:async';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../../services/firebase_service.dart';
 import '../../services/filebase_service.dart';
+import '../../providers/product_provider.dart';
 import 'filter_modal.dart';
 
 class PopularProductsScreen extends StatefulWidget {
@@ -31,6 +33,17 @@ class _PopularProductsScreenState extends State<PopularProductsScreen> {
     _products = [];
     _filteredProducts = [];
     _loadPopularProducts();
+    _loadUserFavorites();
+  }
+
+  Future<void> _loadUserFavorites() async {
+    try {
+      final productProvider = context.read<ProductProvider>();
+      await productProvider.loadUserFavorites();
+      print('✅ User favorites loaded in PopularProductsScreen');
+    } catch (e) {
+      print('Error loading user favorites: $e');
+    }
   }
 
   Future<void> _loadPopularProducts() async {
@@ -293,7 +306,54 @@ class _PopularProductsScreenState extends State<PopularProductsScreen> {
                   top: 8,
                   right: 8,
                   child: GestureDetector(
-                    onTap: () {},
+                    onTap: () {
+                      try {
+                        final productProvider = context.read<ProductProvider>();
+                        final wasIsFavorite = product['isFavorite'] ?? false;
+                        
+                        // Optimistic update - update UI immediately
+                        product['isFavorite'] = !wasIsFavorite;
+                        setState(() {});
+                        
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                product['isFavorite'] ? 'Added to favorites' : 'Removed from favorites',
+                              ),
+                              duration: const Duration(seconds: 1),
+                            ),
+                          );
+                        }
+                        
+                        // Update Firebase in background without awaiting
+                        productProvider.toggleProductFavorite(product['id']?.toString() ?? '')
+                          .catchError((e) {
+                            // Rollback on error
+                            product['isFavorite'] = wasIsFavorite;
+                            if (mounted) {
+                              setState(() {});
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Failed to update favorites'),
+                                  duration: Duration(seconds: 2),
+                                ),
+                              );
+                            }
+                            print('Error toggling favorite: $e');
+                          });
+                      } catch (e) {
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Please sign in to add favorites'),
+                              duration: Duration(seconds: 2),
+                            ),
+                          );
+                        }
+                        print('Error toggling favorite: $e');
+                      }
+                    },
                     child: Icon(
                       product['isFavorite']
                           ? Icons.favorite
