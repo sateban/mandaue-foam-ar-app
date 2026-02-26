@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'dart:async';
 import 'package:provider/provider.dart';
 import '../../data/dummy_data.dart' show categories, categoryImageUrls;
+import 'item_category_screen.dart';
 import '../../providers/product_provider.dart';
 import '../../utils/slide_route.dart';
 import '../../services/firebase_service.dart';
@@ -680,7 +681,16 @@ class _HomeScreenState extends State<HomeScreen> {
                             return Padding(
                               padding: const EdgeInsets.only(right: 12),
                               child: GestureDetector(
-                                onTap: () {},
+                                onTap: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) => ItemCategoryScreen(
+                                        categoryName: categories[index],
+                                      ),
+                                    ),
+                                  );
+                                },
                                 child: Container(
                                   width: 80,
                                   decoration: BoxDecoration(

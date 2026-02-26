@@ -39,6 +39,7 @@ import 'screens/shop/popular_products_screen.dart';
 import 'screens/shop/all_products_screen.dart';
 import 'screens/shop/new_arrivals_screen.dart';
 import 'screens/shop/categories_screen.dart';
+import 'screens/shop/item_category_screen.dart';
 import 'screens/shop/shop_shell.dart';
 import 'screens/shop/search_products_screen.dart';
 import 'screens/shop/track_order_screen.dart';
@@ -187,6 +188,10 @@ class MyApp extends StatelessWidget {
           '/all-products': (context) => const AllProductsScreen(),
           '/new-arrivals': (context) => const NewArrivalsScreen(),
           '/categories': (context) => const CategoriesScreen(),
+          '/item-category': (context) {
+            final categoryName = ModalRoute.of(context)?.settings.arguments as String?;
+            return ItemCategoryScreen(categoryName: categoryName ?? 'Products');
+          },
           '/search-products': (context) => const SearchProductsScreen(),
 
           // Checkout routes
