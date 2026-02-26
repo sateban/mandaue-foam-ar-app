@@ -1338,68 +1338,70 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                       ),
                     ),
-                  Positioned(
-                    top: 8,
-                    right: 8,
-                    child: GestureDetector(
-                      onTap: () {
-                        try {
-                          final productProvider = context.read<ProductProvider>();
-                          final wasIsFavorite = product['isFavorite'] ?? false;
-                          
-                          // Optimistic update - update UI immediately
-                          product['isFavorite'] = !wasIsFavorite;
-                          setState(() {});
-                          
-                          // Show feedback
-                          if (mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text(
-                                  product['isFavorite'] ? 'Added to favorites' : 'Removed from favorites',
-                                ),
-                                duration: const Duration(seconds: 1),
-                              ),
-                            );
-                          }
-                          
-                          // Update Firebase in background without awaiting
-                          productProvider.toggleProductFavorite(product['id']?.toString() ?? '')
-                            .catchError((e) {
-                              // Rollback on error
-                              product['isFavorite'] = wasIsFavorite;
-                              if (mounted) {
-                                setState(() {});
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text('Failed to update favorites'),
-                                    duration: Duration(seconds: 2),
-                                  ),
-                                );
-                              }
-                              print('Error toggling favorite: $e');
-                            });
-                        } catch (e) {
-                          if (mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Please sign in to add favorites'),
-                                duration: Duration(seconds: 2),
-                              ),
-                            );
-                          }
-                          print('Error toggling favorite: $e');
-                        }
-                      },
-                      child: Icon(
-                        product['isFavorite']
-                            ? Icons.favorite
-                            : Icons.favorite_border,
-                        color: product['isFavorite'] ? Colors.red : Colors.grey,
-                        size: 24,
-                      ),
-                    ),
-                  ),
+                  // FAVORITE BUTTON COMMENTED OUT ON HOME PAGE
+                  // Can be uncommented to show favorite button on home page
+                  // Positioned(
+                  //   top: 8,
+                  //   right: 8,
+                  //   child: GestureDetector(
+                  //     onTap: () {
+                  //       try {
+                  //         final productProvider = context.read<ProductProvider>();
+                  //         final wasIsFavorite = product['isFavorite'] ?? false;
+                  //         
+                  //         // Optimistic update - update UI immediately
+                  //         product['isFavorite'] = !wasIsFavorite;
+                  //         setState(() {});
+                  //         
+                  //         // Show feedback
+                  //         if (mounted) {
+                  //           ScaffoldMessenger.of(context).showSnackBar(
+                  //             SnackBar(
+                  //               content: Text(
+                  //                 product['isFavorite'] ? 'Added to favorites' : 'Removed from favorites',
+                  //               ),
+                  //               duration: const Duration(seconds: 1),
+                  //             ),
+                  //           );
+                  //         }
+                  //         
+                  //         // Update Firebase in background without awaiting
+                  //         productProvider.toggleProductFavorite(product['id']?.toString() ?? '')
+                  //           .catchError((e) {
+                  //             // Rollback on error
+                  //             product['isFavorite'] = wasIsFavorite;
+                  //             if (mounted) {
+                  //               setState(() {});
+                  //               ScaffoldMessenger.of(context).showSnackBar(
+                  //                 const SnackBar(
+                  //                   content: Text('Failed to update favorites'),
+                  //                   duration: Duration(seconds: 2),
+                  //                 ),
+                  //               );
+                  //             }
+                  //             print('Error toggling favorite: $e');
+                  //           });
+                  //       } catch (e) {
+                  //         if (mounted) {
+                  //           ScaffoldMessenger.of(context).showSnackBar(
+                  //             const SnackBar(
+                  //               content: Text('Please sign in to add favorites'),
+                  //               duration: Duration(seconds: 2),
+                  //             ),
+                  //           );
+                  //         }
+                  //         print('Error toggling favorite: $e');
+                  //       }
+                  //     },
+                  //     child: Icon(
+                  //       product['isFavorite']
+                  //           ? Icons.favorite
+                  //           : Icons.favorite_border,
+                  //       color: product['isFavorite'] ? Colors.red : Colors.grey,
+                  //       size: 24,
+                  //     ),
+                  //   ),
+                  // ),
                 ],
               ),
             ),
@@ -1553,62 +1555,64 @@ class _HomeScreenState extends State<HomeScreen> {
                 ],
               ),
             ),
-            GestureDetector(
-              onTap: () {
-                try {
-                  final productProvider = context.read<ProductProvider>();
-                  final wasIsFavorite = product['isFavorite'] ?? false;
-                  
-                  // Optimistic update - update UI immediately
-                  product['isFavorite'] = !wasIsFavorite;
-                  setState(() {});
-                  
-                  // Show feedback
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(
-                          product['isFavorite'] ? 'Added to favorites' : 'Removed from favorites',
-                        ),
-                        duration: const Duration(seconds: 1),
-                      ),
-                    );
-                  }
-                  
-                  // Update Firebase in background without awaiting
-                  productProvider.toggleProductFavorite(product['id']?.toString() ?? '')
-                    .catchError((e) {
-                      // Rollback on error
-                      product['isFavorite'] = wasIsFavorite;
-                      if (mounted) {
-                        setState(() {});
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Failed to update favorites'),
-                            duration: Duration(seconds: 2),
-                          ),
-                        );
-                      }
-                      print('Error toggling favorite: $e');
-                    });
-                } catch (e) {
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Please sign in to add favorites'),
-                        duration: Duration(seconds: 2),
-                      ),
-                    );
-                  }
-                  print('Error toggling favorite: $e');
-                }
-              },
-              child: Icon(
-                product['isFavorite'] ? Icons.favorite : Icons.favorite_border,
-                color: product['isFavorite'] ? Colors.red : Colors.grey,
-                size: 20,
-              ),
-            ),
+            // FAVORITE BUTTON COMMENTED OUT ON HOME PAGE
+            // Can be uncommented to show favorite button in New Arrivals section
+            // GestureDetector(
+            //   onTap: () {
+            //     try {
+            //       final productProvider = context.read<ProductProvider>();
+            //       final wasIsFavorite = product['isFavorite'] ?? false;
+            //       
+            //       // Optimistic update - update UI immediately
+            //       product['isFavorite'] = !wasIsFavorite;
+            //       setState(() {});
+            //       
+            //       // Show feedback
+            //       if (mounted) {
+            //         ScaffoldMessenger.of(context).showSnackBar(
+            //           SnackBar(
+            //             content: Text(
+            //               product['isFavorite'] ? 'Added to favorites' : 'Removed from favorites',
+            //             ),
+            //             duration: const Duration(seconds: 1),
+            //           ),
+            //         );
+            //       }
+            //       
+            //       // Update Firebase in background without awaiting
+            //       productProvider.toggleProductFavorite(product['id']?.toString() ?? '')
+            //         .catchError((e) {
+            //           // Rollback on error
+            //           product['isFavorite'] = wasIsFavorite;
+            //           if (mounted) {
+            //             setState(() {});
+            //             ScaffoldMessenger.of(context).showSnackBar(
+            //               const SnackBar(
+            //                 content: Text('Failed to update favorites'),
+            //                 duration: Duration(seconds: 2),
+            //               ),
+            //             );
+            //           }
+            //           print('Error toggling favorite: $e');
+            //         });
+            //     } catch (e) {
+            //       if (mounted) {
+            //         ScaffoldMessenger.of(context).showSnackBar(
+            //           const SnackBar(
+            //             content: Text('Please sign in to add favorites'),
+            //             duration: Duration(seconds: 2),
+            //           ),
+            //         );
+            //       }
+            //       print('Error toggling favorite: $e');
+            //     }
+            //   },
+            //   child: Icon(
+            //     product['isFavorite'] ? Icons.favorite : Icons.favorite_border,
+            //     color: product['isFavorite'] ? Colors.red : Colors.grey,
+            //     size: 20,
+            //   ),
+            // ),
           ],
         ),
       ),
