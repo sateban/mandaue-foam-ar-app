@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 import '../../services/firebase_service.dart';
+import '../../services/filebase_service.dart';
 
 class FillProfileScreen extends StatefulWidget {
   const FillProfileScreen({super.key});
@@ -20,6 +21,58 @@ class _FillProfileScreenState extends State<FillProfileScreen> {
   String? _selectedGender;
   File? _selectedImage;
   String? _uploadedImageUrl;
+  String _selectedCountryCode = '+63'; // Default to Philippines
+  
+  // Country codes map with country names
+  final Map<String, String> _countryCodes = {
+    '+1': 'USA/Canada',
+    '+63': 'Philippines',
+    '+44': 'United Kingdom',
+    '+91': 'India',
+    '+86': 'China',
+    '+81': 'Japan',
+    '+33': 'France',
+    '+49': 'Germany',
+    '+39': 'Italy',
+    '+34': 'Spain',
+    '+61': 'Australia',
+    '+64': 'New Zealand',
+    '+27': 'South Africa',
+    '+55': 'Brazil',
+    '+52': 'Mexico',
+    '+1-809': 'Dominican Republic',
+    '+65': 'Singapore',
+    '+60': 'Malaysia',
+    '+66': 'Thailand',
+    '+84': 'Vietnam',
+    '+62': 'Indonesia',
+    '+92': 'Pakistan',
+    '+88': 'Bangladesh',
+    '+234': 'Nigeria',
+    '+254': 'Kenya',
+    '+358': 'Finland',
+    '+46': 'Sweden',
+    '+47': 'Norway',
+    '+45': 'Denmark',
+    '+31': 'Netherlands',
+    '+32': 'Belgium',
+    '+41': 'Switzerland',
+    '+43': 'Austria',
+    '+48': 'Poland',
+    '+420': 'Czech Republic',
+    '+36': 'Hungary',
+    '+380': 'Ukraine',
+    '+7': 'Russia',
+    '+90': 'Turkey',
+    '+966': 'Saudi Arabia',
+    '+971': 'UAE',
+    '+965': 'Kuwait',
+    '+974': 'Qatar',
+    '+212': 'Morocco',
+    '+216': 'Tunisia',
+    '+213': 'Algeria',
+    '+20': 'Egypt',
+  };
 
   @override
   void dispose() {
@@ -124,10 +177,20 @@ class _FillProfileScreenState extends State<FillProfileScreen> {
   void _cacheNetworkImage(String imageUrl) {
     try {
       if (imageUrl.isNotEmpty && imageUrl.startsWith('http')) {
+        // Cache in Flutter's image cache for faster rendering
         precacheImage(NetworkImage(imageUrl), context).then((_) {
-          print('DEBUG: Image cached successfully: $imageUrl');
+          print('DEBUG: Image cached in Flutter: $imageUrl');
         }).catchError((e) {
-          print('DEBUG: Error caching image: $e');
+          print('DEBUG: Error caching in Flutter: $e');
+        });
+        
+        // Also cache in FilebaseService for byte-level caching (prevents re-download)
+        FilebaseService().getImageBytes(imageUrl).then((bytes) {
+          if (bytes != null) {
+            print('✨ Image bytes cached (${bytes.length} bytes): ${imageUrl.split('/').last}');
+          }
+        }).catchError((e) {
+          print('DEBUG: Error caching image bytes: $e');
         });
       }
     } catch (e) {
@@ -279,35 +342,54 @@ class _FillProfileScreenState extends State<FillProfileScreen> {
                   ),
                 ),
                 const SizedBox(height: 16),
-                // Phone Number
-                TextFormField(
-                  controller: _phoneController,
-                  keyboardType: TextInputType.phone,
-                  decoration: InputDecoration(
-                    labelText: 'Phone Number',
-                    hintText: 'Enter your phone number',
-                    prefixIcon: Padding(
-                      padding: const EdgeInsets.all(12.0),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Image.asset(
-                            'assets/images/us_flag.png',
-                            width: 24,
-                            height: 24,
-                            errorBuilder: (context, error, stackTrace) {
-                              return const Icon(Icons.flag, size: 24);
-                            },
-                          ),
-                          const SizedBox(width: 8),
-                          const Icon(Icons.arrow_drop_down),
-                        ],
+                // Phone Number with country code dropdown
+                Row(
+                  children: [
+                    // Country code dropdown
+                    Expanded(
+                      flex: 2,
+                      child: DropdownButton<String>(
+                        value: _selectedCountryCode,
+                        isExpanded: true,
+                        items: _countryCodes.entries.map((entry) {
+                          return DropdownMenuItem<String>(
+                            value: entry.key,
+                            child: Text(
+                              '${entry.key} ${entry.value}',
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          );
+                        }).toList(),
+                        onChanged: (String? newValue) {
+                          if (newValue != null) {
+                            setState(() {
+                              _selectedCountryCode = newValue;
+                            });
+                          }
+                        },
+                        underline: Container(
+                          height: 1,
+                          color: Colors.grey[300],
+                        ),
                       ),
                     ),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
+                    const SizedBox(width: 12),
+                    // Phone number input
+                    Expanded(
+                      flex: 2,
+                      child: TextFormField(
+                        controller: _phoneController,
+                        keyboardType: TextInputType.phone,
+                        decoration: InputDecoration(
+                          labelText: 'Phone Number',
+                          hintText: 'Enter your phone number',
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                      ),
                     ),
-                  ),
+                  ],
                 ),
                 const SizedBox(height: 16),
                 // Gender

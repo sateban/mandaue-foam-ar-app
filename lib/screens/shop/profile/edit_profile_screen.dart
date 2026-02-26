@@ -23,6 +23,58 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   String? _errorMessage;
   String? _profilePictureUrl;
   File? _selectedImage;
+  String _selectedCountryCode = '+63'; // Default to Philippines
+  
+  // Country codes map with country names
+  final Map<String, String> _countryCodes = {
+    '+1': 'USA/Canada',
+    '+63': 'Philippines',
+    '+44': 'United Kingdom',
+    '+91': 'India',
+    '+86': 'China',
+    '+81': 'Japan',
+    '+33': 'France',
+    '+49': 'Germany',
+    '+39': 'Italy',
+    '+34': 'Spain',
+    '+61': 'Australia',
+    '+64': 'New Zealand',
+    '+27': 'South Africa',
+    '+55': 'Brazil',
+    '+52': 'Mexico',
+    '+1-809': 'Dominican Republic',
+    '+65': 'Singapore',
+    '+60': 'Malaysia',
+    '+66': 'Thailand',
+    '+84': 'Vietnam',
+    '+62': 'Indonesia',
+    '+92': 'Pakistan',
+    '+88': 'Bangladesh',
+    '+234': 'Nigeria',
+    '+254': 'Kenya',
+    '+358': 'Finland',
+    '+46': 'Sweden',
+    '+47': 'Norway',
+    '+45': 'Denmark',
+    '+31': 'Netherlands',
+    '+32': 'Belgium',
+    '+41': 'Switzerland',
+    '+43': 'Austria',
+    '+48': 'Poland',
+    '+420': 'Czech Republic',
+    '+36': 'Hungary',
+    '+380': 'Ukraine',
+    '+7': 'Russia',
+    '+90': 'Turkey',
+    '+966': 'Saudi Arabia',
+    '+971': 'UAE',
+    '+965': 'Kuwait',
+    '+974': 'Qatar',
+    '+212': 'Morocco',
+    '+216': 'Tunisia',
+    '+213': 'Algeria',
+    '+20': 'Egypt',
+  };
 
   @override
   void initState() {
@@ -215,10 +267,20 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   void _cacheNetworkImage(String imageUrl) {
     try {
       if (imageUrl.isNotEmpty && imageUrl.startsWith('http')) {
+        // Cache in Flutter's image cache for faster rendering
         precacheImage(NetworkImage(imageUrl), context).then((_) {
-          print('DEBUG: Image cached successfully: $imageUrl');
+          print('DEBUG: Image cached in Flutter: $imageUrl');
         }).catchError((e) {
-          print('DEBUG: Error caching image: $e');
+          print('DEBUG: Error caching in Flutter: $e');
+        });
+        
+        // Also cache in FilebaseService for byte-level caching (prevents re-download)
+        FilebaseService().getImageBytes(imageUrl).then((bytes) {
+          if (bytes != null) {
+            print('✨ Image bytes cached (${bytes.length} bytes): ${imageUrl.split('/').last}');
+          }
+        }).catchError((e) {
+          print('DEBUG: Error caching image bytes: $e');
         });
       }
     } catch (e) {
@@ -384,29 +446,61 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                         ),
                       ),
                       const SizedBox(height: 16),
-                      // Phone number
-                      TextField(
-                        controller: _phoneController,
-                        keyboardType: TextInputType.phone,
-                        style: TextStyle(color: Colors.grey[700]),
-                        decoration: InputDecoration(
-                          labelText: 'Phone Number (Optional)',
-                          labelStyle: TextStyle(color: Colors.grey[700]),
-                          prefixIcon: Padding(
-                            padding: const EdgeInsets.all(12.0),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                const Text('+1'),
-                                const SizedBox(width: 4),
-                                Icon(Icons.arrow_drop_down, color: Colors.grey[600]),
-                              ],
+                      // Phone number with country code dropdown
+                      Row(
+                        children: [
+                          // Country code dropdown
+                          Expanded(
+                            flex: 1,
+                            child: DropdownButton<String>(
+                              value: _selectedCountryCode,
+                              isExpanded: true,
+                              items: (_countryCodes.entries
+                              .toList()
+                              ..sort((a, b) => a.value.compareTo(b.value)))
+                              .map((entry) {
+                                return DropdownMenuItem<String>(
+                                  value: entry.key,
+                                  child: Text(
+                                    '${entry.key} ${entry.value}',
+                                    style: TextStyle(color: Colors.grey[700]),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                );
+                              }).toList(),
+                              onChanged: (String? newValue) {
+                                if (newValue != null) {
+                                  setState(() {
+                                    _selectedCountryCode = newValue;
+                                  });
+                                }
+                              },
+                              underline: Container(
+                                height: 1,
+                                color: Colors.grey[300],
+                              ),
                             ),
                           ),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
+                          const SizedBox(width: 12),
+                          // Phone number input
+                          Expanded(
+                            flex: 2,
+                            child: TextField(
+                              controller: _phoneController,
+                              keyboardType: TextInputType.phone,
+                              style: TextStyle(color: Colors.grey[700]),
+                              decoration: InputDecoration(
+                                labelText: 'Phone Number (Optional)',
+                                labelStyle: TextStyle(color: Colors.grey[700]),
+                                hintText: 'Enter phone number',
+                                hintStyle: TextStyle(color: Colors.grey[400]),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                              ),
+                            ),
                           ),
-                        ),
+                        ],
                       ),
                       const SizedBox(height: 32),
                       // Save button

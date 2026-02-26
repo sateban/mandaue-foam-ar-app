@@ -19,11 +19,63 @@ class _SignUpScreenState extends State<SignUpScreen> {
   final _passwordController = TextEditingController();
   bool _obscurePassword = true;
   bool _isLoading = false;
+  String _selectedCountryCode = '+63'; // Default to Philippines
   
   String? _firstNameError;
   String? _lastNameError;
   String? _emailError;
   String? _passwordError;
+  
+  // Country codes map with country names
+  final Map<String, String> _countryCodes = {
+    '+1': 'USA/Canada',
+    '+63': 'Philippines',
+    '+44': 'United Kingdom',
+    '+91': 'India',
+    '+86': 'China',
+    '+81': 'Japan',
+    '+33': 'France',
+    '+49': 'Germany',
+    '+39': 'Italy',
+    '+34': 'Spain',
+    '+61': 'Australia',
+    '+64': 'New Zealand',
+    '+27': 'South Africa',
+    '+55': 'Brazil',
+    '+52': 'Mexico',
+    '+1-809': 'Dominican Republic',
+    '+65': 'Singapore',
+    '+60': 'Malaysia',
+    '+66': 'Thailand',
+    '+84': 'Vietnam',
+    '+62': 'Indonesia',
+    '+92': 'Pakistan',
+    '+88': 'Bangladesh',
+    '+234': 'Nigeria',
+    '+254': 'Kenya',
+    '+358': 'Finland',
+    '+46': 'Sweden',
+    '+47': 'Norway',
+    '+45': 'Denmark',
+    '+31': 'Netherlands',
+    '+32': 'Belgium',
+    '+41': 'Switzerland',
+    '+43': 'Austria',
+    '+48': 'Poland',
+    '+420': 'Czech Republic',
+    '+36': 'Hungary',
+    '+380': 'Ukraine',
+    '+7': 'Russia',
+    '+90': 'Turkey',
+    '+966': 'Saudi Arabia',
+    '+971': 'UAE',
+    '+965': 'Kuwait',
+    '+974': 'Qatar',
+    '+212': 'Morocco',
+    '+216': 'Tunisia',
+    '+213': 'Algeria',
+    '+20': 'Egypt',
+  };
 
   bool _validateEmail(String email) {
     final emailRegex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
@@ -459,37 +511,74 @@ class _SignUpScreenState extends State<SignUpScreen> {
                           ),
                         ),
                         const SizedBox(height: 8),
-                        TextField(
-                          controller: _phoneController,
-                          keyboardType: TextInputType.phone,
-                          style: const TextStyle(
-                            color: Colors.black,
-                          ),
-                          decoration: InputDecoration(
-                            hintText: 'Enter Phone number',
-                            hintStyle: const TextStyle(color: Colors.grey),
-                            filled: true,
-                            fillColor: Colors.white,
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide: const BorderSide(
-                                color: Color(0xFFE0E0E0),
+                        Row(
+                          children: [
+                            // Country code dropdown
+                            Expanded(
+                              flex: 2,
+                              child: DropdownButton<String>(
+                                value: _selectedCountryCode,
+                                isExpanded: true,
+                                items: _countryCodes.entries.map((entry) {
+                                  return DropdownMenuItem<String>(
+                                    value: entry.key,
+                                    child: Text(
+                                      '${entry.key} ${entry.value}',
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  );
+                                }).toList(),
+                                onChanged: (String? newValue) {
+                                  if (newValue != null) {
+                                    setState(() {
+                                      _selectedCountryCode = newValue;
+                                    });
+                                  }
+                                },
+                                underline: Container(
+                                  height: 1,
+                                  color: Colors.grey[300],
+                                ),
                               ),
                             ),
-                            enabledBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide: const BorderSide(
-                                color: Color(0xFFE0E0E0),
+                            const SizedBox(width: 12),
+                            // Phone number input
+                            Expanded(
+                              flex: 2,
+                              child: TextField(
+                                controller: _phoneController,
+                                keyboardType: TextInputType.phone,
+                                style: const TextStyle(
+                                  color: Colors.black,
+                                ),
+                                decoration: InputDecoration(
+                                  hintText: 'Enter phone number',
+                                  hintStyle: const TextStyle(color: Colors.grey),
+                                  filled: true,
+                                  fillColor: Colors.white,
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                    borderSide: const BorderSide(
+                                      color: Color(0xFFE0E0E0),
+                                    ),
+                                  ),
+                                  enabledBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                    borderSide: const BorderSide(
+                                      color: Color(0xFFE0E0E0),
+                                    ),
+                                  ),
+                                  focusedBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                    borderSide: const BorderSide(
+                                      color: Color(0xFF1E3A8A),
+                                      width: 2,
+                                    ),
+                                  ),
+                                ),
                               ),
                             ),
-                            focusedBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide: const BorderSide(
-                                color: Color(0xFF1E3A8A),
-                                width: 2,
-                              ),
-                            ),
-                          ),
+                          ],
                         ),
 
                         const SizedBox(height: 24),
