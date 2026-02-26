@@ -36,6 +36,7 @@ import 'screens/shop/profile/edit_profile_screen.dart';
 import 'screens/shop/profile/coupons_screen.dart';
 import 'screens/shop/notifications_screen.dart';
 import 'screens/shop/popular_products_screen.dart';
+import 'screens/shop/all_products_screen.dart';
 import 'screens/shop/new_arrivals_screen.dart';
 import 'screens/shop/categories_screen.dart';
 import 'screens/shop/shop_shell.dart';
@@ -183,6 +184,7 @@ class MyApp extends StatelessWidget {
           // Shop routes
           '/notifications': (context) => const NotificationsScreen(),
           '/popular-products': (context) => const PopularProductsScreen(),
+          '/all-products': (context) => const AllProductsScreen(),
           '/new-arrivals': (context) => const NewArrivalsScreen(),
           '/categories': (context) => const CategoriesScreen(),
           '/search-products': (context) => const SearchProductsScreen(),

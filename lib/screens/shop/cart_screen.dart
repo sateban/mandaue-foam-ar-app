@@ -4,6 +4,8 @@ import '../../widgets/empty_state_widget.dart';
 import '../../widgets/authenticated_image.dart';
 import '../../providers/cart_provider.dart';
 import '../../models/cart_item.dart';
+import 'shop_shell_scope.dart';
+import 'all_products_screen.dart';
 
 class CartScreen extends StatefulWidget {
   const CartScreen({this.showBottomNav = true, super.key});
@@ -157,7 +159,12 @@ class _CartScreenState extends State<CartScreen> {
                   'Looks like you haven\'t picked anything yet. Start exploring now!',
               buttonText: 'Add Products',
               onButtonPressed: () {
-                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const AllProductsScreen(),
+                  ),
+                );
               },
             );
           }
