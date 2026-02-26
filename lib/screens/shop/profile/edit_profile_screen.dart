@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 import '../../../services/firebase_service.dart';
+import '../../../services/filebase_service.dart';
 
 class EditProfileScreen extends StatefulWidget {
   const EditProfileScreen({super.key});
@@ -46,14 +47,28 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       
       if (userData != null) {
         print('DEBUG: User data loaded: $userData');
+        print('DEBUG: Profile picture URL: ${userData['profilePicsUrl']}');
+        
+        // Convert direct URL to presigned URL if needed (for old images)
+        String? profileUrl = userData['profilePicsUrl'];
+        if (profileUrl != null && profileUrl.isNotEmpty) {
+          profileUrl = await FilebaseService().ensurePresignedUrl(profileUrl);
+          print('DEBUG: Converted to presigned URL: $profileUrl');
+        }
+        
         setState(() {
           _firstNameController.text = userData['firstName'] ?? '';
           _lastNameController.text = userData['lastName'] ?? '';
           _emailController.text = userData['email'] ?? user.email ?? '';
           _phoneController.text = userData['phoneNumber'] ?? '';
-          _profilePictureUrl = userData['profilePicsUrl'] ?? '';
+          _profilePictureUrl = profileUrl ?? '';
           _isLoading = false;
         });
+        
+        // Pre-cache image if URL exists
+        if (_profilePictureUrl != null && _profilePictureUrl!.isNotEmpty) {
+          _cacheNetworkImage(_profilePictureUrl!);
+        }
       } else {
         // If no data in database, use Firebase Auth data
         setState(() {
@@ -149,14 +164,19 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           // Delete old profile picture
           await FirebaseService.deleteOldProfilePicture();
 
-          // Upload new profile picture
-          final url = await FirebaseService.uploadProfilePicture(imageFile);
+          // Upload new profile picture using Filebase
+          final url = await FirebaseService.uploadProfilePictureWithFilebase(imageFile);
           
           if (mounted) {
             Navigator.pop(context); // Close loading dialog
             setState(() {
               _profilePictureUrl = url;
             });
+
+            // Pre-cache the uploaded image
+            if (url != null && url.isNotEmpty) {
+              _cacheNetworkImage(url);
+            }
 
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
@@ -188,6 +208,21 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           backgroundColor: Colors.red,
         ),
       );
+    }
+  }
+
+  /// Pre-cache network image to ensure it loads when needed
+  void _cacheNetworkImage(String imageUrl) {
+    try {
+      if (imageUrl.isNotEmpty && imageUrl.startsWith('http')) {
+        precacheImage(NetworkImage(imageUrl), context).then((_) {
+          print('DEBUG: Image cached successfully: $imageUrl');
+        }).catchError((e) {
+          print('DEBUG: Error caching image: $e');
+        });
+      }
+    } catch (e) {
+      print('DEBUG: Error in _cacheNetworkImage: $e');
     }
   }
 
@@ -255,7 +290,21 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                                       ? Image.network(
                                           _profilePictureUrl!,
                                           fit: BoxFit.cover,
+                                          cacheHeight: 500,
+                                          cacheWidth: 500,
+                                          loadingBuilder: (context, child, loadingProgress) {
+                                            if (loadingProgress == null) return child;
+                                            return Center(
+                                              child: CircularProgressIndicator(
+                                                value: loadingProgress.expectedTotalBytes != null
+                                                    ? loadingProgress.cumulativeBytesLoaded /
+                                                        loadingProgress.expectedTotalBytes!
+                                                    : null,
+                                              ),
+                                            );
+                                          },
                                           errorBuilder: (context, error, stackTrace) {
+                                            print('DEBUG: Image load error for $_profilePictureUrl: $error');
                                             return Icon(Icons.person, size: 50, color: Colors.grey[400]);
                                           },
                                         )

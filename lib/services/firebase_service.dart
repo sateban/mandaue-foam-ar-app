@@ -3,6 +3,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'dart:io';
+import 'package:image/image.dart' as img;
+import 'filebase_service.dart';
 
 class FirebaseService {
   static final FirebaseDatabase _database = FirebaseDatabase.instance;
@@ -248,10 +250,129 @@ class FirebaseService {
     }
   }
 
+  /// Compress and resize profile image to reduce file size
+  /// Max width/height: 500px, Quality: 85%
+  static Future<File> compressProfileImage(File imageFile) async {
+    try {
+      print('DEBUG: Compressing profile image...');
+      
+      // Read image
+      final bytes = await imageFile.readAsBytes();
+      final image = img.decodeImage(bytes);
+      
+      if (image == null) {
+        throw Exception('Failed to decode image');
+      }
+
+      // Resize to max 500x500
+      int width = image.width;
+      int height = image.height;
+      
+      if (width > 500 || height > 500) {
+        final maxSize = 500;
+        if (width > height) {
+          height = (height * maxSize / width).toInt();
+          width = maxSize;
+        } else {
+          width = (width * maxSize / height).toInt();
+          height = maxSize;
+        }
+        print('DEBUG: Resizing image to ${width}x${height}');
+      }
+
+      // Resize image
+      final resized = img.copyResize(
+        image,
+        width: width,
+        height: height,
+        interpolation: img.Interpolation.linear,
+      );
+
+      // Encode to JPEG with 85% quality
+      final compressed = img.encodeJpg(resized, quality: 85);
+      
+      // Save compressed image to temp file
+      final tempDir = Directory.systemTemp;
+      final compressedFile = File('${tempDir.path}/profile_compressed_${DateTime.now().millisecondsSinceEpoch}.jpg');
+      await compressedFile.writeAsBytes(compressed);
+      
+      final originalSize = (bytes.length / 1024 / 1024).toStringAsFixed(2);
+      final compressedSize = (compressed.length / 1024 / 1024).toStringAsFixed(2);
+      print('DEBUG: Image compressed from ${originalSize}MB to ${compressedSize}MB');
+      
+      return compressedFile;
+    } catch (e) {
+      print('DEBUG: Error compressing image: $e. Using original file.');
+      return imageFile;
+    }
+  }
+
+  /// Upload profile picture to Filebase (S3-compatible storage)
+  /// This replaces Firebase Storage to avoid payment requirements
+  static Future<String?> uploadProfilePictureWithFilebase(File imageFile) async {
+
+    try {
+      final user = _auth.currentUser;
+      if (user == null) {
+        throw Exception('No user is currently logged in');
+      }
+
+      print('DEBUG: Uploading profile picture to Filebase for user: ${user.uid}');
+
+      // Compress image before upload
+      final compressedFile = await compressProfileImage(imageFile);
+
+      // Create unique filename
+      final fileName = 'profile_${user.uid}_${DateTime.now().millisecondsSinceEpoch}.jpg';
+      final folderPath = 'profiles/${user.uid}';
+      
+      // Upload compressed image to Filebase
+      final objectPath = await FilebaseService().uploadFile(
+        filePath: compressedFile.path,
+        fileName: fileName,
+        folderPath: folderPath,
+        metadata: {
+          'x-amz-meta-user-id': user.uid,
+          'x-amz-meta-upload-time': DateTime.now().toIso8601String(),
+        },
+      );
+
+      if (objectPath == null) {
+        throw Exception('Filebase upload returned null');
+      }
+
+      // Generate presigned URL for secure file access (valid for 7 days)
+      final presignedUrl = await FilebaseService().buildPresignedImageUrl(objectPath);
+      
+      if (presignedUrl == null) {
+        throw Exception('Failed to generate presigned URL');
+      }
+
+      print('DEBUG: Profile picture uploaded successfully to Filebase: $presignedUrl');
+
+      // Save the presigned URL to Firebase Realtime Database
+      await updateData('users/${user.uid}', {
+        'profilePicsUrl': presignedUrl,
+        'profilePictureUpdatedAt': DateTime.now().toIso8601String(),
+      });
+
+      // Clean up temporary compressed file
+      try {
+        await compressedFile.delete();
+      } catch (_) {}
+
+      return presignedUrl;
+    } catch (e) {
+      print('DEBUG: Error uploading profile picture to Filebase: $e');
+      rethrow;
+    }
+  }
+
   /// Check if email exists
   static Future<bool> isEmailRegistered(String email) async {
     try {
       final list = await _auth.fetchSignInMethodsForEmail(email);
+
       return list.isNotEmpty;
     } catch (e) {
       print('DEBUG: Error checking email: $e');

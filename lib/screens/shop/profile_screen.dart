@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../services/firebase_service.dart';
+import '../../services/filebase_service.dart';
 
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({this.showBottomNav = true, super.key});
@@ -36,15 +37,96 @@ class ProfileScreen extends StatelessWidget {
         child: Column(
           children: [
             const SizedBox(height: 24),
-            // Profile photo
-            Container(
-              width: 100,
-              height: 100,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: Colors.grey[200],
-              ),
-              child: Icon(Icons.person, size: 50, color: Colors.grey[400]),
+            // Profile photo with caching
+            FutureBuilder<Map<dynamic, dynamic>?>(
+              future: currentUser != null ? FirebaseService.getUserData(currentUser.uid) : Future.value(null),
+              builder: (context, snapshot) {
+                String? profileImageUrl;
+                
+                if (snapshot.hasData && snapshot.data != null) {
+                  final userData = snapshot.data!;
+                  profileImageUrl = userData['profilePicsUrl'];
+                }
+                
+                // If we have a URL, check cache and convert to presigned if needed
+                if (profileImageUrl != null && profileImageUrl.isNotEmpty) {
+                  return FutureBuilder<String?>(
+                    future: _getAndCacheProfileImage(profileImageUrl),
+                    builder: (context, imageSnapshot) {
+                      if (imageSnapshot.connectionState == ConnectionState.waiting) {
+                        return Container(
+                          width: 100,
+                          height: 100,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: Colors.grey[200],
+                          ),
+                          child: CircularProgressIndicator(
+                            valueColor: AlwaysStoppedAnimation<Color>(Colors.grey[400]!),
+                          ),
+                        );
+                      }
+                      
+                      final presignedUrl = imageSnapshot.data;
+                      if (presignedUrl != null && presignedUrl.isNotEmpty) {
+                        return Container(
+                          width: 100,
+                          height: 100,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: Colors.grey[200],
+                          ),
+                          child: ClipOval(
+                            child: Image.network(
+                              presignedUrl,
+                              fit: BoxFit.cover,
+                              cacheHeight: 500,
+                              cacheWidth: 500,
+                              loadingBuilder: (context, child, loadingProgress) {
+                                if (loadingProgress == null) return child;
+                                return Center(
+                                  child: CircularProgressIndicator(
+                                    value: loadingProgress.expectedTotalBytes != null
+                                        ? loadingProgress.cumulativeBytesLoaded /
+                                            loadingProgress.expectedTotalBytes!
+                                        : null,
+                                  ),
+                                );
+                              },
+                              errorBuilder: (context, error, stackTrace) {
+                                print('DEBUG: Error loading profile image: $error');
+                                return Icon(Icons.person, size: 50, color: Colors.grey[400]);
+                              },
+                            ),
+                          ),
+                        );
+                      }
+                      
+                      // Fallback to person icon
+                      return Container(
+                        width: 100,
+                        height: 100,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Colors.grey[200],
+                        ),
+                        child: Icon(Icons.person, size: 50, color: Colors.grey[400]),
+                      );
+                    },
+                  );
+                }
+                
+                // No profile image - show default icon
+                return Container(
+                  width: 100,
+                  height: 100,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.grey[200],
+                  ),
+                  child: Icon(Icons.person, size: 50, color: Colors.grey[400]),
+                );
+              },
             ),
             const SizedBox(height: 16),
             FutureBuilder<Map<dynamic, dynamic>?>(
@@ -127,6 +209,33 @@ class ProfileScreen extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  /// Get and cache profile image with presigned URL conversion
+  /// Returns presigned URL if image is cached or can be downloaded
+  Future<String?> _getAndCacheProfileImage(String imageUrl) async {
+    try {
+      // First, check if URL is already presigned
+      if (imageUrl.contains('X-Amz-Signature')) {
+        print('✨ Profile image already presigned');
+        return imageUrl;
+      }
+
+      // Convert direct URL to presigned URL
+      final filebaseService = FilebaseService();
+      final presignedUrl = await filebaseService.ensurePresignedUrl(imageUrl);
+      
+      if (presignedUrl != null) {
+        // Pre-cache the image bytes to avoid re-downloading
+        await filebaseService.getImageBytes(presignedUrl);
+        print('✨ Profile image cached successfully');
+      }
+      
+      return presignedUrl;
+    } catch (e) {
+      print('DEBUG: Error getting profile image: $e');
+      return null;
+    }
   }
 
   Widget _buildMenuItem(

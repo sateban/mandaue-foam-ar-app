@@ -66,7 +66,66 @@ class FilebaseService {
   }
 
   /// Build Filebase image URL from relative path
-  /// Prefer bucket-subdomain style: https://<bucket>.s3.filebase.com/<path>
+  /// Uses presigned URLs (temporary signed access) for secure file access
+  /// Presigned URLs are valid for 7 days and don't require bucket to be public
+  Future<String?> buildPresignedImageUrl(String objectPath) async {
+    try {
+      if (objectPath.isEmpty) return null;
+
+      print('DEBUG: Generating presigned URL for: $objectPath');
+      
+      // Generate presigned GET URL valid for 7 days (604800 seconds)
+      final presignedUrl = await _minioClient.presignedGetObject(
+        _bucketName,
+        objectPath,
+        expires: 7 * 24 * 60 * 60, // 7 days in seconds
+      );
+
+      print('✓ Presigned URL generated (valid 7 days): $presignedUrl');
+      return presignedUrl;
+    } catch (e) {
+      print('✗ Error generating presigned URL: $e');
+      return null;
+    }
+  }
+
+  /// Convert direct URL to presigned URL if needed
+  /// If URL already has presigned parameters, return as-is
+  /// If URL is a direct link, regenerate with presigned signature
+  Future<String?> ensurePresignedUrl(String? imageUrl) async {
+    if (imageUrl == null || imageUrl.isEmpty) return null;
+
+    try {
+      // Check if already presigned (contains signature parameter)
+      if (imageUrl.contains('X-Amz-Signature')) {
+        print('DEBUG: URL already presigned, using as-is');
+        return imageUrl;
+      }
+
+      print('DEBUG: Converting direct URL to presigned URL');
+
+      // Extract object path from URL
+      // URLs look like: https://bucket.s3.filebase.com/path/to/object
+      final uri = Uri.parse(imageUrl);
+      String objectPath = uri.path;
+
+      // Remove leading slash if present
+      if (objectPath.startsWith('/')) {
+        objectPath = objectPath.substring(1);
+      }
+
+      print('DEBUG: Extracted object path: $objectPath');
+
+      // Generate presigned URL
+      return await buildPresignedImageUrl(objectPath);
+    } catch (e) {
+      print('✗ Error converting URL to presigned: $e');
+      return imageUrl; // Return original URL if conversion fails
+    }
+  }
+
+  /// Build direct public URL (only works if bucket is public)
+  /// For private buckets, use buildPresignedImageUrl instead
   String buildFilebaseImageUrl(String relativePath) {
     return 'https://$_bucketName.s3.filebase.com/$relativePath';
   }
@@ -112,6 +171,21 @@ class FilebaseService {
   /// Get image bytes from Filebase with proper authentication
   /// Uses MinIO client for secure S3-compatible access
   /// Implements caching and deduplication to minimize data usage
+  /// Get cached image bytes without downloading
+  /// Returns null if image is not in cache
+  /// Use this to check if image is already cached before displaying
+  Uint8List? getCachedImageBytes(String imageUrl) {
+    if (imageUrl.isEmpty) return null;
+    
+    if (_imageCache.containsKey(imageUrl)) {
+      print('✨ Using cached image: ${imageUrl.split('/').last}');
+      return _imageCache[imageUrl];
+    }
+    
+    print('📥 Image not cached, will download if needed: ${imageUrl.split('/').last}');
+    return null;
+  }
+
   Future<Uint8List?> getImageBytes(String imageUrl) async {
     try {
       if (imageUrl.isEmpty) return null;
