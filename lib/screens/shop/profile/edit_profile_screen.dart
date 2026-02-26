@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:image_picker/image_picker.dart';
+import 'dart:io';
 import '../../../services/firebase_service.dart';
 
 class EditProfileScreen extends StatefulWidget {
@@ -18,6 +20,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   bool _isLoading = true;
   bool _isSaving = false;
   String? _errorMessage;
+  String? _profilePictureUrl;
+  File? _selectedImage;
 
   @override
   void initState() {
@@ -47,6 +51,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           _lastNameController.text = userData['lastName'] ?? '';
           _emailController.text = userData['email'] ?? user.email ?? '';
           _phoneController.text = userData['phoneNumber'] ?? '';
+          _profilePictureUrl = userData['profilePicsUrl'] ?? '';
           _isLoading = false;
         });
       } else {
@@ -56,6 +61,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           _firstNameController.text = user.displayName?.split(' ').first ?? '';
           _lastNameController.text = user.displayName?.split(' ').skip(1).join(' ') ?? '';
           _phoneController.text = '';
+          _profilePictureUrl = '';
           _isLoading = false;
         });
       }
@@ -114,6 +120,77 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     }
   }
 
+  Future<void> _pickProfilePicture() async {
+    try {
+      final ImagePicker picker = ImagePicker();
+      final XFile? pickedFile = await picker.pickImage(source: ImageSource.gallery);
+
+      if (pickedFile != null) {
+        final File imageFile = File(pickedFile.path);
+        
+        setState(() {
+          _selectedImage = imageFile;
+        });
+
+        // Show loading dialog
+        if (mounted) {
+          showDialog(
+            context: context,
+            barrierDismissible: false,
+            builder: (BuildContext dialogContext) {
+              return const Center(
+                child: CircularProgressIndicator(),
+              );
+            },
+          );
+        }
+
+        try {
+          // Delete old profile picture
+          await FirebaseService.deleteOldProfilePicture();
+
+          // Upload new profile picture
+          final url = await FirebaseService.uploadProfilePicture(imageFile);
+          
+          if (mounted) {
+            Navigator.pop(context); // Close loading dialog
+            setState(() {
+              _profilePictureUrl = url;
+            });
+
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Profile picture updated successfully'),
+                backgroundColor: Colors.green,
+              ),
+            );
+          }
+        } catch (e) {
+          if (mounted) {
+            try {
+              Navigator.pop(context); // Close loading dialog if still open
+            } catch (_) {}
+            
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Error uploading picture: $e'),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
+        }
+      }
+    } catch (e) {
+      print('Error picking image: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
   @override
   void dispose() {
     _firstNameController.dispose();
@@ -168,22 +245,40 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                               shape: BoxShape.circle,
                               color: Colors.grey[200],
                             ),
-                            child: Icon(Icons.person, size: 50, color: Colors.grey[400]),
+                            child: ClipOval(
+                              child: _selectedImage != null
+                                  ? Image.file(
+                                      _selectedImage!,
+                                      fit: BoxFit.cover,
+                                    )
+                                  : (_profilePictureUrl != null && _profilePictureUrl!.isNotEmpty)
+                                      ? Image.network(
+                                          _profilePictureUrl!,
+                                          fit: BoxFit.cover,
+                                          errorBuilder: (context, error, stackTrace) {
+                                            return Icon(Icons.person, size: 50, color: Colors.grey[400]);
+                                          },
+                                        )
+                                      : Icon(Icons.person, size: 50, color: Colors.grey[400]),
+                            ),
                           ),
                           Positioned(
                             bottom: 0,
                             right: 0,
-                            child: Container(
-                              width: 32,
-                              height: 32,
-                              decoration: const BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: Color(0xFFFDB022),
-                              ),
-                              child: const Icon(
-                                Icons.camera_alt,
-                                size: 18,
-                                color: Colors.white,
+                            child: GestureDetector(
+                              onTap: _pickProfilePicture,
+                              child: Container(
+                                width: 32,
+                                height: 32,
+                                decoration: const BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: Color(0xFFFDB022),
+                                ),
+                                child: const Icon(
+                                  Icons.camera_alt,
+                                  size: 18,
+                                  color: Colors.white,
+                                ),
                               ),
                             ),
                           ),

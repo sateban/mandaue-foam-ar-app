@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../../services/firebase_service.dart';
 
 class ProfileScreen extends StatelessWidget {
@@ -8,6 +9,8 @@ class ProfileScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final currentUser = FirebaseService.getCurrentUser();
+    
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
@@ -44,13 +47,29 @@ class ProfileScreen extends StatelessWidget {
               child: Icon(Icons.person, size: 50, color: Colors.grey[400]),
             ),
             const SizedBox(height: 16),
-            const Text(
-              'John Doe',
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-                color: Color(0xFF1E3A8A),
-              ),
+            FutureBuilder<Map<dynamic, dynamic>?>(
+              future: currentUser != null ? FirebaseService.getUserData(currentUser.uid) : Future.value(null),
+              builder: (context, snapshot) {
+                String displayName = 'User';
+                
+                if (snapshot.hasData && snapshot.data != null) {
+                  final userData = snapshot.data!;
+                  final firstName = userData['firstName'] ?? '';
+                  final lastName = userData['lastName'] ?? '';
+                  displayName = '$firstName $lastName'.trim();
+                } else if (currentUser?.displayName != null) {
+                  displayName = currentUser!.displayName!;
+                }
+                
+                return Text(
+                  displayName,
+                  style: const TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF1E3A8A),
+                  ),
+                );
+              },
             ),
             const SizedBox(height: 32),
             // Menu items
@@ -72,30 +91,30 @@ class ProfileScreen extends StatelessWidget {
               title: 'Shipping Address',
               onTap: () => Navigator.pushNamed(context, '/shipping-address'),
             ),
-            _buildMenuItem(
-              context,
-              icon: Icons.shopping_bag_outlined,
-              title: 'My Orders',
-              onTap: () => Navigator.pushNamed(context, '/orders'),
-            ),
+            // _buildMenuItem(
+            //   context,
+            //   icon: Icons.shopping_bag_outlined,
+            //   title: 'My Orders',
+            //   onTap: () => Navigator.pushNamed(context, '/orders'),
+            // ),
             _buildMenuItem(
               context,
               icon: Icons.favorite_outline,
               title: 'Wishlist',
               onTap: () => Navigator.pushNamed(context, '/wishlist'),
             ),
-            _buildMenuItem(
-              context,
-              icon: Icons.credit_card_outlined,
-              title: 'My Cards',
-              onTap: () => Navigator.pushNamed(context, '/my-cards'),
-            ),
-            _buildMenuItem(
-              context,
-              icon: Icons.more_horiz,
-              title: 'More',
-              onTap: () => Navigator.pushNamed(context, '/more-settings'),
-            ),
+            // _buildMenuItem(
+            //   context,
+            //   icon: Icons.credit_card_outlined,
+            //   title: 'My Cards',
+            //   onTap: () => Navigator.pushNamed(context, '/my-cards'),
+            // ),
+            // _buildMenuItem(
+            //   context,
+            //   icon: Icons.more_horiz,
+            //   title: 'More',
+            //   onTap: () => Navigator.pushNamed(context, '/more-settings'),
+            // ),
             _buildMenuItem(
               context,
               icon: Icons.logout,

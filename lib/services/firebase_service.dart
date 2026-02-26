@@ -1,10 +1,13 @@
 import 'package:firebase_database/firebase_database.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'dart:io';
 
 class FirebaseService {
   static final FirebaseDatabase _database = FirebaseDatabase.instance;
   static final FirebaseAuth _auth = FirebaseAuth.instance;
+  static final FirebaseStorage _storage = FirebaseStorage.instance;
 
   /// Get Firebase Database instance
   static FirebaseDatabase getDatabase() => _database;
@@ -192,6 +195,56 @@ class FirebaseService {
     } catch (e) {
       print('DEBUG: Unexpected error updating profile: $e');
       rethrow;
+    }
+  }
+
+  /// Upload profile picture to Firebase Storage
+  static Future<String?> uploadProfilePicture(File imageFile) async {
+    try {
+      final user = _auth.currentUser;
+      if (user == null) {
+        throw Exception('No user is currently logged in');
+      }
+
+      print('DEBUG: Uploading profile picture for user: ${user.uid}');
+
+      // Create a reference to the user's profile picture
+      final fileName = 'profile_${user.uid}_${DateTime.now().millisecondsSinceEpoch}.jpg';
+      final ref = _storage.ref('profiles/${user.uid}/$fileName');
+
+      // Upload file
+      final uploadTask = ref.putFile(imageFile);
+      final taskSnapshot = await uploadTask;
+
+      // Get download URL
+      final downloadUrl = await taskSnapshot.ref.getDownloadURL();
+      print('DEBUG: Profile picture uploaded successfully: $downloadUrl');
+
+      // Save the URL to the database
+      await updateData('users/${user.uid}', {
+        'profilePicsUrl': downloadUrl,
+      });
+
+      return downloadUrl;
+    } catch (e) {
+      print('DEBUG: Error uploading profile picture: $e');
+      rethrow;
+    }
+  }
+
+  /// Delete old profile picture from Firebase Storage
+  static Future<void> deleteOldProfilePicture() async {
+    try {
+      final user = _auth.currentUser;
+      if (user == null) return;
+
+      final listResult = await _storage.ref('profiles/${user.uid}').listAll();
+      for (var file in listResult.items) {
+        await file.delete();
+      }
+      print('DEBUG: Old profile pictures deleted');
+    } catch (e) {
+      print('DEBUG: Error deleting old profile picture: $e');
     }
   }
 
