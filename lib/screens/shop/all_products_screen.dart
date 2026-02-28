@@ -63,26 +63,13 @@ class _AllProductsScreenState extends State<AllProductsScreen> {
             (productsList) {
               if (!mounted) return;
 
+              // Transform with Filebase URLs for variation support
+              final transformedList = FilebaseService()
+                  .transformProductsWithFilebaseUrls(productsList);
+
               // Convert all Firebase products to Product model
-              final convertedProducts = productsList.map((productMap) {
-                return Product(
-                  id: productMap['id'] ?? '',
-                  name: productMap['name'] ?? 'Unknown',
-                  price: (productMap['price'] ?? 0).toDouble(),
-                  category: productMap['category'] ?? 'Other',
-                  material: productMap['material'] ?? 'N/A',
-                  color: productMap['color'] ?? 'N/A',
-                  imageUrl: productMap['imageUrl'] ?? '',
-                  rating: (productMap['rating'] ?? 0).toDouble(),
-                  reviews: productMap['reviews'] ?? 0,
-                  isFavorite: productMap['isFavorite'] ?? false,
-                  discount: productMap['discount'],
-                  description: productMap['description'],
-                  quantity: productMap['quantity'],
-                  inStock: productMap['inStock'] ?? true,
-                  modelUrl: productMap['modelUrl'],
-                  modelScale: (productMap['modelScale'] ?? 1.0).toDouble(),
-                );
+              final convertedProducts = transformedList.map((productMap) {
+                return Product.fromMap(productMap);
               }).toList();
 
               setState(() {

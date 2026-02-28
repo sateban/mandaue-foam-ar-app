@@ -73,7 +73,7 @@ class FilebaseService {
       if (objectPath.isEmpty) return null;
 
       print('DEBUG: Generating presigned URL for: $objectPath');
-      
+
       // Generate presigned GET URL valid for 7 days (604800 seconds)
       final presignedUrl = await _minioClient.presignedGetObject(
         _bucketName,
@@ -164,6 +164,37 @@ class FilebaseService {
         }
       }
 
+      // Transform variations
+      if (product['variation'] is Map) {
+        final variations = Map<String, dynamic>.from(product['variation']);
+        final transformedVariations = <String, dynamic>{};
+
+        variations.forEach((color, details) {
+          if (details is Map) {
+            final transformedDetails = Map<String, dynamic>.from(details);
+
+            if (details['imageUrl'] is String &&
+                details['imageUrl'].isNotEmpty) {
+              final imageUrl = details['imageUrl'] as String;
+              transformedDetails['imageUrl'] = imageUrl.startsWith('http')
+                  ? imageUrl
+                  : buildFilebaseImageUrl(imageUrl);
+            }
+
+            if (details['modelUrl'] is String &&
+                details['modelUrl'].isNotEmpty) {
+              final modelUrl = details['modelUrl'] as String;
+              transformedDetails['modelUrl'] = modelUrl.startsWith('http')
+                  ? modelUrl
+                  : buildFilebaseImageUrl(modelUrl);
+            }
+
+            transformedVariations[color] = transformedDetails;
+          }
+        });
+        transformedProduct['variation'] = transformedVariations;
+      }
+
       return transformedProduct;
     }).toList();
   }
@@ -176,13 +207,15 @@ class FilebaseService {
   /// Use this to check if image is already cached before displaying
   Uint8List? getCachedImageBytes(String imageUrl) {
     if (imageUrl.isEmpty) return null;
-    
+
     if (_imageCache.containsKey(imageUrl)) {
       print('✨ Using cached image: ${imageUrl.split('/').last}');
       return _imageCache[imageUrl];
     }
-    
-    print('📥 Image not cached, will download if needed: ${imageUrl.split('/').last}');
+
+    print(
+      '📥 Image not cached, will download if needed: ${imageUrl.split('/').last}',
+    );
     return null;
   }
 

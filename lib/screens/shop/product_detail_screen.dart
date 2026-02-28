@@ -25,11 +25,16 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   int _quantity = 1;
   bool _isDownloadingModel = false;
   double _downloadProgress = 0.0;
+  ProductVariation? _selectedVariation;
 
   @override
   void initState() {
     super.initState();
     _isFavorite = widget.product.isFavorite;
+    final variations = widget.product.getAllVariations();
+    if (variations.isNotEmpty) {
+      _selectedVariation = variations.first;
+    }
   }
 
   @override
@@ -112,7 +117,9 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                 children: [
                   Center(
                     child: AuthenticatedImage(
-                      imageUrl: widget.product.imageUrl,
+                      imageUrl:
+                          _selectedVariation?.imageUrl ??
+                          widget.product.imageUrl,
                       fit: BoxFit.contain,
                     ),
                   ),
@@ -190,38 +197,6 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                           ),
                         ),
                       ),
-                      const SizedBox(width: 8),
-                      if (widget.product.modelUrl != null &&
-                          widget.product.modelUrl!.isNotEmpty) ...[
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 6,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.blue.withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: const Row(
-                            children: [
-                              Icon(
-                                Icons.view_in_ar,
-                                size: 14,
-                                color: Colors.blue,
-                              ),
-                              SizedBox(width: 4),
-                              Text(
-                                'AR',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.blue,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
                     ],
                   ),
                   const SizedBox(height: 16),
@@ -298,6 +273,11 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                     ),
                   ),
                   const SizedBox(height: 24),
+
+                  // Color Selection
+                  _buildColorSelection(),
+
+                  const SizedBox(height: 24),
                   // Description
                   const Text(
                     'Description',
@@ -329,7 +309,10 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                   const SizedBox(height: 12),
                   _buildSpecificationRow('Material', widget.product.material),
                   const SizedBox(height: 10),
-                  _buildSpecificationRow('Color', widget.product.color),
+                  _buildSpecificationRow(
+                    'Color',
+                    _selectedVariation?.color ?? widget.product.color,
+                  ),
                   const SizedBox(height: 10),
                   _buildSpecificationRow('Category', widget.product.category),
                   const SizedBox(height: 24),
@@ -394,7 +377,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                     ),
                   ),
                   const SizedBox(height: 32),
-                  // View In AR and View 3D Buttons
+                  // AR and 3D Buttons
                   if (widget.product.modelUrl != null &&
                       widget.product.modelUrl!.isNotEmpty)
                     Row(
@@ -513,21 +496,22 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                               await cartProvider.addToCart(
                                 product: widget.product,
                                 quantity: _quantity,
+                                colorOverride: _selectedVariation?.color,
+                                imageUrlOverride: _selectedVariation?.imageUrl,
                               );
                               if (mounted) {
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   SnackBar(
                                     content: Text(
-                                      '$_quantity ${widget.product.name}(s) added to cart',
+                                      '$_quantity ${widget.product.name} added to cart',
                                     ),
                                     backgroundColor: Colors.green,
                                     duration: const Duration(seconds: 2),
                                     action: SnackBarAction(
                                       label: 'View Cart',
                                       textColor: Colors.white,
-                                      onPressed: () {
-                                        Navigator.pushNamed(context, '/cart');
-                                      },
+                                      onPressed: () =>
+                                          Navigator.pushNamed(context, '/cart'),
                                     ),
                                   ),
                                 );
@@ -562,49 +546,92 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                       },
                     ),
                   ),
-                  const SizedBox(height: 16),
-                  // Buy Now Button
-                  SizedBox(
-                    width: double.infinity,
-                    height: 56,
-                    child: OutlinedButton(
-                      onPressed: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(
-                              'Proceeding to checkout for $_quantity item(s)',
-                            ),
-                            backgroundColor: const Color(0xFF6200EE),
-                            duration: const Duration(seconds: 2),
-                          ),
-                        );
-                      },
-                      style: OutlinedButton.styleFrom(
-                        side: const BorderSide(
-                          color: Color(0xFF6200EE),
-                          width: 2,
-                        ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                      child: const Text(
-                        'Buy Now',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFF6200EE),
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 24),
                 ],
               ),
             ),
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildColorSelection() {
+    final variations = widget.product.getAllVariations();
+    if (variations.length <= 1) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Available Colors',
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+            color: Color(0xFF1E3A8A),
+          ),
+        ),
+        const SizedBox(height: 12),
+        SizedBox(
+          height: 48,
+          child: ListView.separated(
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            scrollDirection: Axis.horizontal,
+            itemCount: variations.length,
+            separatorBuilder: (context, index) => const SizedBox(width: 12),
+            itemBuilder: (context, index) {
+              final variation = variations[index];
+              final isSelected = _selectedVariation?.color == variation.color;
+
+              return GestureDetector(
+                onTap: () {
+                  setState(() {
+                    _selectedVariation = variation;
+                  });
+                },
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 8,
+                  ),
+                  decoration: BoxDecoration(
+                    color: isSelected ? const Color(0xFF1E3A8A) : Colors.white,
+                    borderRadius: BorderRadius.circular(24),
+                    border: Border.all(
+                      color: const Color(0xFF1E3A8A),
+                      width: 1.5,
+                    ),
+                    boxShadow: isSelected
+                        ? [
+                            BoxShadow(
+                              color: const Color(
+                                0xFF1E3A8A,
+                              ).withValues(alpha: 0.3),
+                              blurRadius: 8,
+                              offset: const Offset(0, 4),
+                            ),
+                          ]
+                        : null,
+                  ),
+                  child: Center(
+                    child: Text(
+                      variation.color,
+                      style: TextStyle(
+                        color: isSelected
+                            ? Colors.white
+                            : const Color(0xFF1E3A8A),
+                        fontWeight: isSelected
+                            ? FontWeight.bold
+                            : FontWeight.normal,
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ],
     );
   }
 
@@ -639,9 +666,17 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     );
   }
 
-  /// Download/Load model and navigate to viewing screen
   Future<void> _handleModelView({bool isAR = true}) async {
-    if (widget.product.modelUrl == null || widget.product.modelUrl!.isEmpty) {
+    final modelUrl = _selectedVariation?.modelUrl ?? widget.product.modelUrl;
+
+    if (modelUrl == null || modelUrl.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('No 3D model available for this variation'),
+          ),
+        );
+      }
       return;
     }
 
@@ -651,10 +686,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     });
 
     try {
-      // Check if model is already cached
-      final fileName = widget.product.modelUrl!.split('/').last;
-      // Use getApplicationDocumentsDirectory which points to 'app_flutter'
-      // This matches the path where the AR plugin's NodeType.fileSystemAppFolderGLB looks
+      final fileName = modelUrl.split('/').last;
       final appDocDir = await getApplicationDocumentsDirectory();
       final filePath = '${appDocDir.path}/$fileName';
       final file = File(filePath);
@@ -662,16 +694,13 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
       String? localPath;
 
       if (await file.exists()) {
-        // Model already downloaded
         setState(() {
           _downloadProgress = 1.0;
         });
         localPath = filePath;
       } else {
-        // Download the model with progress
-        final filebaseService = FilebaseService();
-        localPath = await filebaseService.downloadModelFile(
-          modelUrl: widget.product.modelUrl!,
+        localPath = await FilebaseService().downloadModelFile(
+          modelUrl: modelUrl,
           localFilePath: filePath,
           onProgress: (received, total) {
             if (mounted && total > 0) {
@@ -689,20 +718,18 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
 
       if (localPath != null && mounted) {
         if (isAR) {
-          // Navigate to AR viewer
           Navigator.push(
             context,
             MaterialPageRoute(
               builder: (context) => ARViewerScreen(
                 productName: widget.product.name,
-                modelUrl: widget.product.modelUrl!,
+                modelUrl: modelUrl,
                 modelScale: widget.product.modelScale,
-                localModelPath: localPath, // Pass the downloaded path
+                localModelPath: localPath!,
               ),
             ),
           );
         } else {
-          // Navigate to 3D Viewer
           Navigator.push(
             context,
             MaterialPageRoute(
@@ -713,27 +740,15 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
             ),
           );
         }
-      } else {
-        // Download failed
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Failed to download 3D model. Please try again.'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
       }
     } catch (e) {
-      print('Error downloading model: $e');
       setState(() {
         _isDownloadingModel = false;
       });
-
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error loading model: $e')));
       }
     }
   }

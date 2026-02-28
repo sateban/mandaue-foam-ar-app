@@ -110,16 +110,23 @@ class CartProvider extends ChangeNotifier {
     });
   }
 
-  /// Add item to cart
-  Future<void> addToCart({required Product product, int quantity = 1}) async {
+  Future<void> addToCart({
+    required Product product,
+    int quantity = 1,
+    String? colorOverride,
+    String? imageUrlOverride,
+  }) async {
     if (_userId == null) {
       throw Exception('User not authenticated');
     }
 
     try {
-      // Check if product already exists in cart
+      final selectedColor = colorOverride ?? product.color;
+      final selectedImageUrl = imageUrlOverride ?? product.imageUrl;
+
+      // Check if product with same color already exists in cart
       final existingIndex = _items.indexWhere(
-        (item) => item.productId == product.id,
+        (item) => item.productId == product.id && item.color == selectedColor,
       );
 
       if (existingIndex != -1) {
@@ -135,10 +142,10 @@ class CartProvider extends ChangeNotifier {
           id: '', // Firebase will generate the ID
           productId: product.id,
           name: product.name,
-          color: product.color,
+          color: selectedColor,
           price: product.price,
           quantity: quantity,
-          imageUrl: product.imageUrl,
+          imageUrl: selectedImageUrl,
           addedAt: now,
           updatedAt: now,
         );

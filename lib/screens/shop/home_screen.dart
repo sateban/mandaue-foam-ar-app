@@ -1262,24 +1262,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
     return GestureDetector(
       onTap: () {
-        final selectedProduct = Product(
-          id: product['id']?.toString() ?? '',
-          name: product['name'] ?? '',
-          price: (product['price'] as num?)?.toDouble() ?? 0.0,
-          category: product['category'] ?? '',
-          material: product['material'] ?? '',
-          color: product['color'] ?? '',
-          imageUrl: product['imageUrl'] ?? '',
-          rating: (product['rating'] as num?)?.toDouble() ?? 0.0,
-          reviews: (product['reviews'] as num?)?.toInt() ?? 0,
-          isFavorite: product['isFavorite'] ?? false,
-          discount: product['discount'],
-          description: product['description'],
-          quantity: product['quantity'] as int?,
-          inStock: product['inStock'] ?? true,
-          modelUrl: product['modelUrl'],
-          modelScale: (product['modelScale'] as num?)?.toDouble(),
-        );
+        final selectedProduct = Product.fromMap(product);
         Navigator.of(
           context,
         ).push(slideRoute(ProductDetailScreen(product: selectedProduct)));
@@ -1460,24 +1443,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final imageUrl = product['imageUrl'] ?? '';
     return GestureDetector(
       onTap: () {
-        final selectedProduct = Product(
-          id: product['id']?.toString() ?? '',
-          name: product['name'] ?? '',
-          price: (product['price'] as num?)?.toDouble() ?? 0.0,
-          category: product['category'] ?? '',
-          material: product['material'] ?? '',
-          color: product['color'] ?? '',
-          imageUrl: product['imageUrl'] ?? '',
-          rating: (product['rating'] as num?)?.toDouble() ?? 0.0,
-          reviews: (product['reviews'] as num?)?.toInt() ?? 0,
-          isFavorite: product['isFavorite'] ?? false,
-          discount: product['discount'],
-          description: product['description'],
-          quantity: product['quantity'] as int?,
-          inStock: product['inStock'] ?? true,
-          modelUrl: product['modelUrl'],
-          modelScale: (product['modelScale'] as num?)?.toDouble(),
-        );
+        final selectedProduct = Product.fromMap(product);
         Navigator.of(
           context,
         ).push(slideRoute(ProductDetailScreen(product: selectedProduct)));
