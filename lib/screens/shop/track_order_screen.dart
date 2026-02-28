@@ -210,7 +210,7 @@ class TrackOrderScreen extends StatelessWidget {
                       ),
                     ),
                     Text(
-                      '\$${item.price.toStringAsFixed(2)}',
+                      '₱${item.price.toStringAsFixed(2)}',
                       style: const TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,

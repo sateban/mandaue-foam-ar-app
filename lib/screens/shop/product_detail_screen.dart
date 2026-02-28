@@ -53,12 +53,12 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
               try {
                 final productProvider = context.read<ProductProvider>();
                 final wasFavorite = _isFavorite;
-                
+
                 // Optimistic update - update UI immediately
                 setState(() {
                   _isFavorite = !_isFavorite;
                 });
-                
+
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
                     content: Text(
@@ -69,22 +69,23 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                     duration: const Duration(seconds: 1),
                   ),
                 );
-                
+
                 // Update Firebase in background without awaiting
-                productProvider.toggleProductFavorite(widget.product.id)
-                  .catchError((e) {
-                    // Rollback on error
-                    setState(() {
-                      _isFavorite = wasFavorite;
+                productProvider
+                    .toggleProductFavorite(widget.product.id)
+                    .catchError((e) {
+                      // Rollback on error
+                      setState(() {
+                        _isFavorite = wasFavorite;
+                      });
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Failed to update favorites'),
+                          duration: Duration(seconds: 2),
+                        ),
+                      );
+                      print('Error toggling favorite: $e');
                     });
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Failed to update favorites'),
-                        duration: Duration(seconds: 2),
-                      ),
-                    );
-                    print('Error toggling favorite: $e');
-                  });
               } catch (e) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
@@ -286,7 +287,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                           ),
                         ),
                         Text(
-                          '\$${widget.product.price.toStringAsFixed(2)}',
+                          '₱${widget.product.price.toStringAsFixed(2)}',
                           style: const TextStyle(
                             fontSize: 28,
                             fontWeight: FontWeight.bold,

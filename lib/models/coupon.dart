@@ -29,7 +29,7 @@ class Coupon {
     if (type == CouponType.percentage) {
       return '${value.toInt()}% OFF';
     } else {
-      return '\$${value.toStringAsFixed(2)} OFF';
+      return '₱${value.toStringAsFixed(2)} OFF';
     }
   }
 

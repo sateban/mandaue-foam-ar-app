@@ -21,8 +21,8 @@ class CouponsScreen extends StatelessWidget {
       Coupon(
         id: '2',
         code: 'WELCOME20',
-        title: '\$20 Off',
-        description: 'Save \$20 on your first purchase',
+        title: '₱20 Off',
+        description: 'Save ₱20 on your first purchase',
         type: CouponType.fixed,
         value: 20,
         expiryDate: DateTime.now().add(const Duration(days: 15)),

@@ -216,7 +216,7 @@ class _OrderReceiptScreenState extends State<OrderReceiptScreen> {
                                 ),
                               ),
                               Text(
-                                '\$${item.total.toStringAsFixed(2)}',
+                                '₱${item.total.toStringAsFixed(2)}',
                                 style: const TextStyle(
                                   fontWeight: FontWeight.bold,
                                   fontSize: 16,
@@ -230,25 +230,25 @@ class _OrderReceiptScreenState extends State<OrderReceiptScreen> {
                       // Payment Details
                       _buildDetailRow(
                         'Amount',
-                        '\$${_order!.subtotal.toStringAsFixed(2)}',
+                        '₱${_order!.subtotal.toStringAsFixed(2)}',
                       ),
                       _buildDetailRow(
                         'Promo',
-                        '-\$${_order!.discount.toStringAsFixed(2)}',
+                        '-₱${_order!.discount.toStringAsFixed(2)}',
                         isDiscount: true,
                       ),
                       _buildDetailRow(
                         'Shipping',
-                        '\$${_order!.shippingCharge.toStringAsFixed(2)}',
+                        '₱${_order!.shippingCharge.toStringAsFixed(2)}',
                       ),
                       _buildDetailRow(
                         'Tax',
-                        '\$${_order!.tax.toStringAsFixed(2)}',
+                        '₱${_order!.tax.toStringAsFixed(2)}',
                       ),
                       const Divider(height: 32),
                       _buildDetailRow(
                         'Total',
-                        '\$${_order!.total.toStringAsFixed(2)}',
+                        '₱${_order!.total.toStringAsFixed(2)}',
                         isTotal: true,
                       ),
                       const SizedBox(height: 32),

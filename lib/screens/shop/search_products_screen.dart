@@ -387,7 +387,7 @@ class _SearchProductsScreenState extends State<SearchProductsScreen> {
                       ),
                       // Price
                       Text(
-                        '\$${product.price.toStringAsFixed(2)}',
+                        '₱${product.price.toStringAsFixed(2)}',
                         style: const TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,

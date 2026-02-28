@@ -244,7 +244,7 @@ class _OrdersScreenState extends State<OrdersScreen>
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          '${item.quantity} x \$${item.price.toStringAsFixed(2)}',
+                          '${item.quantity} x ₱${item.price.toStringAsFixed(2)}',
                           style: TextStyle(
                             color: Colors.grey[600],
                             fontSize: 13,
@@ -270,7 +270,7 @@ class _OrdersScreenState extends State<OrdersScreen>
                 children: [
                   const Text('Total: ', style: TextStyle(color: Colors.grey)),
                   Text(
-                    '\$${order.total.toStringAsFixed(2)}',
+                    '₱${order.total.toStringAsFixed(2)}',
                     style: const TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 16,
