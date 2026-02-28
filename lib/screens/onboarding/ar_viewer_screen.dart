@@ -590,7 +590,7 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
       // modelScale from Firebase is in centimeters, convert to meters for AR
       final double scaleInCm = widget.modelScale ?? 50.0;
       final double scaleValue = scaleInCm / 100.0; // Convert CM to meters
-      final fileName = _localModelPath!.split('/').last;
+      final fileName = FilebaseService().getUniqueFileName(widget.modelUrl);
 
       _logger.d('🎯 Placing AR Model:');
       _logger.d('   File: $fileName');
@@ -740,7 +740,7 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
       // modelScale from Firebase is in centimeters, convert to meters for AR
       final double scaleInCm = widget.modelScale ?? 50.0;
       final double scaleValue = scaleInCm / 100.0; // Convert CM to meters
-      final fileName = _localModelPath!.split('/').last;
+      final fileName = FilebaseService().getUniqueFileName(widget.modelUrl);
 
       _logger.d('🎯 Adding AR Model:');
       _logger.d('   Full Path: $_localModelPath');
@@ -864,7 +864,7 @@ class _ARViewerScreenState extends State<ARViewerScreen> {
       }
 
       print('🔍 Model URL received: ${widget.modelUrl}');
-      final fileName = widget.modelUrl.split('/').last;
+      final fileName = FilebaseService().getUniqueFileName(widget.modelUrl);
 
       // Use getApplicationDocumentsDirectory which points to 'app_flutter'
       // This matches the path where the AR plugin's NodeType.fileSystemAppFolderGLB looks

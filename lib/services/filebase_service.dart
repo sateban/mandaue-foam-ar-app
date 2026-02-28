@@ -438,26 +438,19 @@ class FilebaseService {
       final file = File(localFilePath);
       final sink = file.openWrite();
 
+      // Handle the stream and track progress
       int receivedBytes = 0;
-      await stream
-          .listen(
-            (chunk) {
-              sink.add(chunk);
-              receivedBytes += chunk.length;
-              if (onProgress != null && totalBytes > 0) {
-                onProgress(receivedBytes, totalBytes);
-              }
-            },
-            onDone: () async {
-              await sink.close();
-            },
-            onError: (e) async {
-              await sink.close();
-              throw e;
-            },
-            cancelOnError: true,
-          )
-          .asFuture();
+      await stream.listen((chunk) {
+        sink.add(chunk);
+        receivedBytes += chunk.length;
+        if (onProgress != null && totalBytes > 0) {
+          onProgress(receivedBytes, totalBytes);
+        }
+      }, cancelOnError: true).asFuture();
+
+      // Ensure sink is fully flushed and closed
+      await sink.flush();
+      await sink.close();
 
       print('✅ Model downloaded successfully: $localFilePath');
       return localFilePath;
@@ -667,6 +660,22 @@ class FilebaseService {
     } catch (e) {
       print('Error generating presigned URL: $e');
       return null;
+    }
+  }
+
+  /// Get a unique filename from a URL or object path to prevent collisions
+  String getUniqueFileName(String url) {
+    if (url.isEmpty) return 'unknown_file';
+    try {
+      final uri = Uri.parse(url);
+      // Remove query parameters which might contain tokens
+      final path = uri.path;
+      // Replace slashes with underscores to create a flat unique filename
+      // and remove leading slash
+      return path.replaceFirst('/', '').replaceAll('/', '_');
+    } catch (e) {
+      // Fallback: simple split if URL is not a valid URI
+      return url.split('/').last;
     }
   }
 

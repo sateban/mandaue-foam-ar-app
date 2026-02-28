@@ -686,7 +686,8 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     });
 
     try {
-      final fileName = modelUrl.split('/').last;
+      final filebaseService = FilebaseService();
+      final fileName = filebaseService.getUniqueFileName(modelUrl);
       final appDocDir = await getApplicationDocumentsDirectory();
       final filePath = '${appDocDir.path}/$fileName';
       final file = File(filePath);
