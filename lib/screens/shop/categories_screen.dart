@@ -19,7 +19,8 @@ class CategoriesScreen extends StatefulWidget {
 class _CategoriesScreenState extends State<CategoriesScreen> {
   late List<String> _categories;
   Map<String, String> _categoryImageUrls = Map.from(categoryImageUrls);
-  Map<String, int> _categoryQuantities = {}; // Store quantity counts by category
+  Map<String, int> _categoryQuantities =
+      {}; // Store quantity counts by category
   StreamSubscription<List<Map<String, dynamic>>>? _categoriesSubscription;
 
   @override
@@ -30,7 +31,9 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
     // Load products immediately
     Future.microtask(() {
       final productProvider = context.read<ProductProvider>();
-      print('ProductProvider initial products: ${productProvider.products.length}');
+      print(
+        'ProductProvider initial products: ${productProvider.products.length}',
+      );
       if (productProvider.products.isEmpty) {
         print('Loading products from Firebase...');
         productProvider.loadProducts();
@@ -42,7 +45,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
 
   void _calculateCategoryStocks(List<Map<String, dynamic>> products) {
     final Map<String, int> categoryQuantities = {};
-    
+
     // Get quantity from first product in each category
     for (final product in products) {
       final category = product['category'] as String? ?? 'Other';
@@ -52,11 +55,11 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
         categoryQuantities[category] = quantity;
       }
     }
-    
+
     setState(() {
       _categoryQuantities = categoryQuantities;
     });
-    
+
     print('✅ Category quantities calculated: $_categoryQuantities');
   }
 
@@ -106,7 +109,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
   Widget _buildCategoryCard(String category, ProductProvider productProvider) {
     // Get quantity count directly from category data
     final productCount = _categoryQuantities[category] ?? 0;
-    
+
     print('🔍 Category: $category | Total quantity: $productCount');
 
     return GestureDetector(
@@ -168,10 +171,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
             ),
             const SizedBox(height: 4),
             Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 8,
-                vertical: 4,
-              ),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
                 color: const Color(0xFFFDB022),
                 borderRadius: BorderRadius.circular(12),
@@ -206,7 +206,8 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
       final Map<String, String> firebaseMapLower = {};
 
       for (final cat in categoriesData) {
-        final name = (cat['name'] ?? cat['title'] ?? cat['id'])?.toString() ?? '';
+        final name =
+            (cat['name'] ?? cat['title'] ?? cat['id'])?.toString() ?? '';
         var imageUrl = _extractImageUrl(cat);
         if (imageUrl.isEmpty) continue;
         if (!imageUrl.startsWith('http')) {
@@ -255,14 +256,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
 
   String _extractImageUrl(Map<String, dynamic> cat) {
     // Common keys and nested shapes to check
-    final candidates = [
-      'imageUrl',
-      'image_url',
-      'image',
-      'url',
-      'src',
-      'path',
-    ];
+    final candidates = ['imageUrl', 'image_url', 'image', 'url', 'src', 'path'];
 
     for (final key in candidates) {
       final val = cat[key];
@@ -270,7 +264,8 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
       if (val is String && val.isNotEmpty) return val;
       if (val is Map) {
         // try nested keys
-        final nested = (val['url'] ?? val['imageUrl'] ?? val['src'] ?? val['path']);
+        final nested =
+            (val['url'] ?? val['imageUrl'] ?? val['src'] ?? val['path']);
         if (nested is String && nested.isNotEmpty) return nested;
       }
     }
@@ -296,17 +291,17 @@ class _AuthenticatedCategoryImage extends StatelessWidget {
   final int? cacheWidth;
   final int? cacheHeight;
 
-  const _AuthenticatedCategoryImage({required this.imageUrl, this.cacheWidth, this.cacheHeight});
+  const _AuthenticatedCategoryImage({
+    required this.imageUrl,
+    this.cacheWidth,
+    this.cacheHeight,
+  });
 
   @override
   Widget build(BuildContext context) {
     if (imageUrl.isEmpty) {
       return const Center(
-        child: Icon(
-          Icons.image_outlined,
-          color: Colors.grey,
-          size: 32,
-        ),
+        child: Icon(Icons.image_outlined, color: Colors.grey, size: 32),
       );
     }
 
@@ -318,7 +313,10 @@ class _AuthenticatedCategoryImage extends StatelessWidget {
             child: SizedBox(
               width: 24,
               height: 24,
-              child: CircularProgressIndicator(strokeWidth: 2, valueColor: AlwaysStoppedAnimation(Color(0xFFFDB022))),
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                valueColor: AlwaysStoppedAnimation(Color(0xFFFDB022)),
+              ),
             ),
           );
         }
@@ -327,7 +325,7 @@ class _AuthenticatedCategoryImage extends StatelessWidget {
         if (snapshot.hasData && snapshot.data != null) {
           return Image.memory(
             snapshot.data!,
-            fit: BoxFit.cover,
+            fit: BoxFit.contain,
             width: double.infinity,
             height: double.infinity,
           );
@@ -336,16 +334,12 @@ class _AuthenticatedCategoryImage extends StatelessWidget {
         // Else, fall back to Image.network (publicly accessible)
         return Image.network(
           imageUrl,
-          fit: BoxFit.cover,
+          fit: BoxFit.contain,
           cacheWidth: cacheWidth,
           cacheHeight: cacheHeight,
           errorBuilder: (context, error, stackTrace) {
             return const Center(
-              child: Icon(
-                Icons.image_outlined,
-                color: Colors.grey,
-                size: 32,
-              ),
+              child: Icon(Icons.image_outlined, color: Colors.grey, size: 32),
             );
           },
           loadingBuilder: (context, child, loadingProgress) {
@@ -353,7 +347,8 @@ class _AuthenticatedCategoryImage extends StatelessWidget {
             return Center(
               child: CircularProgressIndicator(
                 value: loadingProgress.expectedTotalBytes != null
-                    ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
+                    ? loadingProgress.cumulativeBytesLoaded /
+                          loadingProgress.expectedTotalBytes!
                     : null,
                 valueColor: const AlwaysStoppedAnimation(Color(0xFFFDB022)),
               ),

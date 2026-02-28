@@ -30,7 +30,7 @@ class _ItemCategoryScreenState extends State<ItemCategoryScreen> {
   List<String> _selectedColors = [];
   StreamSubscription<List<Map<String, dynamic>>>? _productsSubscription;
   bool _isLoadingProducts = false;
-  
+
   // Cache for products by category
   static final Map<String, List<Product>> _categoryCache = {};
 
@@ -74,15 +74,16 @@ class _ItemCategoryScreenState extends State<ItemCategoryScreen> {
       _productsSubscription?.cancel();
 
       // Listen to real-time updates from Firebase
-      _productsSubscription = FirebaseService.streamListData('/products')
-          .listen(
-            (productsList) {
-              if (!mounted) return;
-              
-              // Convert Firebase products to Product model and filter by category
-              final convertedProducts = productsList
-                  .where((productMap) => productMap['category'] == widget.categoryName)
-                  .map((productMap) {
+      _productsSubscription = FirebaseService.streamListData('/products').listen(
+        (productsList) {
+          if (!mounted) return;
+
+          // Convert Firebase products to Product model and filter by category
+          final convertedProducts = productsList
+              .where(
+                (productMap) => productMap['category'] == widget.categoryName,
+              )
+              .map((productMap) {
                 return Product(
                   id: productMap['id'] ?? '',
                   name: productMap['name'] ?? 'Unknown',
@@ -101,23 +102,24 @@ class _ItemCategoryScreenState extends State<ItemCategoryScreen> {
                   modelUrl: productMap['modelUrl'],
                   modelScale: (productMap['modelScale'] ?? 1.0).toDouble(),
                 );
-              }).toList();
-              
-              setState(() {
-                _allProducts = convertedProducts;
-                // Cache the results
-                _categoryCache[widget.categoryName] = convertedProducts;
-                _filterProducts();
-                _isLoadingProducts = false;
-              });
-            },
-            onError: (error) {
-              print('Error loading category products: $error');
-              setState(() {
-                _isLoadingProducts = false;
-              });
-            },
-          );
+              })
+              .toList();
+
+          setState(() {
+            _allProducts = convertedProducts;
+            // Cache the results
+            _categoryCache[widget.categoryName] = convertedProducts;
+            _filterProducts();
+            _isLoadingProducts = false;
+          });
+        },
+        onError: (error) {
+          print('Error loading category products: $error');
+          setState(() {
+            _isLoadingProducts = false;
+          });
+        },
+      );
     } catch (e) {
       print('Error in _loadCategoryProducts: $e');
       setState(() {
@@ -132,8 +134,13 @@ class _ItemCategoryScreenState extends State<ItemCategoryScreen> {
     super.dispose();
   }
 
-  void _applyFilters(List<String> categories, double minPrice, double maxPrice,
-      List<String> materials, List<String> colors) {
+  void _applyFilters(
+    List<String> categories,
+    double minPrice,
+    double maxPrice,
+    List<String> materials,
+    List<String> colors,
+  ) {
     setState(() {
       // Only allow the current category to be selected
       _selectedCategories = [widget.categoryName];
@@ -152,7 +159,8 @@ class _ItemCategoryScreenState extends State<ItemCategoryScreen> {
       bool categoryMatch = product.category == widget.categoryName;
       bool priceMatch =
           product.price >= _minPrice && product.price <= _maxPrice;
-      bool materialMatch = _selectedMaterials.isEmpty ||
+      bool materialMatch =
+          _selectedMaterials.isEmpty ||
           _selectedMaterials.contains(product.material);
       bool colorMatch =
           _selectedColors.isEmpty || _selectedColors.contains(product.color);
@@ -163,7 +171,10 @@ class _ItemCategoryScreenState extends State<ItemCategoryScreen> {
 
   void _loadMoreItems() {
     setState(() {
-      _itemsToShow = (_itemsToShow + _itemsPerLoad).clamp(0, _filteredProducts.length);
+      _itemsToShow = (_itemsToShow + _itemsPerLoad).clamp(
+        0,
+        _filteredProducts.length,
+      );
     });
   }
 
@@ -209,79 +220,80 @@ class _ItemCategoryScreenState extends State<ItemCategoryScreen> {
         ],
       ),
       body: _isLoadingProducts
-        ? const Center(
-            child: CircularProgressIndicator(
-              valueColor: AlwaysStoppedAnimation(Color(0xFFFDB022)),
-            ),
-          )
-        : _filteredProducts.isEmpty
+          ? const Center(
+              child: CircularProgressIndicator(
+                valueColor: AlwaysStoppedAnimation(Color(0xFFFDB022)),
+              ),
+            )
+          : _filteredProducts.isEmpty
           ? Center(
               child: Text(
                 'No products found in ${widget.categoryName}',
-                style: const TextStyle(
-                  color: Color(0xFF1E3A8A),
-                  fontSize: 16,
-                ),
+                style: const TextStyle(color: Color(0xFF1E3A8A), fontSize: 16),
                 textAlign: TextAlign.center,
               ),
             )
           : Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 16.0),
-        child: GridView.builder(
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 2,
-            childAspectRatio: 0.65,
-            crossAxisSpacing: 12,
-            mainAxisSpacing: 12,
-          ),
-          itemCount: _itemsToShow >= _filteredProducts.length 
-            ? _filteredProducts.length 
-            : _itemsToShow + 1, // +1 for load more button
-          itemBuilder: (context, index) {
-            if (index == _itemsToShow && _itemsToShow < _filteredProducts.length) {
-              // Load more button
-              return GestureDetector(
-                onTap: _loadMoreItems,
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: Colors.grey[100],
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: const Color(0xFFFDB022),
-                      width: 2,
-                    ),
-                  ),
-                  child: const Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.add,
-                          color: Color(0xFFFDB022),
-                          size: 32,
-                        ),
-                        SizedBox(height: 8),
-                        Text(
-                          'Load More',
-                          style: TextStyle(
-                            color: Color(0xFFFDB022),
-                            fontWeight: FontWeight.w600,
-                            fontSize: 14,
+              padding: const EdgeInsets.symmetric(
+                horizontal: 16.0,
+                vertical: 16.0,
+              ),
+              child: GridView.builder(
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 2,
+                  childAspectRatio: 0.65,
+                  crossAxisSpacing: 12,
+                  mainAxisSpacing: 12,
+                ),
+                itemCount: _itemsToShow >= _filteredProducts.length
+                    ? _filteredProducts.length
+                    : _itemsToShow + 1, // +1 for load more button
+                itemBuilder: (context, index) {
+                  if (index == _itemsToShow &&
+                      _itemsToShow < _filteredProducts.length) {
+                    // Load more button
+                    return GestureDetector(
+                      onTap: _loadMoreItems,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: Colors.grey[100],
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: const Color(0xFFFDB022),
+                            width: 2,
                           ),
                         ),
-                      ],
-                    ),
-                  ),
-                ),
-              );
-            }
-            if (index >= _filteredProducts.length) {
-              return const SizedBox.shrink();
-            }
-            return _buildProductCard(_filteredProducts[index]);
-          },
-        ),
-      ),
+                        child: const Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Icons.add,
+                                color: Color(0xFFFDB022),
+                                size: 32,
+                              ),
+                              SizedBox(height: 8),
+                              Text(
+                                'Load More',
+                                style: TextStyle(
+                                  color: Color(0xFFFDB022),
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 14,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    );
+                  }
+                  if (index >= _filteredProducts.length) {
+                    return const SizedBox.shrink();
+                  }
+                  return _buildProductCard(_filteredProducts[index]);
+                },
+              ),
+            ),
     );
   }
 
@@ -354,45 +366,53 @@ class _ItemCategoryScreenState extends State<ItemCategoryScreen> {
                     child: GestureDetector(
                       onTap: () {
                         try {
-                          final productProvider = context.read<ProductProvider>();
+                          final productProvider = context
+                              .read<ProductProvider>();
                           final wasFavorite = product.isFavorite;
-                          
+
                           // Optimistic update - update UI immediately
                           product.isFavorite = !wasFavorite;
                           setState(() {});
-                          
+
                           if (mounted) {
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(
                                 content: Text(
-                                  product.isFavorite ? 'Added to favorites' : 'Removed from favorites',
+                                  product.isFavorite
+                                      ? 'Added to favorites'
+                                      : 'Removed from favorites',
                                 ),
                                 duration: const Duration(seconds: 1),
                               ),
                             );
                           }
-                          
+
                           // Update Firebase in background without awaiting
-                          productProvider.toggleProductFavorite(product.id)
-                            .catchError((e) {
-                              // Rollback on error
-                              product.isFavorite = wasFavorite;
-                              if (mounted) {
-                                setState(() {});
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text('Failed to update favorites'),
-                                    duration: Duration(seconds: 2),
-                                  ),
-                                );
-                              }
-                              print('Error toggling favorite: $e');
-                            });
+                          productProvider
+                              .toggleProductFavorite(product.id)
+                              .catchError((e) {
+                                // Rollback on error
+                                product.isFavorite = wasFavorite;
+                                if (mounted) {
+                                  setState(() {});
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text(
+                                        'Failed to update favorites',
+                                      ),
+                                      duration: Duration(seconds: 2),
+                                    ),
+                                  );
+                                }
+                                print('Error toggling favorite: $e');
+                              });
                         } catch (e) {
                           if (mounted) {
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(
-                                content: Text('Please sign in to add favorites'),
+                                content: Text(
+                                  'Please sign in to add favorites',
+                                ),
                                 duration: Duration(seconds: 2),
                               ),
                             );
@@ -439,7 +459,11 @@ class _ItemCategoryScreenState extends State<ItemCategoryScreen> {
                   const SizedBox(height: 4),
                   Row(
                     children: [
-                      const Icon(Icons.star, color: Color(0xFFFDB022), size: 14),
+                      const Icon(
+                        Icons.star,
+                        color: Color(0xFFFDB022),
+                        size: 14,
+                      ),
                       const SizedBox(width: 4),
                       Text(
                         '${product.rating}',
@@ -478,20 +502,13 @@ class _AuthenticatedProductImage extends StatelessWidget {
             ),
           );
         }
-        
+
         if (snapshot.hasData && snapshot.data != null) {
-          return Image.memory(
-            snapshot.data!,
-            fit: BoxFit.cover,
-          );
+          return Image.memory(snapshot.data!, fit: BoxFit.contain);
         }
-        
+
         return const Center(
-          child: Icon(
-            Icons.image_outlined,
-            color: Colors.grey,
-            size: 48,
-          ),
+          child: Icon(Icons.image_outlined, color: Colors.grey, size: 48),
         );
       },
     );

@@ -62,15 +62,16 @@ class _PopularProductsScreenState extends State<PopularProductsScreen> {
           .listen(
             (productsList) {
               if (!mounted) return;
-              
+
               // Filter only popular products (isPopular == true)
               final popularProducts = productsList.where((product) {
                 return product['isPopular'] == true;
               }).toList();
-              
+
               // Transform Firebase paths to full Filebase URLs
-              final transformedProducts = filebaseService.transformProductsWithFilebaseUrls(popularProducts);
-              
+              final transformedProducts = filebaseService
+                  .transformProductsWithFilebaseUrls(popularProducts);
+
               setState(() {
                 _products = transformedProducts;
                 _filteredProducts = List.from(_products);
@@ -98,8 +99,13 @@ class _PopularProductsScreenState extends State<PopularProductsScreen> {
     super.dispose();
   }
 
-  void _applyFilters(List<String> categories, double minPrice, double maxPrice,
-      List<String> materials, List<String> colors) {
+  void _applyFilters(
+    List<String> categories,
+    double minPrice,
+    double maxPrice,
+    List<String> materials,
+    List<String> colors,
+  ) {
     setState(() {
       _selectedCategories = categories;
       _minPrice = minPrice;
@@ -112,11 +118,13 @@ class _PopularProductsScreenState extends State<PopularProductsScreen> {
 
   void _filterProducts() {
     _filteredProducts = _products.where((product) {
-      bool categoryMatch = _selectedCategories.isEmpty ||
+      bool categoryMatch =
+          _selectedCategories.isEmpty ||
           _selectedCategories.contains(product['category']);
       bool priceMatch =
           product['price'] >= _minPrice && product['price'] <= _maxPrice;
-      bool materialMatch = _selectedMaterials.isEmpty ||
+      bool materialMatch =
+          _selectedMaterials.isEmpty ||
           _selectedMaterials.contains(product['material']);
       bool colorMatch =
           _selectedColors.isEmpty || _selectedColors.contains(product['color']);
@@ -127,7 +135,10 @@ class _PopularProductsScreenState extends State<PopularProductsScreen> {
 
   void _loadMoreItems() {
     setState(() {
-      _itemsToShow = (_itemsToShow + _itemsPerLoad).clamp(0, _filteredProducts.length);
+      _itemsToShow = (_itemsToShow + _itemsPerLoad).clamp(
+        0,
+        _filteredProducts.length,
+      );
     });
   }
 
@@ -173,78 +184,79 @@ class _PopularProductsScreenState extends State<PopularProductsScreen> {
         ],
       ),
       body: _isLoadingProducts
-        ? const Center(
-            child: CircularProgressIndicator(
-              valueColor: AlwaysStoppedAnimation(Color(0xFFFDB022)),
-            ),
-          )
-        : _filteredProducts.isEmpty
+          ? const Center(
+              child: CircularProgressIndicator(
+                valueColor: AlwaysStoppedAnimation(Color(0xFFFDB022)),
+              ),
+            )
+          : _filteredProducts.isEmpty
           ? const Center(
               child: Text(
                 'No popular products found',
-                style: TextStyle(
-                  color: Color(0xFF1E3A8A),
-                  fontSize: 16,
-                ),
+                style: TextStyle(color: Color(0xFF1E3A8A), fontSize: 16),
               ),
             )
           : Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 16.0),
-        child: GridView.builder(
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 2,
-            childAspectRatio: 0.65,
-            crossAxisSpacing: 12,
-            mainAxisSpacing: 12,
-          ),
-          itemCount: _itemsToShow >= _filteredProducts.length 
-            ? _filteredProducts.length 
-            : _itemsToShow + 1, // +1 for load more button
-          itemBuilder: (context, index) {
-            if (index == _itemsToShow && _itemsToShow < _filteredProducts.length) {
-              // Load more button
-              return GestureDetector(
-                onTap: _loadMoreItems,
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: Colors.grey[100],
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: const Color(0xFFFDB022),
-                      width: 2,
-                    ),
-                  ),
-                  child: const Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.add,
-                          color: Color(0xFFFDB022),
-                          size: 32,
-                        ),
-                        SizedBox(height: 8),
-                        Text(
-                          'Load More',
-                          style: TextStyle(
-                            color: Color(0xFFFDB022),
-                            fontWeight: FontWeight.w600,
-                            fontSize: 14,
+              padding: const EdgeInsets.symmetric(
+                horizontal: 16.0,
+                vertical: 16.0,
+              ),
+              child: GridView.builder(
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 2,
+                  childAspectRatio: 0.65,
+                  crossAxisSpacing: 12,
+                  mainAxisSpacing: 12,
+                ),
+                itemCount: _itemsToShow >= _filteredProducts.length
+                    ? _filteredProducts.length
+                    : _itemsToShow + 1, // +1 for load more button
+                itemBuilder: (context, index) {
+                  if (index == _itemsToShow &&
+                      _itemsToShow < _filteredProducts.length) {
+                    // Load more button
+                    return GestureDetector(
+                      onTap: _loadMoreItems,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: Colors.grey[100],
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: const Color(0xFFFDB022),
+                            width: 2,
                           ),
                         ),
-                      ],
-                    ),
-                  ),
-                ),
-              );
-            }
-            if (index >= _filteredProducts.length) {
-              return const SizedBox.shrink();
-            }
-            return _buildProductCard(_filteredProducts[index]);
-          },
-        ),
-      ),
+                        child: const Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Icons.add,
+                                color: Color(0xFFFDB022),
+                                size: 32,
+                              ),
+                              SizedBox(height: 8),
+                              Text(
+                                'Load More',
+                                style: TextStyle(
+                                  color: Color(0xFFFDB022),
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 14,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    );
+                  }
+                  if (index >= _filteredProducts.length) {
+                    return const SizedBox.shrink();
+                  }
+                  return _buildProductCard(_filteredProducts[index]);
+                },
+              ),
+            ),
     );
   }
 
@@ -310,38 +322,43 @@ class _PopularProductsScreenState extends State<PopularProductsScreen> {
                       try {
                         final productProvider = context.read<ProductProvider>();
                         final wasIsFavorite = product['isFavorite'] ?? false;
-                        
+
                         // Optimistic update - update UI immediately
                         product['isFavorite'] = !wasIsFavorite;
                         setState(() {});
-                        
+
                         if (mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
                               content: Text(
-                                product['isFavorite'] ? 'Added to favorites' : 'Removed from favorites',
+                                product['isFavorite']
+                                    ? 'Added to favorites'
+                                    : 'Removed from favorites',
                               ),
                               duration: const Duration(seconds: 1),
                             ),
                           );
                         }
-                        
+
                         // Update Firebase in background without awaiting
-                        productProvider.toggleProductFavorite(product['id']?.toString() ?? '')
-                          .catchError((e) {
-                            // Rollback on error
-                            product['isFavorite'] = wasIsFavorite;
-                            if (mounted) {
-                              setState(() {});
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('Failed to update favorites'),
-                                  duration: Duration(seconds: 2),
-                                ),
-                              );
-                            }
-                            print('Error toggling favorite: $e');
-                          });
+                        productProvider
+                            .toggleProductFavorite(
+                              product['id']?.toString() ?? '',
+                            )
+                            .catchError((e) {
+                              // Rollback on error
+                              product['isFavorite'] = wasIsFavorite;
+                              if (mounted) {
+                                setState(() {});
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('Failed to update favorites'),
+                                    duration: Duration(seconds: 2),
+                                  ),
+                                );
+                              }
+                              print('Error toggling favorite: $e');
+                            });
                       } catch (e) {
                         if (mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
@@ -397,10 +414,7 @@ class _PopularProductsScreenState extends State<PopularProductsScreen> {
                     const SizedBox(width: 4),
                     Text(
                       '${product['rating']}',
-                      style: const TextStyle(
-                        color: Colors.grey,
-                        fontSize: 12,
-                      ),
+                      style: const TextStyle(color: Colors.grey, fontSize: 12),
                     ),
                   ],
                 ),
@@ -431,20 +445,13 @@ class _AuthenticatedProductImage extends StatelessWidget {
             ),
           );
         }
-        
+
         if (snapshot.hasData && snapshot.data != null) {
-          return Image.memory(
-            snapshot.data!,
-            fit: BoxFit.cover,
-          );
+          return Image.memory(snapshot.data!, fit: BoxFit.contain);
         }
-        
+
         return const Center(
-          child: Icon(
-            Icons.image_outlined,
-            color: Colors.grey,
-            size: 48,
-          ),
+          child: Icon(Icons.image_outlined, color: Colors.grey, size: 48),
         );
       },
     );

@@ -64,15 +64,16 @@ class _NewArrivalsScreenState extends State<NewArrivalsScreen> {
           .listen(
             (productsList) {
               if (!mounted) return;
-              
+
               // Filter only new arrival products (isNewArrival == true)
               final newArrivalProducts = productsList.where((product) {
                 return product['isNewArrival'] == true;
               }).toList();
-              
+
               // Transform Firebase paths to full Filebase URLs
-              final transformedProducts = filebaseService.transformProductsWithFilebaseUrls(newArrivalProducts);
-              
+              final transformedProducts = filebaseService
+                  .transformProductsWithFilebaseUrls(newArrivalProducts);
+
               setState(() {
                 _products = transformedProducts;
                 _filteredProducts = List.from(_products);
@@ -102,15 +103,21 @@ class _NewArrivalsScreenState extends State<NewArrivalsScreen> {
   }
 
   void _onScroll() {
-    if (_scrollController.position.pixels == _scrollController.position.maxScrollExtent) {
+    if (_scrollController.position.pixels ==
+        _scrollController.position.maxScrollExtent) {
       if (_itemsToShow < _filteredProducts.length) {
         _loadMoreItems();
       }
     }
   }
 
-  void _applyFilters(List<String> categories, double minPrice, double maxPrice,
-      List<String> materials, List<String> colors) {
+  void _applyFilters(
+    List<String> categories,
+    double minPrice,
+    double maxPrice,
+    List<String> materials,
+    List<String> colors,
+  ) {
     setState(() {
       _selectedCategories = categories;
       _minPrice = minPrice;
@@ -124,11 +131,13 @@ class _NewArrivalsScreenState extends State<NewArrivalsScreen> {
 
   void _filterProducts() {
     _filteredProducts = _products.where((product) {
-      bool categoryMatch = _selectedCategories.isEmpty ||
+      bool categoryMatch =
+          _selectedCategories.isEmpty ||
           _selectedCategories.contains(product['category']);
       bool priceMatch =
           product['price'] >= _minPrice && product['price'] <= _maxPrice;
-      bool materialMatch = _selectedMaterials.isEmpty ||
+      bool materialMatch =
+          _selectedMaterials.isEmpty ||
           _selectedMaterials.contains(product['material']);
       bool colorMatch =
           _selectedColors.isEmpty || _selectedColors.contains(product['color']);
@@ -139,7 +148,10 @@ class _NewArrivalsScreenState extends State<NewArrivalsScreen> {
 
   void _loadMoreItems() {
     setState(() {
-      _itemsToShow = (_itemsToShow + _itemsPerLoad).clamp(0, _filteredProducts.length);
+      _itemsToShow = (_itemsToShow + _itemsPerLoad).clamp(
+        0,
+        _filteredProducts.length,
+      );
     });
   }
 
@@ -185,43 +197,46 @@ class _NewArrivalsScreenState extends State<NewArrivalsScreen> {
         ],
       ),
       body: _isLoadingProducts
-        ? const Center(
-            child: CircularProgressIndicator(
-              valueColor: AlwaysStoppedAnimation(Color(0xFFFDB022)),
-            ),
-          )
-        : _filteredProducts.isEmpty
+          ? const Center(
+              child: CircularProgressIndicator(
+                valueColor: AlwaysStoppedAnimation(Color(0xFFFDB022)),
+              ),
+            )
+          : _filteredProducts.isEmpty
           ? const Center(
               child: Text(
                 'No new arrival products found',
-                style: TextStyle(
-                  color: Color(0xFF1E3A8A),
-                  fontSize: 16,
-                ),
+                style: TextStyle(color: Color(0xFF1E3A8A), fontSize: 16),
               ),
             )
           : ListView.builder(
-        controller: _scrollController,
-        padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
-        itemCount: _itemsToShow + (_itemsToShow < _filteredProducts.length ? 1 : 0),
-        itemBuilder: (context, index) {
-          if (index == _itemsToShow && _itemsToShow < _filteredProducts.length) {
-            // Loading indicator
-            return Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Center(
-                child: const CircularProgressIndicator(
-                  valueColor: AlwaysStoppedAnimation(Color(0xFFFDB022)),
-                ),
+              controller: _scrollController,
+              padding: const EdgeInsets.symmetric(
+                horizontal: 16.0,
+                vertical: 12.0,
               ),
-            );
-          }
-          if (index >= _filteredProducts.length) {
-            return const SizedBox.shrink();
-          }
-          return _buildNewArrivalItem(_filteredProducts[index]);
-        },
-      ),
+              itemCount:
+                  _itemsToShow +
+                  (_itemsToShow < _filteredProducts.length ? 1 : 0),
+              itemBuilder: (context, index) {
+                if (index == _itemsToShow &&
+                    _itemsToShow < _filteredProducts.length) {
+                  // Loading indicator
+                  return Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Center(
+                      child: const CircularProgressIndicator(
+                        valueColor: AlwaysStoppedAnimation(Color(0xFFFDB022)),
+                      ),
+                    ),
+                  );
+                }
+                if (index >= _filteredProducts.length) {
+                  return const SizedBox.shrink();
+                }
+                return _buildNewArrivalItem(_filteredProducts[index]);
+              },
+            ),
     );
   }
 
@@ -278,8 +293,11 @@ class _NewArrivalsScreenState extends State<NewArrivalsScreen> {
                     ),
                     Row(
                       children: [
-                        const Icon(Icons.star,
-                            color: Color(0xFFFDB022), size: 14),
+                        const Icon(
+                          Icons.star,
+                          color: Color(0xFFFDB022),
+                          size: 14,
+                        ),
                         const SizedBox(width: 4),
                         Text(
                           '${product['rating']}',
@@ -300,38 +318,41 @@ class _NewArrivalsScreenState extends State<NewArrivalsScreen> {
               try {
                 final productProvider = context.read<ProductProvider>();
                 final wasIsFavorite = product['isFavorite'] ?? false;
-                
+
                 // Optimistic update - update UI immediately
                 product['isFavorite'] = !wasIsFavorite;
                 setState(() {});
-                
+
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
                       content: Text(
-                        product['isFavorite'] ? 'Added to favorites' : 'Removed from favorites',
+                        product['isFavorite']
+                            ? 'Added to favorites'
+                            : 'Removed from favorites',
                       ),
                       duration: const Duration(seconds: 1),
                     ),
                   );
                 }
-                
+
                 // Update Firebase in background without awaiting
-                productProvider.toggleProductFavorite(product['id']?.toString() ?? '')
-                  .catchError((e) {
-                    // Rollback on error
-                    product['isFavorite'] = wasIsFavorite;
-                    if (mounted) {
-                      setState(() {});
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Failed to update favorites'),
-                          duration: Duration(seconds: 2),
-                        ),
-                      );
-                    }
-                    print('Error toggling favorite: $e');
-                  });
+                productProvider
+                    .toggleProductFavorite(product['id']?.toString() ?? '')
+                    .catchError((e) {
+                      // Rollback on error
+                      product['isFavorite'] = wasIsFavorite;
+                      if (mounted) {
+                        setState(() {});
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Failed to update favorites'),
+                            duration: Duration(seconds: 2),
+                          ),
+                        );
+                      }
+                      print('Error toggling favorite: $e');
+                    });
               } catch (e) {
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
@@ -374,20 +395,13 @@ class _AuthenticatedArrivalImage extends StatelessWidget {
             ),
           );
         }
-        
+
         if (snapshot.hasData && snapshot.data != null) {
-          return Image.memory(
-            snapshot.data!,
-            fit: BoxFit.cover,
-          );
+          return Image.memory(snapshot.data!, fit: BoxFit.contain);
         }
-        
+
         return const Center(
-          child: Icon(
-            Icons.image_outlined,
-            color: Colors.grey,
-            size: 40,
-          ),
+          child: Icon(Icons.image_outlined, color: Colors.grey, size: 40),
         );
       },
     );

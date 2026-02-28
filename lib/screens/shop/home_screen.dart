@@ -174,10 +174,10 @@ class _HomeScreenState extends State<HomeScreen> {
                 _allFirebaseProducts = transformedStreamProducts;
                 _filteredProducts = List.from(_allFirebaseProducts);
               });
-              
+
               // Reload user favorites to update isFavorite status
               _loadUserFavorites();
-              
+
               // Re-run search if there's an active search query
               if (_searchController.text.isNotEmpty) {
                 _searchProducts(_searchController.text);
@@ -216,7 +216,7 @@ class _HomeScreenState extends State<HomeScreen> {
     try {
       final productProvider = context.read<ProductProvider>();
       await productProvider.loadUserFavorites();
-      
+
       if (mounted) {
         setState(() {
           _filteredProducts = List.from(productProvider.products);
@@ -629,7 +629,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                           imageUrl: url,
                                           width: 120,
                                           height: 120,
-                                          fit: BoxFit.cover,
+                                          fit: BoxFit.contain,
                                         );
                                       },
                                     ),
@@ -745,7 +745,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                             imageUrl:
                                                 categoryImageUrls[categories[index]] ??
                                                 '',
-                                            fit: BoxFit.cover,
+                                            fit: BoxFit.contain,
                                             placeholder: const Center(
                                               child: CircularProgressIndicator(
                                                 valueColor:
@@ -1048,7 +1048,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                   borderRadius: BorderRadius.circular(6),
                                   child: AuthenticatedImage(
                                     imageUrl: product['imageUrl'] ?? '',
-                                    fit: BoxFit.cover,
+                                    fit: BoxFit.contain,
                                   ),
                                 ),
                               ),
@@ -1311,7 +1311,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                       child: AuthenticatedImage(
                         imageUrl: imageUrl,
-                        fit: BoxFit.cover,
+                        fit: BoxFit.contain,
                       ),
                     ),
                   ),
@@ -1348,11 +1348,11 @@ class _HomeScreenState extends State<HomeScreen> {
                   //       try {
                   //         final productProvider = context.read<ProductProvider>();
                   //         final wasIsFavorite = product['isFavorite'] ?? false;
-                  //         
+                  //
                   //         // Optimistic update - update UI immediately
                   //         product['isFavorite'] = !wasIsFavorite;
                   //         setState(() {});
-                  //         
+                  //
                   //         // Show feedback
                   //         if (mounted) {
                   //           ScaffoldMessenger.of(context).showSnackBar(
@@ -1364,7 +1364,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   //             ),
                   //           );
                   //         }
-                  //         
+                  //
                   //         // Update Firebase in background without awaiting
                   //         productProvider.toggleProductFavorite(product['id']?.toString() ?? '')
                   //           .catchError((e) {
@@ -1502,7 +1502,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 borderRadius: BorderRadius.circular(8),
                 child: AuthenticatedImage(
                   imageUrl: imageUrl,
-                  fit: BoxFit.cover,
+                  fit: BoxFit.contain,
                 ),
               ),
             ),
@@ -1562,11 +1562,11 @@ class _HomeScreenState extends State<HomeScreen> {
             //     try {
             //       final productProvider = context.read<ProductProvider>();
             //       final wasIsFavorite = product['isFavorite'] ?? false;
-            //       
+            //
             //       // Optimistic update - update UI immediately
             //       product['isFavorite'] = !wasIsFavorite;
             //       setState(() {});
-            //       
+            //
             //       // Show feedback
             //       if (mounted) {
             //         ScaffoldMessenger.of(context).showSnackBar(
@@ -1578,7 +1578,7 @@ class _HomeScreenState extends State<HomeScreen> {
             //           ),
             //         );
             //       }
-            //       
+            //
             //       // Update Firebase in background without awaiting
             //       productProvider.toggleProductFavorite(product['id']?.toString() ?? '')
             //         .catchError((e) {

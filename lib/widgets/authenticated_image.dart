@@ -13,7 +13,7 @@ class AuthenticatedImage extends StatefulWidget {
 
   const AuthenticatedImage({
     required this.imageUrl,
-    this.fit = BoxFit.cover,
+    this.fit = BoxFit.contain,
     this.width,
     this.height,
     this.placeholder,
