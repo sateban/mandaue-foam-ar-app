@@ -58,12 +58,48 @@ class _HomeScreenState extends State<HomeScreen> {
   // Stream subscription for Firebase products
   StreamSubscription<List<Map<String, dynamic>>>? _productsSubscription;
 
+  void _onProductProviderUpdate() {
+    if (!mounted) return;
+    final productProvider = context.read<ProductProvider>();
+    setState(() {
+      // Update maps in local storage
+      for (var p in _allFirebaseProducts) {
+        final provP = productProvider.getProductById(p['id']?.toString() ?? '');
+        if (provP != null) {
+          p['isFavorite'] = provP['isFavorite'] ?? false;
+        }
+      }
+
+      // Update Product model objects
+      for (var p in _popularProducts) {
+        final provP = productProvider.getProductById(p.id);
+        if (provP != null) {
+          p.isFavorite = provP['isFavorite'] ?? false;
+        }
+      }
+      for (var p in _newArrivalProducts) {
+        final provP = productProvider.getProductById(p.id);
+        if (provP != null) {
+          p.isFavorite = provP['isFavorite'] ?? false;
+        }
+      }
+
+      // Refresh search results if active
+      if (_searchController.text.isNotEmpty) {
+        _searchProducts(_searchController.text);
+      }
+    });
+  }
+
   @override
   void initState() {
     super.initState();
     _searchController = TextEditingController();
     _categoriesScrollController = ScrollController();
     _categoriesScrollController.addListener(_updateCategoriesScrollState);
+
+    // Register listener for ProductProvider to sync favorites across screens
+    context.read<ProductProvider>().addListener(_onProductProviderUpdate);
 
     // Get products from ProductProvider (loaded from Firebase after sign-in)
     final productProvider = context.read<ProductProvider>();
@@ -251,7 +287,13 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   @override
+  @override
   void dispose() {
+    // Unregister ProductProvider listener
+    try {
+      context.read<ProductProvider>().removeListener(_onProductProviderUpdate);
+    } catch (_) {}
+
     _heroTimer?.cancel();
     _heroPageController.dispose();
     _searchController.dispose();

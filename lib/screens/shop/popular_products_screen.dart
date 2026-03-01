@@ -31,11 +31,36 @@ class _PopularProductsScreenState extends State<PopularProductsScreen> {
   StreamSubscription<List<Map<String, dynamic>>>? _productsSubscription;
   bool _isLoadingProducts = false;
 
+  void _onProductProviderUpdate() {
+    if (!mounted) return;
+    final productProvider = context.read<ProductProvider>();
+    setState(() {
+      // Update Product model objects in our local lists
+      for (var p in _products) {
+        final provP = productProvider.getProductById(p.id);
+        if (provP != null) {
+          p.isFavorite = provP['isFavorite'] ?? false;
+        }
+      }
+
+      for (var p in _filteredProducts) {
+        final provP = productProvider.getProductById(p.id);
+        if (provP != null) {
+          p.isFavorite = provP['isFavorite'] ?? false;
+        }
+      }
+    });
+  }
+
   @override
   void initState() {
     super.initState();
     _products = [];
     _filteredProducts = [];
+
+    // Register listener for ProductProvider to sync favorites across screens
+    context.read<ProductProvider>().addListener(_onProductProviderUpdate);
+
     _loadPopularProducts();
     _loadUserFavorites();
   }
@@ -103,6 +128,11 @@ class _PopularProductsScreenState extends State<PopularProductsScreen> {
 
   @override
   void dispose() {
+    // Unregister ProductProvider listener
+    try {
+      context.read<ProductProvider>().removeListener(_onProductProviderUpdate);
+    } catch (_) {}
+
     _productsSubscription?.cancel();
     super.dispose();
   }

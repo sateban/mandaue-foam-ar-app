@@ -32,12 +32,39 @@ class _NewArrivalsScreenState extends State<NewArrivalsScreen> {
   StreamSubscription<List<Map<String, dynamic>>>? _productsSubscription;
   bool _isLoadingProducts = false;
 
+  void _onProductProviderUpdate() {
+    if (!mounted) return;
+    final productProvider = context.read<ProductProvider>();
+    setState(() {
+      // Update Product model objects in our local lists
+      for (var p in _products) {
+        final provP = productProvider.getProductById(p.id);
+        if (provP != null) {
+          p.isFavorite = provP['isFavorite'] ?? false;
+        }
+      }
+
+      // _filteredProducts contains the same objects, so they should be updated already.
+      // But we can re-sync just to be sure if some filtering based on isFavorite is added later.
+      for (var p in _filteredProducts) {
+        final provP = productProvider.getProductById(p.id);
+        if (provP != null) {
+          p.isFavorite = provP['isFavorite'] ?? false;
+        }
+      }
+    });
+  }
+
   @override
   void initState() {
     super.initState();
     _products = [];
     _filteredProducts = [];
     _scrollController.addListener(_onScroll);
+
+    // Register listener for ProductProvider to sync favorites across screens
+    context.read<ProductProvider>().addListener(_onProductProviderUpdate);
+
     _loadNewArrivalProducts();
     _loadUserFavorites();
   }
@@ -105,6 +132,11 @@ class _NewArrivalsScreenState extends State<NewArrivalsScreen> {
 
   @override
   void dispose() {
+    // Unregister ProductProvider listener
+    try {
+      context.read<ProductProvider>().removeListener(_onProductProviderUpdate);
+    } catch (_) {}
+
     _scrollController.dispose();
     _productsSubscription?.cancel();
     super.dispose();
