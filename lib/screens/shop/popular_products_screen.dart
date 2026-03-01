@@ -4,6 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../services/firebase_service.dart';
 import '../../services/filebase_service.dart';
+import '../../models/product.dart';
+import '../../utils/slide_route.dart';
+import 'product_detail_screen.dart';
+import '../../widgets/authenticated_image.dart';
 import '../../providers/product_provider.dart';
 import 'filter_modal.dart';
 
@@ -15,8 +19,8 @@ class PopularProductsScreen extends StatefulWidget {
 }
 
 class _PopularProductsScreenState extends State<PopularProductsScreen> {
-  late List<Map<String, dynamic>> _products;
-  late List<Map<String, dynamic>> _filteredProducts;
+  late List<Product> _products;
+  late List<Product> _filteredProducts;
   int _itemsToShow = 4;
   final int _itemsPerLoad = 4;
   List<String> _selectedCategories = [];
@@ -58,33 +62,37 @@ class _PopularProductsScreenState extends State<PopularProductsScreen> {
       _productsSubscription?.cancel();
 
       // Listen to real-time updates from Firebase
-      _productsSubscription = FirebaseService.streamListData('/products')
-          .listen(
-            (productsList) {
-              if (!mounted) return;
+      _productsSubscription = FirebaseService.streamListData('/products').listen(
+        (productsList) {
+          if (!mounted) return;
 
-              // Filter only popular products (isPopular == true)
-              final popularProducts = productsList.where((product) {
-                return product['isPopular'] == true;
-              }).toList();
+          // Filter only popular products (isPopular == true)
+          final popularProducts = productsList.where((product) {
+            return product['isPopular'] == true;
+          }).toList();
 
-              // Transform Firebase paths to full Filebase URLs
-              final transformedProducts = filebaseService
-                  .transformProductsWithFilebaseUrls(popularProducts);
+          // Transform Firebase paths to full Filebase URLs
+          final transformedProducts = filebaseService
+              .transformProductsWithFilebaseUrls(popularProducts);
 
-              setState(() {
-                _products = transformedProducts;
-                _filteredProducts = List.from(_products);
-                _isLoadingProducts = false;
-              });
-            },
-            onError: (error) {
-              print('Error loading popular products: $error');
-              setState(() {
-                _isLoadingProducts = false;
-              });
-            },
-          );
+          // Convert to Product models for robust mapping and to fix null errors
+          final convertedProducts = transformedProducts.map<Product>((map) {
+            return Product.fromMap(map);
+          }).toList();
+
+          setState(() {
+            _products = convertedProducts;
+            _filteredProducts = List.from(_products);
+            _isLoadingProducts = false;
+          });
+        },
+        onError: (error) {
+          print('Error loading popular products: $error');
+          setState(() {
+            _isLoadingProducts = false;
+          });
+        },
+      );
     } catch (e) {
       print('Error in _loadPopularProducts: $e');
       setState(() {
@@ -120,14 +128,14 @@ class _PopularProductsScreenState extends State<PopularProductsScreen> {
     _filteredProducts = _products.where((product) {
       bool categoryMatch =
           _selectedCategories.isEmpty ||
-          _selectedCategories.contains(product['category']);
+          _selectedCategories.contains(product.category);
       bool priceMatch =
-          product['price'] >= _minPrice && product['price'] <= _maxPrice;
+          product.price >= _minPrice && product.price <= _maxPrice;
       bool materialMatch =
           _selectedMaterials.isEmpty ||
-          _selectedMaterials.contains(product['material']);
+          _selectedMaterials.contains(product.material);
       bool colorMatch =
-          _selectedColors.isEmpty || _selectedColors.contains(product['color']);
+          _selectedColors.isEmpty || _selectedColors.contains(product.color);
 
       return categoryMatch && priceMatch && materialMatch && colorMatch;
     }).toList();
@@ -260,200 +268,166 @@ class _PopularProductsScreenState extends State<PopularProductsScreen> {
     );
   }
 
-  Widget _buildProductCard(Map<String, dynamic> product) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.grey[100],
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(
-            child: Stack(
-              children: [
-                Container(
-                  width: double.infinity,
-                  decoration: BoxDecoration(
-                    color: Colors.grey[200],
-                    borderRadius: const BorderRadius.only(
-                      topLeft: Radius.circular(12),
-                      topRight: Radius.circular(12),
+  Widget _buildProductCard(Product product) {
+    return GestureDetector(
+      onTap: () {
+        Navigator.of(
+          context,
+        ).push(slideRoute(ProductDetailScreen(product: product)));
+      },
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Stack(
+                children: [
+                  ClipRRect(
+                    borderRadius: const BorderRadius.vertical(
+                      top: Radius.circular(16),
                     ),
+                    child: AuthenticatedImage(imageUrl: product.imageUrl),
                   ),
-                  child: ClipRRect(
-                    borderRadius: const BorderRadius.only(
-                      topLeft: Radius.circular(12),
-                      topRight: Radius.circular(12),
-                    ),
-                    child: _AuthenticatedProductImage(
-                      imageUrl: product['imageUrl'] ?? '',
-                    ),
-                  ),
-                ),
-                if (product['discount'] != null)
                   Positioned(
-                    top: 8,
-                    left: 8,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFFDB022),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Text(
-                        product['discount'],
-                        style: const TextStyle(
+                    top: 12,
+                    right: 12,
+                    child: GestureDetector(
+                      onTap: () {
+                        try {
+                          final productProvider = context
+                              .read<ProductProvider>();
+                          final wasIsFavorite = product.isFavorite;
+
+                          // Optimistic update
+                          product.isFavorite = !wasIsFavorite;
+                          setState(() {});
+
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  product.isFavorite
+                                      ? 'Added to favorites'
+                                      : 'Removed from favorites',
+                                ),
+                                duration: const Duration(seconds: 1),
+                              ),
+                            );
+                          }
+
+                          // Update Firebase
+                          productProvider
+                              .toggleProductFavorite(product.id)
+                              .catchError((e) {
+                                // Rollback on error
+                                product.isFavorite = wasIsFavorite;
+                                if (mounted) {
+                                  setState(() {});
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text(
+                                        'Failed to update favorites',
+                                      ),
+                                      duration: Duration(seconds: 2),
+                                    ),
+                                  );
+                                }
+                              });
+                        } catch (e) {
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text(
+                                  'Please sign in to add favorites',
+                                ),
+                                duration: Duration(seconds: 2),
+                              ),
+                            );
+                          }
+                        }
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: const BoxDecoration(
                           color: Colors.white,
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          product.isFavorite
+                              ? Icons.favorite
+                              : Icons.favorite_border,
+                          size: 18,
+                          color: product.isFavorite ? Colors.red : Colors.grey,
                         ),
                       ),
                     ),
                   ),
-                Positioned(
-                  top: 8,
-                  right: 8,
-                  child: GestureDetector(
-                    onTap: () {
-                      try {
-                        final productProvider = context.read<ProductProvider>();
-                        final wasIsFavorite = product['isFavorite'] ?? false;
-
-                        // Optimistic update - update UI immediately
-                        product['isFavorite'] = !wasIsFavorite;
-                        setState(() {});
-
-                        if (mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(
-                                product['isFavorite']
-                                    ? 'Added to favorites'
-                                    : 'Removed from favorites',
-                              ),
-                              duration: const Duration(seconds: 1),
-                            ),
-                          );
-                        }
-
-                        // Update Firebase in background without awaiting
-                        productProvider
-                            .toggleProductFavorite(
-                              product['id']?.toString() ?? '',
-                            )
-                            .catchError((e) {
-                              // Rollback on error
-                              product['isFavorite'] = wasIsFavorite;
-                              if (mounted) {
-                                setState(() {});
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text('Failed to update favorites'),
-                                    duration: Duration(seconds: 2),
-                                  ),
-                                );
-                              }
-                              print('Error toggling favorite: $e');
-                            });
-                      } catch (e) {
-                        if (mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Please sign in to add favorites'),
-                              duration: Duration(seconds: 2),
-                            ),
-                          );
-                        }
-                        print('Error toggling favorite: $e');
-                      }
-                    },
-                    child: Icon(
-                      product['isFavorite']
-                          ? Icons.favorite
-                          : Icons.favorite_border,
-                      color: product['isFavorite'] ? Colors.red : Colors.grey,
-                      size: 24,
-                    ),
-                  ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  product['name'],
-                  style: const TextStyle(
-                    color: Color(0xFF1E3A8A),
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                  ),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  '₱${product['price'].toStringAsFixed(2)}',
-                  style: const TextStyle(
-                    color: Color(0xFF1E3A8A),
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Row(
-                  children: [
-                    const Icon(Icons.star, color: Color(0xFFFDB022), size: 14),
-                    const SizedBox(width: 4),
-                    Text(
-                      '${product['rating']}',
-                      style: const TextStyle(color: Colors.grey, fontSize: 12),
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    product.name,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF1E3A8A),
                     ),
-                  ],
-                ),
-              ],
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        '₱${product.price.toStringAsFixed(2)}',
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFFFDB022),
+                        ),
+                      ),
+                      Row(
+                        children: [
+                          const Icon(
+                            Icons.star,
+                            size: 14,
+                            color: Color(0xFFFDB022),
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            '${product.rating}',
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
-    );
-  }
-}
-
-/// Authenticated image widget that fetches images from Filebase with proper auth
-class _AuthenticatedProductImage extends StatelessWidget {
-  final String imageUrl;
-
-  const _AuthenticatedProductImage({required this.imageUrl});
-
-  @override
-  Widget build(BuildContext context) {
-    return FutureBuilder<Uint8List?>(
-      future: FilebaseService().getImageBytes(imageUrl),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(
-            child: CircularProgressIndicator(
-              valueColor: AlwaysStoppedAnimation(Color(0xFFFDB022)),
-            ),
-          );
-        }
-
-        if (snapshot.hasData && snapshot.data != null) {
-          return Image.memory(snapshot.data!, fit: BoxFit.contain);
-        }
-
-        return const Center(
-          child: Icon(Icons.image_outlined, color: Colors.grey, size: 48),
-        );
-      },
     );
   }
 }

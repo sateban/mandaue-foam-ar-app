@@ -35,6 +35,8 @@ class _HomeScreenState extends State<HomeScreen> {
   double _maxPrice = 500;
   List<String> _selectedMaterials = [];
   List<String> _selectedColors = [];
+  List<Product> _popularProducts = [];
+  List<Product> _newArrivalProducts = [];
   // Hero carousel
   late final PageController _heroPageController;
   int _heroCurrentIndex = 0;
@@ -173,6 +175,16 @@ class _HomeScreenState extends State<HomeScreen> {
               setState(() {
                 _allFirebaseProducts = transformedStreamProducts;
                 _filteredProducts = List.from(_allFirebaseProducts);
+
+                // Update section-specific lists using Product model
+                _popularProducts = _allFirebaseProducts
+                    .where((p) => p['isPopular'] == true)
+                    .map<Product>((p) => Product.fromMap(p))
+                    .toList();
+                _newArrivalProducts = _allFirebaseProducts
+                    .where((p) => p['isNewArrival'] == true)
+                    .map<Product>((p) => Product.fromMap(p))
+                    .toList();
               });
 
               // Reload user favorites to update isFavorite status
@@ -194,6 +206,16 @@ class _HomeScreenState extends State<HomeScreen> {
       setState(() {
         _allFirebaseProducts = transformedProducts;
         _filteredProducts = List.from(_allFirebaseProducts);
+
+        // Update section-specific lists using Product model
+        _popularProducts = _allFirebaseProducts
+            .where((p) => p['isPopular'] == true)
+            .map<Product>((p) => Product.fromMap(p))
+            .toList();
+        _newArrivalProducts = _allFirebaseProducts
+            .where((p) => p['isNewArrival'] == true)
+            .map<Product>((p) => Product.fromMap(p))
+            .toList();
       });
     } catch (e) {
       if (!mounted) return;
@@ -913,9 +935,9 @@ class _HomeScreenState extends State<HomeScreen> {
                             crossAxisSpacing: 12,
                             mainAxisSpacing: 12,
                           ),
-                      itemCount: _filteredProducts.take(4).toList().length,
+                      itemCount: _popularProducts.take(4).toList().length,
                       itemBuilder: (context, index) {
-                        final products = _filteredProducts.take(4).toList();
+                        final products = _popularProducts.take(4).toList();
                         if (index >= products.length) {
                           return const SizedBox.shrink();
                         }
@@ -984,9 +1006,9 @@ class _HomeScreenState extends State<HomeScreen> {
                     child: ListView.builder(
                       physics: const NeverScrollableScrollPhysics(),
                       shrinkWrap: true,
-                      itemCount: _filteredProducts.take(4).length,
+                      itemCount: _newArrivalProducts.take(4).length,
                       itemBuilder: (context, index) {
-                        final product = _filteredProducts[index];
+                        final product = _newArrivalProducts[index];
                         return _buildNewArrivalItem(product);
                       },
                     ),
@@ -1053,7 +1075,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                 ),
                               ),
                               title: Text(
-                                product['name'],
+                                product['name'] ?? 'Unknown Product',
                                 style: const TextStyle(
                                   fontSize: 13,
                                   fontWeight: FontWeight.w600,
@@ -1063,7 +1085,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                 overflow: TextOverflow.ellipsis,
                               ),
                               subtitle: Text(
-                                '₱${product['price'].toStringAsFixed(2)}',
+                                '₱${(product['price'] ?? 0.0).toStringAsFixed(2)}',
                                 style: const TextStyle(
                                   fontSize: 12,
                                   color: Colors.grey,
@@ -1254,18 +1276,17 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildProductCard(Map<String, dynamic> product) {
-    final imageUrl = product['imageUrl'] ?? '';
+  Widget _buildProductCard(Product product) {
+    final imageUrl = product.imageUrl;
     if (imageUrl.isNotEmpty) {
-      print('🖼️  Product: ${product['name']} | URL: $imageUrl');
+      print('🖼️  Product: ${product.name} | URL: $imageUrl');
     }
 
     return GestureDetector(
       onTap: () {
-        final selectedProduct = Product.fromMap(product);
         Navigator.of(
           context,
-        ).push(slideRoute(ProductDetailScreen(product: selectedProduct)));
+        ).push(slideRoute(ProductDetailScreen(product: product)));
       },
       child: Container(
         decoration: BoxDecoration(
@@ -1298,7 +1319,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                     ),
                   ),
-                  if (product['discount'] != null)
+                  if (product.discount != null)
                     Positioned(
                       top: 8,
                       left: 8,
@@ -1312,7 +1333,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           borderRadius: BorderRadius.circular(6),
                         ),
                         child: Text(
-                          product['discount'],
+                          product.discount!,
                           style: const TextStyle(
                             color: Colors.white,
                             fontSize: 10,
@@ -1394,7 +1415,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    product['name'],
+                    product.name,
                     style: const TextStyle(
                       color: Color(0xFF1E3A8A),
                       fontSize: 14,
@@ -1405,7 +1426,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    '₱${product['price'].toStringAsFixed(2)}',
+                    '₱${product.price.toStringAsFixed(2)}',
                     style: const TextStyle(
                       color: Color(0xFF1E3A8A),
                       fontSize: 14,
@@ -1422,7 +1443,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                       const SizedBox(width: 4),
                       Text(
-                        '${product['rating']}',
+                        '${product.rating}',
                         style: const TextStyle(
                           color: Colors.grey,
                           fontSize: 12,
@@ -1439,14 +1460,13 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildNewArrivalItem(Map<String, dynamic> product) {
-    final imageUrl = product['imageUrl'] ?? '';
+  Widget _buildNewArrivalItem(Product product) {
+    final imageUrl = product.imageUrl;
     return GestureDetector(
       onTap: () {
-        final selectedProduct = Product.fromMap(product);
         Navigator.of(
           context,
-        ).push(slideRoute(ProductDetailScreen(product: selectedProduct)));
+        ).push(slideRoute(ProductDetailScreen(product: product)));
       },
       child: Container(
         margin: const EdgeInsets.only(bottom: 16),
@@ -1478,7 +1498,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    product['name'],
+                    product.name,
                     style: const TextStyle(
                       color: Color(0xFF1E3A8A),
                       fontSize: 14,
@@ -1492,7 +1512,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
-                        '₱${product['price'].toStringAsFixed(2)}',
+                        '₱${product.price.toStringAsFixed(2)}',
                         style: const TextStyle(
                           color: Color(0xFF1E3A8A),
                           fontSize: 14,
@@ -1508,7 +1528,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           ),
                           const SizedBox(width: 4),
                           Text(
-                            '${product['rating']}',
+                            '${product.rating}',
                             style: const TextStyle(
                               color: Colors.grey,
                               fontSize: 12,

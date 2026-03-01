@@ -4,6 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../services/firebase_service.dart';
 import '../../services/filebase_service.dart';
+import '../../models/product.dart';
+import '../../utils/slide_route.dart';
+import 'product_detail_screen.dart';
+import '../../widgets/authenticated_image.dart';
 import '../../providers/product_provider.dart';
 import 'filter_modal.dart';
 
@@ -15,8 +19,8 @@ class NewArrivalsScreen extends StatefulWidget {
 }
 
 class _NewArrivalsScreenState extends State<NewArrivalsScreen> {
-  late List<Map<String, dynamic>> _products;
-  late List<Map<String, dynamic>> _filteredProducts;
+  late List<Product> _products;
+  late List<Product> _filteredProducts;
   int _itemsToShow = 4;
   final int _itemsPerLoad = 4;
   final ScrollController _scrollController = ScrollController();
@@ -60,33 +64,37 @@ class _NewArrivalsScreenState extends State<NewArrivalsScreen> {
       _productsSubscription?.cancel();
 
       // Listen to real-time updates from Firebase
-      _productsSubscription = FirebaseService.streamListData('/products')
-          .listen(
-            (productsList) {
-              if (!mounted) return;
+      _productsSubscription = FirebaseService.streamListData('/products').listen(
+        (productsList) {
+          if (!mounted) return;
 
-              // Filter only new arrival products (isNewArrival == true)
-              final newArrivalProducts = productsList.where((product) {
-                return product['isNewArrival'] == true;
-              }).toList();
+          // Filter only new arrival products (isNewArrival == true)
+          final newArrivalProducts = productsList.where((product) {
+            return product['isNewArrival'] == true;
+          }).toList();
 
-              // Transform Firebase paths to full Filebase URLs
-              final transformedProducts = filebaseService
-                  .transformProductsWithFilebaseUrls(newArrivalProducts);
+          // Transform Firebase paths to full Filebase URLs
+          final transformedProducts = filebaseService
+              .transformProductsWithFilebaseUrls(newArrivalProducts);
 
-              setState(() {
-                _products = transformedProducts;
-                _filteredProducts = List.from(_products);
-                _isLoadingProducts = false;
-              });
-            },
-            onError: (error) {
-              print('Error loading new arrival products: $error');
-              setState(() {
-                _isLoadingProducts = false;
-              });
-            },
-          );
+          // Convert to Product models for robust mapping and to fix null errors
+          final convertedProducts = transformedProducts.map<Product>((map) {
+            return Product.fromMap(map);
+          }).toList();
+
+          setState(() {
+            _products = convertedProducts;
+            _filteredProducts = List.from(_products);
+            _isLoadingProducts = false;
+          });
+        },
+        onError: (error) {
+          print('Error loading new arrival products: $error');
+          setState(() {
+            _isLoadingProducts = false;
+          });
+        },
+      );
     } catch (e) {
       print('Error in _loadNewArrivalProducts: $e');
       setState(() {
@@ -133,14 +141,14 @@ class _NewArrivalsScreenState extends State<NewArrivalsScreen> {
     _filteredProducts = _products.where((product) {
       bool categoryMatch =
           _selectedCategories.isEmpty ||
-          _selectedCategories.contains(product['category']);
+          _selectedCategories.contains(product.category);
       bool priceMatch =
-          product['price'] >= _minPrice && product['price'] <= _maxPrice;
+          product.price >= _minPrice && product.price <= _maxPrice;
       bool materialMatch =
           _selectedMaterials.isEmpty ||
-          _selectedMaterials.contains(product['material']);
+          _selectedMaterials.contains(product.material);
       bool colorMatch =
-          _selectedColors.isEmpty || _selectedColors.contains(product['color']);
+          _selectedColors.isEmpty || _selectedColors.contains(product.color);
 
       return categoryMatch && priceMatch && materialMatch && colorMatch;
     }).toList();
@@ -240,7 +248,7 @@ class _NewArrivalsScreenState extends State<NewArrivalsScreen> {
     );
   }
 
-  Widget _buildNewArrivalItem(Map<String, dynamic> product) {
+  Widget _buildNewArrivalItem(Product product) {
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.all(16),
@@ -259,75 +267,80 @@ class _NewArrivalsScreenState extends State<NewArrivalsScreen> {
             ),
             child: ClipRRect(
               borderRadius: BorderRadius.circular(8),
-              child: _AuthenticatedArrivalImage(
-                imageUrl: product['imageUrl'] ?? '',
-              ),
+              child: AuthenticatedImage(imageUrl: product.imageUrl),
             ),
           ),
           const SizedBox(width: 16),
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  product['name'],
-                  style: const TextStyle(
-                    color: Color(0xFF1E3A8A),
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
+            child: GestureDetector(
+              onTap: () {
+                Navigator.of(
+                  context,
+                ).push(slideRoute(ProductDetailScreen(product: product)));
+              },
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    product.name,
+                    style: const TextStyle(
+                      color: Color(0xFF1E3A8A),
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
                   ),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      '₱${product['price'].toStringAsFixed(2)}',
-                      style: const TextStyle(
-                        color: Color(0xFF1E3A8A),
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
+                  const SizedBox(height: 8),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        '₱${product.price.toStringAsFixed(2)}',
+                        style: const TextStyle(
+                          color: Color(0xFF1E3A8A),
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
-                    ),
-                    Row(
-                      children: [
-                        const Icon(
-                          Icons.star,
-                          color: Color(0xFFFDB022),
-                          size: 14,
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          '${product['rating']}',
-                          style: const TextStyle(
-                            color: Colors.grey,
-                            fontSize: 12,
+                      Row(
+                        children: [
+                          const Icon(
+                            Icons.star,
+                            color: Color(0xFFFDB022),
+                            size: 14,
                           ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ],
+                          const SizedBox(width: 4),
+                          Text(
+                            '${product.rating}',
+                            style: const TextStyle(
+                              color: Colors.grey,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
           ),
           GestureDetector(
             onTap: () {
               try {
                 final productProvider = context.read<ProductProvider>();
-                final wasIsFavorite = product['isFavorite'] ?? false;
+                final wasIsFavorite = product.isFavorite;
 
                 // Optimistic update - update UI immediately
-                product['isFavorite'] = !wasIsFavorite;
+                product.isFavorite = !wasIsFavorite;
                 setState(() {});
 
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
                       content: Text(
-                        product['isFavorite']
+                        product.isFavorite
                             ? 'Added to favorites'
                             : 'Removed from favorites',
                       ),
@@ -337,22 +350,22 @@ class _NewArrivalsScreenState extends State<NewArrivalsScreen> {
                 }
 
                 // Update Firebase in background without awaiting
-                productProvider
-                    .toggleProductFavorite(product['id']?.toString() ?? '')
-                    .catchError((e) {
-                      // Rollback on error
-                      product['isFavorite'] = wasIsFavorite;
-                      if (mounted) {
-                        setState(() {});
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Failed to update favorites'),
-                            duration: Duration(seconds: 2),
-                          ),
-                        );
-                      }
-                      print('Error toggling favorite: $e');
-                    });
+                productProvider.toggleProductFavorite(product.id).catchError((
+                  e,
+                ) {
+                  // Rollback on error
+                  product.isFavorite = wasIsFavorite;
+                  if (mounted) {
+                    setState(() {});
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Failed to update favorites'),
+                        duration: Duration(seconds: 2),
+                      ),
+                    );
+                  }
+                  print('Error toggling favorite: $e');
+                });
               } catch (e) {
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
@@ -366,44 +379,13 @@ class _NewArrivalsScreenState extends State<NewArrivalsScreen> {
               }
             },
             child: Icon(
-              product['isFavorite'] ? Icons.favorite : Icons.favorite_border,
-              color: product['isFavorite'] ? Colors.red : Colors.grey,
+              product.isFavorite ? Icons.favorite : Icons.favorite_border,
+              color: product.isFavorite ? Colors.red : Colors.grey,
               size: 20,
             ),
           ),
         ],
       ),
-    );
-  }
-}
-
-/// Authenticated image widget for new arrivals that fetches images from Filebase
-class _AuthenticatedArrivalImage extends StatelessWidget {
-  final String imageUrl;
-
-  const _AuthenticatedArrivalImage({required this.imageUrl});
-
-  @override
-  Widget build(BuildContext context) {
-    return FutureBuilder<Uint8List?>(
-      future: FilebaseService().getImageBytes(imageUrl),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(
-            child: CircularProgressIndicator(
-              valueColor: AlwaysStoppedAnimation(Color(0xFFFDB022)),
-            ),
-          );
-        }
-
-        if (snapshot.hasData && snapshot.data != null) {
-          return Image.memory(snapshot.data!, fit: BoxFit.contain);
-        }
-
-        return const Center(
-          child: Icon(Icons.image_outlined, color: Colors.grey, size: 40),
-        );
-      },
     );
   }
 }
