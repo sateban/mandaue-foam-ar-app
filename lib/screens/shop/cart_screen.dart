@@ -72,6 +72,51 @@ class _CartScreenState extends State<CartScreen> {
     }
   }
 
+  Future<void> _confirmRemoveItem(
+    String id,
+    String itemName,
+    CartProvider cartProvider,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text(
+          'Remove Item',
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            color: Color(0xFF1E3A8A),
+          ),
+        ),
+        content: Text(
+          'Are you sure you want to remove "$itemName" from your cart?',
+          style: const TextStyle(fontSize: 14),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+            child: const Text('Remove'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      _removeItem(id, cartProvider);
+    }
+  }
+
   void _applyPromoCode(double subtotal) {
     // Mock promo code logic
     final code = _promoController.text.toUpperCase();
@@ -287,7 +332,8 @@ class _CartScreenState extends State<CartScreen> {
           ),
           // Delete button
           IconButton(
-            onPressed: () => _removeItem(item.id, cartProvider),
+            onPressed: () =>
+                _confirmRemoveItem(item.id, item.name, cartProvider),
             icon: const Icon(Icons.delete_outline),
             color: Colors.red,
           ),

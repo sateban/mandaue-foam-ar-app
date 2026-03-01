@@ -189,7 +189,8 @@ class MyApp extends StatelessWidget {
           '/new-arrivals': (context) => const NewArrivalsScreen(),
           '/categories': (context) => const CategoriesScreen(),
           '/item-category': (context) {
-            final categoryName = ModalRoute.of(context)?.settings.arguments as String?;
+            final categoryName =
+                ModalRoute.of(context)?.settings.arguments as String?;
             return ItemCategoryScreen(categoryName: categoryName ?? 'Products');
           },
           '/search-products': (context) => const SearchProductsScreen(),

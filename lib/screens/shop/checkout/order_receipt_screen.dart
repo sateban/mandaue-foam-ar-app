@@ -10,6 +10,7 @@ import 'package:share_plus/share_plus.dart';
 import '../../../../models/order.dart'; // Make sure this path is correct
 import '../../../../services/firebase_service.dart';
 import '../../../../providers/user_provider.dart';
+import '../../../../widgets/authenticated_image.dart';
 
 class OrderReceiptScreen extends StatefulWidget {
   const OrderReceiptScreen({super.key});
@@ -183,12 +184,19 @@ class _OrderReceiptScreenState extends State<OrderReceiptScreen> {
                                 decoration: BoxDecoration(
                                   color: Colors.grey[100],
                                   borderRadius: BorderRadius.circular(8),
-                                  image: DecorationImage(
-                                    image: AssetImage(
-                                      item.imageUrl,
-                                    ), // Need to handle Assets vs Network
+                                ),
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(8),
+                                  child: AuthenticatedImage(
+                                    imageUrl: item.imageUrl,
                                     fit: BoxFit.cover,
-                                    // Error builder if utilizing NetworkImage later
+                                    errorWidget: Center(
+                                      child: Icon(
+                                        Icons.image_outlined,
+                                        color: Colors.grey[400],
+                                        size: 24,
+                                      ),
+                                    ),
                                   ),
                                 ),
                               ),

@@ -46,42 +46,43 @@ class PaymentSuccessScreen extends StatelessWidget {
                 style: TextStyle(fontSize: 16, color: Colors.grey, height: 1.5),
               ),
               const SizedBox(height: 48),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: () {
-                    if (orderId != null) {
-                      Navigator.pushNamed(
-                        context,
-                        '/order-receipt',
-                        arguments: orderId,
-                      );
-                    } else {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text(
-                            'Order details not available for receipt.',
-                          ),
-                        ),
-                      );
-                    }
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.white,
-                    foregroundColor: const Color(0xFF1E3A8A),
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      side: const BorderSide(color: Color(0xFF1E3A8A)),
-                    ),
-                    elevation: 0,
-                  ),
-                  child: const Text(
-                    'View E-Receipt',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                  ),
-                ),
-              ),
+              // SizedBox(
+              //   width: double.infinity,
+              //   child: ElevatedButton(
+              //     onPressed: () {
+              //       if (orderId != null) {
+              //         Navigator.pushNamed(
+              //           context,
+              //           '/order-receipt',
+              //           arguments: orderId,
+              //         );
+              //       } else {
+              //         ScaffoldMessenger.of(context).showSnackBar(
+              //           const SnackBar(
+              //             content: Text(
+              //               'Order details not available for receipt.',
+              //             ),
+              //           ),
+              //         );
+              //       }
+              //     },
+              //     style: ElevatedButton.styleFrom(
+              //       backgroundColor: Colors.white,
+              //       foregroundColor: const Color(0xFF1E3A8A),
+              //       padding: const EdgeInsets.symmetric(vertical: 16),
+              //       shape: RoundedRectangleBorder(
+              //         borderRadius: BorderRadius.circular(12),
+              //         side: const BorderSide(color: Color(0xFF1E3A8A)),
+              //       ),
+              //       elevation: 0,
+              //     )
+              //     ,
+              //     child: const Text(
+              //       'View E-Receipt',
+              //       style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              //     ),
+              //   ),
+              // ),
               const SizedBox(height: 16),
               SizedBox(
                 width: double.infinity,

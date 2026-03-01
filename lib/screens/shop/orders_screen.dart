@@ -4,6 +4,7 @@ import '../../models/order.dart';
 import '../../services/firebase_service.dart';
 import '../../providers/user_provider.dart';
 import '../../widgets/empty_state_widget.dart';
+import '../../widgets/authenticated_image.dart';
 
 class OrdersScreen extends StatefulWidget {
   const OrdersScreen({super.key});
@@ -216,15 +217,19 @@ class _OrdersScreenState extends State<OrdersScreen>
                     decoration: BoxDecoration(
                       color: Colors.grey[100],
                       borderRadius: BorderRadius.circular(8),
-                      image: DecorationImage(
-                        image: AssetImage(
-                          item.imageUrl,
-                        ), // Assuming asset for now
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: AuthenticatedImage(
+                        imageUrl: item.imageUrl,
                         fit: BoxFit.cover,
-                        // Error builder to handle network images if we switch
-                        onError: (e, s) {
-                          // Handle error
-                        },
+                        errorWidget: Center(
+                          child: Icon(
+                            Icons.image_outlined,
+                            color: Colors.grey[400],
+                            size: 24,
+                          ),
+                        ),
                       ),
                     ),
                   ),
