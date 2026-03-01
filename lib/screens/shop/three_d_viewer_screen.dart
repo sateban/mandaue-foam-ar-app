@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:model_viewer_plus/model_viewer_plus.dart';
 
-enum LightingMode { front, leftSide }
+enum LightingMode { front, leftSide, rightSide }
 
 class ThreeDViewerScreen extends StatefulWidget {
   final String localPath;
@@ -81,12 +81,16 @@ class _ThreeDViewerScreenState extends State<ThreeDViewerScreen> {
               exposure: 1.0,
               orientation: _lightingMode == LightingMode.front
                   ? "0deg 0deg 0deg"
-                  : "0deg 0deg 0deg",
+                  : (_lightingMode == LightingMode.leftSide
+                        ? "0deg 90deg 0deg"
+                        : "0deg -90deg 0deg"),
               cameraOrbit: _lightingMode == LightingMode.front
                   ? "0deg 75deg auto"
-                  : "0deg 75deg auto",
+                  : (_lightingMode == LightingMode.leftSide
+                        ? "90deg 75deg auto"
+                        : "-90deg 75deg auto"),
               shadowIntensity: 1.0,
-              shadowSoftness: 0.5,
+              shadowSoftness: 1.0, // Maximum softness for ray-traced feel
             ),
           ),
 
@@ -129,7 +133,9 @@ class _ThreeDViewerScreenState extends State<ThreeDViewerScreen> {
                       Text(
                         _lightingMode == LightingMode.front
                             ? 'Frontal'
-                            : 'Side Light',
+                            : (_lightingMode == LightingMode.leftSide
+                                  ? 'Left Side'
+                                  : 'Right Side'),
                         style: TextStyle(
                           fontSize: 12,
                           color: const Color(0xFF1E3A8A).withValues(alpha: 0.7),
@@ -143,17 +149,25 @@ class _ThreeDViewerScreenState extends State<ThreeDViewerScreen> {
                     children: [
                       Expanded(
                         child: _buildLightingButton(
+                          mode: LightingMode.leftSide,
+                          icon: Icons.wb_twilight_rounded,
+                          label: 'Left',
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: _buildLightingButton(
                           mode: LightingMode.front,
-                          icon: Icons.wb_sunny_outlined,
+                          icon: Icons.wb_sunny_rounded,
                           label: 'Front',
                         ),
                       ),
-                      const SizedBox(width: 12),
+                      const SizedBox(width: 8),
                       Expanded(
                         child: _buildLightingButton(
-                          mode: LightingMode.leftSide,
-                          icon: Icons.wb_twilight_outlined,
-                          label: 'Left Side',
+                          mode: LightingMode.rightSide,
+                          icon: Icons.wb_twilight_rounded,
+                          label: 'Right',
                         ),
                       ),
                     ],
