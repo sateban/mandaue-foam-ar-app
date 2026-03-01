@@ -19,6 +19,7 @@ class ThreeDViewerScreen extends StatefulWidget {
 
 class _ThreeDViewerScreenState extends State<ThreeDViewerScreen> {
   LightingMode _lightingMode = LightingMode.front;
+  double _brightness = 1.0;
 
   @override
   Widget build(BuildContext context) {
@@ -41,27 +42,52 @@ class _ThreeDViewerScreenState extends State<ThreeDViewerScreen> {
       ),
       body: Stack(
         children: [
-          // 3D Viewer using model_viewer_plus for advanced lighting control
-          ModelViewer(
-            key: ValueKey('${widget.localPath}_${_lightingMode.index}'),
-            src: 'file://${widget.localPath}',
-            alt: widget.productName,
-            autoRotate: true,
-            cameraControls: true,
-            backgroundColor: Colors.white,
-            // Lighting simulation trick:
-            // Front: Default orientation and camera
-            // Left Side: Rotate model 90deg and compensate camera to look at front again.
-            // Since the environment lighting is fixed in the world, the light now hits the side.
-            orientation: _lightingMode == LightingMode.front
-                ? "0deg 0deg 0deg"
-                : "0deg 0deg 0deg",
-            cameraOrbit: _lightingMode == LightingMode.front
-                ? "0deg 75deg auto"
-                : "0deg 75deg auto",
-            exposure: _lightingMode == LightingMode.front ? 1.0 : 0.8,
-            shadowIntensity: 1.0,
-            shadowSoftness: 0.5,
+          // Fixed World Background (unaffected by brightness)
+          Positioned.fill(child: Container(color: Colors.white)),
+
+          // 3D Viewer with Realtime Brightness via ColorFilter
+          ColorFiltered(
+            colorFilter: ColorFilter.matrix([
+              _brightness,
+              0,
+              0,
+              0,
+              0,
+              0,
+              _brightness,
+              0,
+              0,
+              0,
+              0,
+              0,
+              _brightness,
+              0,
+              0,
+              0,
+              0,
+              0,
+              1,
+              0,
+            ]),
+            child: ModelViewer(
+              key: ValueKey('${widget.localPath}_${_lightingMode.index}'),
+              src: 'file://${widget.localPath}',
+              alt: widget.productName,
+              autoRotate: true,
+              cameraControls: true,
+              backgroundColor:
+                  Colors.transparent, // Important: keep underlying pixels clear
+              // Keep base exposure at 1.0; the ColorFilter handles the intensity
+              exposure: 1.0,
+              orientation: _lightingMode == LightingMode.front
+                  ? "0deg 0deg 0deg"
+                  : "0deg 0deg 0deg",
+              cameraOrbit: _lightingMode == LightingMode.front
+                  ? "0deg 75deg auto"
+                  : "0deg 75deg auto",
+              shadowIntensity: 1.0,
+              shadowSoftness: 0.5,
+            ),
           ),
 
           // Tools Panel
@@ -133,6 +159,60 @@ class _ThreeDViewerScreenState extends State<ThreeDViewerScreen> {
                     ],
                   ),
                   const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      const Icon(
+                        Icons.brightness_6,
+                        color: Color(0xFF1E3A8A),
+                        size: 16,
+                      ),
+                      const SizedBox(width: 8),
+                      const Text(
+                        'Brightness',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Color(0xFF1E3A8A),
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const Spacer(),
+                      Text(
+                        '${(_brightness * 100).toInt()}%',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: const Color(0xFF1E3A8A).withValues(alpha: 0.7),
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                  SliderTheme(
+                    data: SliderTheme.of(context).copyWith(
+                      trackHeight: 4,
+                      thumbShape: const RoundSliderThumbShape(
+                        enabledThumbRadius: 6,
+                      ),
+                      overlayShape: const RoundSliderOverlayShape(
+                        overlayRadius: 14,
+                      ),
+                      activeTrackColor: const Color(0xFF1E3A8A),
+                      inactiveTrackColor: const Color(
+                        0xFF1E3A8A,
+                      ).withValues(alpha: 0.1),
+                      thumbColor: const Color(0xFF1E3A8A),
+                    ),
+                    child: Slider(
+                      value: _brightness,
+                      min: 0.1,
+                      max: 1.0,
+                      onChanged: (value) {
+                        setState(() {
+                          _brightness = value;
+                        });
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: 8),
                   const Text(
                     'Pinch to zoom • Drag to rotate • Two fingers to pan',
                     style: TextStyle(fontSize: 12, color: Colors.grey),
