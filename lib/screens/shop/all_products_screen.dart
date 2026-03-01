@@ -468,7 +468,15 @@ class _AuthenticatedProductImage extends StatelessWidget {
         }
 
         if (snapshot.hasData && snapshot.data != null) {
-          return Image.memory(snapshot.data!, fit: BoxFit.contain);
+          return Center(
+            child: Image.memory(
+              snapshot.data!,
+              fit: BoxFit.contain,
+              alignment: Alignment.center,
+              width: double.infinity,
+              height: double.infinity,
+            ),
+          );
         }
 
         return const Center(
