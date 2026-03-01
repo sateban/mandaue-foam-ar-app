@@ -77,11 +77,14 @@ class _AuthenticatedImageState extends State<AuthenticatedImage> {
               );
         }
 
-        return Image.memory(
-          snapshot.data!,
-          fit: widget.fit,
-          width: widget.width,
-          height: widget.height,
+        return Center(
+          child: Image.memory(
+            snapshot.data!,
+            fit: widget.fit,
+            width: widget.width ?? double.infinity,
+            height: widget.height ?? double.infinity,
+            alignment: Alignment.center,
+          ),
         );
       },
     );

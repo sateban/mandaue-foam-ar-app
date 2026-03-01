@@ -1,13 +1,34 @@
 import 'package:flutter/material.dart';
 import '../../models/order.dart';
+import '../../widgets/authenticated_image.dart';
 
 class TrackOrderScreen extends StatelessWidget {
   final Order order;
 
   const TrackOrderScreen({required this.order, super.key});
 
+  // Determine which step index is the "active" (current) step (0-based)
+  int get _activeStepIndex {
+    switch (order.status) {
+      case OrderStatus.pending:
+        return 0;
+      case OrderStatus.processing:
+        return 1;
+      case OrderStatus.shipped:
+        return 2;
+      case OrderStatus.delivered:
+        return 3;
+      case OrderStatus.cancelled:
+        return 0;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final firstItem = order.items.isNotEmpty ? order.items.first : null;
+    final estimatedDelivery =
+        order.estimatedDelivery ?? order.orderDate.add(const Duration(days: 4));
+
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
@@ -32,158 +53,36 @@ class TrackOrderScreen extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Order Info Card
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.grey[50],
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.grey[200]!),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text(
-                        'Order Number',
-                        style: TextStyle(fontSize: 14, color: Colors.grey),
-                      ),
-                      Text(
-                        order.orderNumber,
-                        style: const TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: Color(0xFF1E3A8A),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text(
-                        'Tracking Number',
-                        style: TextStyle(fontSize: 14, color: Colors.grey),
-                      ),
-                      Text(
-                        order.trackingNumber ?? 'N/A',
-                        style: const TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: Color(0xFF1E3A8A),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text(
-                        'Status',
-                        style: TextStyle(fontSize: 14, color: Colors.grey),
-                      ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: _getStatusColor(order.status),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Text(
-                          _getStatusText(order.status),
-                          style: const TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.white,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 24),
-
-            // Tracking Timeline
-            const Text(
-              'Tracking History',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w600,
-                color: Color(0xFF1E3A8A),
-              ),
-            ),
-            const SizedBox(height: 16),
-
-            _buildTrackingStep(
-              'Order Placed',
-              'Your order has been placed successfully',
-              order.orderDate,
-              isCompleted: true,
-              isFirst: true,
-            ),
-            _buildTrackingStep(
-              'Processing',
-              'We are preparing your order',
-              order.orderDate.add(const Duration(hours: 2)),
-              isCompleted: order.status != OrderStatus.pending,
-            ),
-            _buildTrackingStep(
-              'Shipped',
-              'Your order is on the way',
-              order.orderDate.add(const Duration(days: 1)),
-              isCompleted: order.status == OrderStatus.delivered,
-            ),
-            _buildTrackingStep(
-              'Delivered',
-              'Order has been delivered',
-              order.orderDate.add(const Duration(days: 3)),
-              isCompleted: order.status == OrderStatus.delivered,
-              isLast: true,
-            ),
-
-            const SizedBox(height: 24),
-
-            // Order Items
-            const Text(
-              'Order Items',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w600,
-                color: Color(0xFF1E3A8A),
-              ),
-            ),
-            const SizedBox(height: 16),
-
-            ...order.items.map(
-              (item) => Container(
-                margin: const EdgeInsets.only(bottom: 12),
+            // ── Product Card (first item) ──────────────────────────────────
+            if (firstItem != null) ...[
+              Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: Colors.grey[50],
+                  color: Colors.grey[100],
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.grey[200]!),
                 ),
                 child: Row(
                   children: [
                     Container(
-                      width: 60,
-                      height: 60,
+                      width: 80,
+                      height: 80,
                       decoration: BoxDecoration(
                         color: Colors.grey[200],
                         borderRadius: BorderRadius.circular(8),
                       ),
-                      child: Icon(
-                        Icons.chair_outlined,
-                        size: 30,
-                        color: Colors.grey[400],
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: AuthenticatedImage(
+                          imageUrl: firstItem.imageUrl,
+                          fit: BoxFit.contain,
+                          errorWidget: Center(
+                            child: Icon(
+                              Icons.image_outlined,
+                              color: Colors.grey[400],
+                              size: 28,
+                            ),
+                          ),
+                        ),
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -192,29 +91,206 @@ class TrackOrderScreen extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            item.productName,
+                            firstItem.productName,
                             style: const TextStyle(
                               fontSize: 16,
-                              fontWeight: FontWeight.w600,
+                              fontWeight: FontWeight.bold,
                               color: Color(0xFF1E3A8A),
                             ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
                           ),
+                          const SizedBox(height: 4),
                           Text(
-                            'Qty: ${item.quantity}',
+                            'Qty: ${firstItem.quantity.toString().padLeft(2, '0')}',
                             style: TextStyle(
                               fontSize: 14,
                               color: Colors.grey[600],
                             ),
                           ),
+                          const SizedBox(height: 4),
+                          Text(
+                            '₱${firstItem.price.toStringAsFixed(2)}',
+                            style: const TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF1E3A8A),
+                            ),
+                          ),
                         ],
                       ),
                     ),
-                    Text(
-                      '₱${item.price.toStringAsFixed(2)}',
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF1E3A8A),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 24),
+            ],
+
+            // ── Order Details ──────────────────────────────────────────────
+            const Text(
+              'Order Details',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF1E3A8A),
+              ),
+            ),
+            const SizedBox(height: 12),
+            _buildDetailRow('Order ID', order.orderNumber),
+            const SizedBox(height: 8),
+            _buildDetailRow(
+              'Expected Delivery Date',
+              _formatDisplayDate(estimatedDelivery),
+              valueColor: const Color(0xFF1E3A8A),
+            ),
+            const SizedBox(height: 28),
+
+            // ── Order Status Timeline ──────────────────────────────────────
+            const Text(
+              'Order Status',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF1E3A8A),
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            _buildStatusTimeline(),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDetailRow(String label, String value, {Color? valueColor}) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(label, style: const TextStyle(fontSize: 14, color: Colors.grey)),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+            color: valueColor ?? const Color(0xFF1E3A8A),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildStatusTimeline() {
+    final steps = [
+      _TrackStep(
+        title: 'Order placed',
+        date: order.orderDate,
+        icon: Icons.inventory_2_outlined,
+      ),
+      _TrackStep(
+        title: 'In progress',
+        date: order.orderDate.add(const Duration(hours: 1, minutes: 15)),
+        icon: Icons.access_time_outlined,
+      ),
+      _TrackStep(
+        title: 'Shipped',
+        date: order.orderDate.add(const Duration(days: 2)),
+        icon: Icons.local_shipping_outlined,
+        isExpected:
+            order.status == OrderStatus.pending ||
+            order.status == OrderStatus.processing,
+      ),
+      _TrackStep(
+        title: 'Order delivered',
+        date:
+            order.estimatedDelivery ??
+            order.orderDate.add(const Duration(days: 4)),
+        icon: Icons.inventory_outlined,
+        isExpected: order.status != OrderStatus.delivered,
+      ),
+    ];
+
+    return Column(
+      children: List.generate(steps.length, (index) {
+        final step = steps[index];
+        // A step is "done" if its index <= activeStepIndex
+        final isDone = index <= _activeStepIndex;
+        final isActive = index == _activeStepIndex;
+        final isLast = index == steps.length - 1;
+
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Timeline column
+            SizedBox(
+              width: 32,
+              child: Column(
+                children: [
+                  // Circle
+                  Container(
+                    width: 28,
+                    height: 28,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: isActive
+                          ? const Color(0xFF4CAF50)
+                          : isDone
+                          ? Colors.grey[400]
+                          : Colors.grey[200],
+                      border: isDone && !isActive
+                          ? Border.all(color: Colors.grey[400]!, width: 1)
+                          : null,
+                    ),
+                    child: Icon(Icons.check, color: Colors.white, size: 16),
+                  ),
+                  // Connector line
+                  if (!isLast)
+                    Container(width: 2, height: 56, color: Colors.grey[300]),
+                ],
+              ),
+            ),
+            const SizedBox(width: 12),
+
+            // Content
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            step.title,
+                            style: const TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF1E3A8A),
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            step.isExpected
+                                ? 'Expected on ${_formatDisplayDate(step.date)}'
+                                : _formatFullDateTime(step.date),
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: Colors.grey[600],
+                            ),
+                          ),
+                          if (!isLast) const SizedBox(height: 24),
+                        ],
+                      ),
+                    ),
+                    // Step icon on the right
+                    Padding(
+                      padding: const EdgeInsets.only(top: 2),
+                      child: Icon(
+                        step.icon,
+                        color: const Color(0xFF1E3A8A),
+                        size: 22,
                       ),
                     ),
                   ],
@@ -222,111 +298,65 @@ class TrackOrderScreen extends StatelessWidget {
               ),
             ),
           ],
-        ),
-      ),
+        );
+      }),
     );
   }
 
-  Widget _buildTrackingStep(
-    String title,
-    String description,
-    DateTime date, {
-    bool isCompleted = false,
-    bool isFirst = false,
-    bool isLast = false,
-  }) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Column(
-          children: [
-            if (!isFirst)
-              Container(
-                width: 2,
-                height: 20,
-                color: isCompleted ? const Color(0xFFFDB022) : Colors.grey[300],
-              ),
-            Container(
-              width: 24,
-              height: 24,
-              decoration: BoxDecoration(
-                color: isCompleted ? const Color(0xFFFDB022) : Colors.grey[300],
-                shape: BoxShape.circle,
-              ),
-              child: isCompleted
-                  ? const Icon(Icons.check, color: Colors.white, size: 16)
-                  : null,
-            ),
-            if (!isLast)
-              Container(
-                width: 2,
-                height: 40,
-                color: isCompleted ? const Color(0xFFFDB022) : Colors.grey[300],
-              ),
-          ],
-        ),
-        const SizedBox(width: 16),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                title,
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: isCompleted ? const Color(0xFF1E3A8A) : Colors.grey,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                description,
-                style: TextStyle(fontSize: 14, color: Colors.grey[600]),
-              ),
-              if (isCompleted)
-                Text(
-                  _formatDate(date),
-                  style: TextStyle(fontSize: 12, color: Colors.grey[500]),
-                ),
-              if (!isLast) const SizedBox(height: 8),
-            ],
-          ),
-        ),
-      ],
-    );
+  String _formatDisplayDate(DateTime date) {
+    const months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
+    return '${date.day} ${months[date.month - 1]}, ${date.year}';
   }
 
-  Color _getStatusColor(OrderStatus status) {
-    switch (status) {
-      case OrderStatus.pending:
-        return Colors.orange;
-      case OrderStatus.processing:
-        return Colors.blue;
-      case OrderStatus.shipped:
-        return Colors.purple;
-      case OrderStatus.delivered:
-        return Colors.green;
-      case OrderStatus.cancelled:
-        return Colors.red;
-    }
+  String _formatFullDateTime(DateTime date) {
+    const months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
+    final hour = date.hour > 12
+        ? date.hour - 12
+        : date.hour == 0
+        ? 12
+        : date.hour;
+    final amPm = date.hour >= 12 ? 'PM' : 'AM';
+    final minute = date.minute.toString().padLeft(2, '0');
+    return '${date.day} ${months[date.month - 1]}, ${date.year}  |  $hour:$minute $amPm';
   }
+}
 
-  String _getStatusText(OrderStatus status) {
-    switch (status) {
-      case OrderStatus.pending:
-        return 'Pending';
-      case OrderStatus.processing:
-        return 'Processing';
-      case OrderStatus.shipped:
-        return 'Shipped';
-      case OrderStatus.delivered:
-        return 'Delivered';
-      case OrderStatus.cancelled:
-        return 'Cancelled';
-    }
-  }
+class _TrackStep {
+  final String title;
+  final DateTime date;
+  final IconData icon;
+  final bool isExpected;
 
-  String _formatDate(DateTime date) {
-    return '${date.day}/${date.month}/${date.year} ${date.hour}:${date.minute.toString().padLeft(2, '0')}';
-  }
+  const _TrackStep({
+    required this.title,
+    required this.date,
+    required this.icon,
+    this.isExpected = false,
+  });
 }
