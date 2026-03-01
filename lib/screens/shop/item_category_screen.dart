@@ -25,7 +25,8 @@ class _ItemCategoryScreenState extends State<ItemCategoryScreen> {
   final int _itemsPerLoad = 4;
   List<String> _selectedCategories = [];
   double _minPrice = 0;
-  double _maxPrice = 500;
+  double _maxPrice =
+      999999; // high sentinel — will be narrowed after products load
   List<String> _selectedMaterials = [];
   List<String> _selectedColors = [];
   StreamSubscription<List<Map<String, dynamic>>>? _productsSubscription;
@@ -60,16 +61,6 @@ class _ItemCategoryScreenState extends State<ItemCategoryScreen> {
         _isLoadingProducts = true;
       });
 
-      // Check cache first
-      if (_categoryCache.containsKey(widget.categoryName)) {
-        setState(() {
-          _allProducts = _categoryCache[widget.categoryName]!;
-          _filterProducts();
-          _isLoadingProducts = false;
-        });
-        return;
-      }
-
       // Cancel previous subscription if it exists
       _productsSubscription?.cancel();
 
@@ -83,9 +74,13 @@ class _ItemCategoryScreenState extends State<ItemCategoryScreen> {
               .transformProductsWithFilebaseUrls(productsList);
 
           // Convert Firebase products to Product model and filter by category
+          // Use case-insensitive comparison in case Firebase stores a different case
+          final categoryLower = widget.categoryName.toLowerCase();
           final convertedProducts = transformedList
               .where(
-                (productMap) => productMap['category'] == widget.categoryName,
+                (productMap) =>
+                    (productMap['category'] as String? ?? '').toLowerCase() ==
+                    categoryLower,
               )
               .map((productMap) {
                 return Product.fromMap(productMap);
@@ -96,6 +91,16 @@ class _ItemCategoryScreenState extends State<ItemCategoryScreen> {
             _allProducts = convertedProducts;
             // Cache the results
             _categoryCache[widget.categoryName] = convertedProducts;
+            // Auto-adjust max price ceiling to the highest product price
+            if (convertedProducts.isNotEmpty) {
+              final highestPrice = convertedProducts
+                  .map((p) => p.price)
+                  .reduce((a, b) => a > b ? a : b);
+              if (_maxPrice == 999999) {
+                // Only set on first load (before user touches the filter)
+                _maxPrice = (highestPrice * 1.5).ceilToDouble();
+              }
+            }
             _filterProducts();
             _isLoadingProducts = false;
           });
@@ -132,7 +137,8 @@ class _ItemCategoryScreenState extends State<ItemCategoryScreen> {
       // Only allow the current category to be selected
       _selectedCategories = [widget.categoryName];
       _minPrice = minPrice;
-      _maxPrice = maxPrice;
+      // If the modal was cleared (maxPrice == 500), treat it as "no price filter"
+      _maxPrice = (maxPrice == 500 && minPrice == 0) ? 999999 : maxPrice;
       _selectedMaterials = materials;
       _selectedColors = colors;
       _itemsToShow = 4; // Reset pagination when filters change
@@ -141,11 +147,16 @@ class _ItemCategoryScreenState extends State<ItemCategoryScreen> {
   }
 
   void _filterProducts() {
+    final categoryLower = widget.categoryName.toLowerCase();
+    // Price is only filtered when the user has explicitly set a range
+    // (sentinel value 999999 means "no filter applied yet")
+    final bool hasPriceFilter = _maxPrice < 999999;
     _filteredProducts = _allProducts.where((product) {
-      // Category is always the current category
-      bool categoryMatch = product.category == widget.categoryName;
+      // Category is always the current category (case-insensitive)
+      bool categoryMatch = product.category.toLowerCase() == categoryLower;
       bool priceMatch =
-          product.price >= _minPrice && product.price <= _maxPrice;
+          !hasPriceFilter ||
+          (product.price >= _minPrice && product.price <= _maxPrice);
       bool materialMatch =
           _selectedMaterials.isEmpty ||
           _selectedMaterials.contains(product.material);
