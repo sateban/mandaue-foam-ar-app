@@ -120,8 +120,10 @@ class _SignInScreenState extends State<SignInScreen> {
     setState(() => _isLoading = true);
 
     try {
-      print('DEBUG: Attempting Firebase sign-in with: ${_emailController.text}');
-      
+      print(
+        'DEBUG: Attempting Firebase sign-in with: ${_emailController.text}',
+      );
+
       final User? user = await FirebaseService.signInWithEmailPassword(
         email: _emailController.text,
         password: _passwordController.text,
@@ -131,7 +133,7 @@ class _SignInScreenState extends State<SignInScreen> {
 
       if (user != null) {
         print('DEBUG: Sign-in successful for user: ${user.email}');
-        
+
         // Show success message
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -142,28 +144,28 @@ class _SignInScreenState extends State<SignInScreen> {
         );
 
         // Navigate to home screen
-        Navigator.pushNamedAndRemoveUntil(
-          context,
-          '/home',
-          (route) => false,
-        );
+        Navigator.pushNamedAndRemoveUntil(context, '/home', (route) => false);
       }
     } on FirebaseAuthException catch (e) {
       if (!mounted) return;
 
-      print('DEBUG: FirebaseAuthException - Code: ${e.code}, Message: ${e.message}');
+      print(
+        'DEBUG: FirebaseAuthException - Code: ${e.code}, Message: ${e.message}',
+      );
 
       String errorMessage = 'Authentication error';
-      
+
       switch (e.code) {
         case 'user-not-found':
-          errorMessage = 'No account found with this email address. Please sign up first.';
+          errorMessage =
+              'No account found with this email address. Please sign up first.';
           break;
         case 'wrong-password':
           errorMessage = 'Incorrect password. Please try again.';
           break;
         case 'invalid-credential':
-          errorMessage = 'Invalid email or password. Please check and try again.';
+          errorMessage =
+              'Invalid email or password. Please check and try again.';
           break;
         case 'user-disabled':
           errorMessage = 'This account has been disabled. Contact support.';
@@ -175,7 +177,8 @@ class _SignInScreenState extends State<SignInScreen> {
           errorMessage = 'Email/password authentication is not enabled.';
           break;
         default:
-          errorMessage = e.message ?? 'Authentication failed. Please try again.';
+          errorMessage =
+              e.message ?? 'Authentication failed. Please try again.';
       }
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -194,7 +197,9 @@ class _SignInScreenState extends State<SignInScreen> {
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: const Text('An unexpected error occurred. Please try again.'),
+          content: const Text(
+            'An unexpected error occurred. Please try again.',
+          ),
           duration: const Duration(seconds: 4),
           backgroundColor: Colors.red,
         ),
@@ -258,7 +263,7 @@ class _SignInScreenState extends State<SignInScreen> {
         try {
           // Authenticate with Firebase using Google credentials
           print('DEBUG: Authenticating with Firebase using Google credentials');
-          
+
           final User? user = await FirebaseService.signInWithGoogle(googleUser);
 
           if (user != null) {
@@ -287,7 +292,7 @@ class _SignInScreenState extends State<SignInScreen> {
 
           // Fallback: If authentication fails, just navigate anyway
           print('DEBUG: Google authentication returned null user');
-          
+
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
@@ -296,7 +301,7 @@ class _SignInScreenState extends State<SignInScreen> {
                 backgroundColor: Colors.orange,
               ),
             );
-            
+
             Navigator.pushNamedAndRemoveUntil(
               context,
               '/home',
@@ -306,9 +311,9 @@ class _SignInScreenState extends State<SignInScreen> {
           return;
         } catch (e) {
           print('DEBUG: Error during Firebase Google authentication: $e');
-          
+
           if (!mounted) return;
-          
+
           // Show error but allow fallback navigation
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -317,7 +322,7 @@ class _SignInScreenState extends State<SignInScreen> {
               backgroundColor: Colors.red,
             ),
           );
-          
+
           setState(() => _isLoading = false);
           return;
         }
@@ -698,12 +703,9 @@ class _SignInScreenState extends State<SignInScreen> {
                             ),
                             TextButton(
                               onPressed: () {
-                                Navigator.push(
+                                Navigator.pushNamed(
                                   context,
-                                  MaterialPageRoute(
-                                    builder: (context) =>
-                                        const ForgotPasswordScreen(),
-                                  ),
+                                  '/forgot-password',
                                 );
                               },
                               child: const Text(

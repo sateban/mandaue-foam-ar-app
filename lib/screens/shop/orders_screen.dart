@@ -391,30 +391,61 @@ class _OrdersScreenState extends State<OrdersScreen>
             ),
           ),
           const SizedBox(width: 8),
-          // Write Review button
-          ElevatedButton(
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) =>
-                      WriteReviewScreen(item: item, orderId: order.id),
+          // Buttons
+          Column(
+            children: [
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) =>
+                          WriteReviewScreen(item: item, orderId: order.id),
+                    ),
+                  );
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFFDB022),
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 8,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(20),
+                  ),
                 ),
-              );
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFFDB022),
-              foregroundColor: Colors.white,
-              elevation: 0,
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20),
+                child: const Text(
+                  'Write Review',
+                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+                ),
               ),
-            ),
-            child: const Text(
-              'Write Review',
-              style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-            ),
+              const SizedBox(height: 4),
+              TextButton(
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => TrackOrderScreen(order: order),
+                    ),
+                  );
+                },
+                style: TextButton.styleFrom(
+                  padding: EdgeInsets.zero,
+                  minimumSize: const Size(0, 0),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                child: const Text(
+                  'View Status',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: Color(0xFF1E3A8A),
+                    decoration: TextDecoration.underline,
+                  ),
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -426,14 +457,24 @@ class _OrdersScreenState extends State<OrdersScreen>
   Widget _buildCancelledList(List<Order> orders) {
     if (orders.isEmpty) {
       return _buildEmptyState(
-        customIconWidget: const Icon(
-          Icons.close,
-          color: Color(0xFFFDB022),
-          size: 56,
+        customIconWidget: Container(
+          width: 120,
+          height: 120,
+          decoration: BoxDecoration(
+            color: const Color(0xFFFDB022).withOpacity(0.1),
+            shape: BoxShape.circle,
+          ),
+          child: const Center(
+            child: Icon(
+              Icons.close_rounded,
+              color: Color(0xFFFDB022),
+              size: 64,
+            ),
+          ),
         ),
-        title: 'No Cancelled Orders',
+        title: 'Cancel Order empty',
         message:
-            "You haven't cancelled any orders. Ready to explore something new?",
+            "Good news! You don't have any cancelled orders. Everything is on track!",
         buttonText: 'Discover More',
         onButton: () => _navigateToShop(),
       );
@@ -523,29 +564,60 @@ class _OrdersScreenState extends State<OrdersScreen>
             ),
           ),
           const SizedBox(width: 8),
-          // Re-Order button
-          ElevatedButton(
-            onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('${item.productName} added to cart'),
+          // Buttons
+          Column(
+            children: [
+              ElevatedButton(
+                onPressed: () {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('${item.productName} added to cart'),
+                      backgroundColor: const Color(0xFFFDB022),
+                    ),
+                  );
+                },
+                style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFFFDB022),
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 8,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(20),
+                  ),
                 ),
-              );
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFFDB022),
-              foregroundColor: Colors.white,
-              elevation: 0,
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20),
+                child: const Text(
+                  'Re-Order',
+                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+                ),
               ),
-            ),
-            child: const Text(
-              'Re-Order',
-              style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-            ),
+              const SizedBox(height: 4),
+              TextButton(
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => TrackOrderScreen(order: order),
+                    ),
+                  );
+                },
+                style: TextButton.styleFrom(
+                  padding: EdgeInsets.zero,
+                  minimumSize: const Size(0, 0),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                child: const Text(
+                  'View Status',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: Color(0xFF1E3A8A),
+                    decoration: TextDecoration.underline,
+                  ),
+                ),
+              ),
+            ],
           ),
         ],
       ),

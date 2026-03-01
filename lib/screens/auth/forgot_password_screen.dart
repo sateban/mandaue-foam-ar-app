@@ -43,7 +43,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
 
     try {
       print('DEBUG: Sending password reset email to: ${_emailController.text}');
-      
+
       await FirebaseService.sendPasswordResetEmail(_emailController.text);
 
       if (!mounted) return;
@@ -55,7 +55,9 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
       // Show success message
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Password reset link sent to ${_emailController.text}. Please check your email.'),
+          content: Text(
+            'Password reset link sent to ${_emailController.text}. Please check your email.',
+          ),
           duration: const Duration(seconds: 3),
           backgroundColor: Colors.green,
         ),
@@ -70,10 +72,12 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     } on FirebaseAuthException catch (e) {
       if (!mounted) return;
 
-      print('DEBUG: FirebaseAuthException - Code: ${e.code}, Message: ${e.message}');
+      print(
+        'DEBUG: FirebaseAuthException - Code: ${e.code}, Message: ${e.message}',
+      );
 
       String errorMessage = 'Password reset failed';
-      
+
       switch (e.code) {
         case 'user-not-found':
           errorMessage = 'No account found with this email address.';
@@ -85,7 +89,8 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
           errorMessage = 'Too many requests. Please try again later.';
           break;
         default:
-          errorMessage = e.message ?? 'Password reset failed. Please try again.';
+          errorMessage =
+              e.message ?? 'Password reset failed. Please try again.';
       }
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -104,7 +109,9 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: const Text('An unexpected error occurred. Please try again.'),
+          content: const Text(
+            'An unexpected error occurred. Please try again.',
+          ),
           duration: const Duration(seconds: 4),
           backgroundColor: Colors.red,
         ),
@@ -137,11 +144,41 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
             ),
 
             // Header
-            const Padding(
-              padding: EdgeInsets.all(24.0),
+            Padding(
+              padding: const EdgeInsets.all(24.0),
               child: Column(
                 children: [
-                  Text(
+                  // Logo
+                  Row(
+                    children: [
+                      Image.asset(
+                        'assets/images/logo.png',
+                        width: 40,
+                        height: 40,
+                        errorBuilder: (context, error, stackTrace) {
+                          return Container(
+                            width: 40,
+                            height: 40,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFDB022),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                          );
+                        },
+                      ),
+                      const SizedBox(width: 8),
+                      const Text(
+                        'mandauefoam',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 20,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 40),
+                  const Text(
                     'Forgot Your Password?',
                     style: TextStyle(
                       color: Colors.white,
@@ -149,8 +186,8 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                       fontWeight: FontWeight.bold,
                     ),
                   ),
-                  SizedBox(height: 16),
-                  Text(
+                  const SizedBox(height: 16),
+                  const Text(
                     'Provide your email so we can help you reset your password.',
                     textAlign: TextAlign.center,
                     style: TextStyle(color: Colors.white70, fontSize: 16),
@@ -190,9 +227,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                         TextField(
                           controller: _emailController,
                           keyboardType: TextInputType.emailAddress,
-                          style: const TextStyle(
-                            color: Colors.black,
-                          ),
+                          style: const TextStyle(color: Colors.black),
                           decoration: InputDecoration(
                             hintText: 'Enter your email',
                             hintStyle: const TextStyle(color: Colors.grey),

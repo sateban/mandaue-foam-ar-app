@@ -26,6 +26,7 @@ import 'screens/auth/account_setup_success_screen.dart';
 import 'screens/auth/password_reset_success_screen.dart';
 import 'screens/auth/sign_in_screen.dart';
 import 'screens/auth/sign_up_screen.dart';
+import 'screens/auth/forgot_password_screen.dart';
 import 'screens/shop/checkout/shipping_address_screen.dart';
 import 'screens/shop/checkout/address_list_screen.dart';
 import 'screens/shop/checkout/add_address_screen.dart';
@@ -175,6 +176,7 @@ class MyApp extends StatelessWidget {
               const AccountSetupSuccessScreenStateful(),
           '/password-reset-success': (context) =>
               const PasswordResetSuccessScreen(),
+          '/forgot-password': (context) => const ForgotPasswordScreen(),
 
           // Main app routes
           '/home': (context) => const ShopShell(),

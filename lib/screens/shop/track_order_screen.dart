@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../../models/order.dart';
 import '../../widgets/authenticated_image.dart';
+import 'orders/completed_order_screen.dart';
+import 'orders/cancelled_order_screen.dart';
 
 class TrackOrderScreen extends StatelessWidget {
   final Order order;
@@ -25,6 +27,13 @@ class TrackOrderScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (order.status == OrderStatus.delivered) {
+      return CompletedOrderScreen(order: order);
+    }
+    if (order.status == OrderStatus.cancelled) {
+      return CancelledOrderScreen(order: order);
+    }
+
     final firstItem = order.items.isNotEmpty ? order.items.first : null;
     final estimatedDelivery =
         order.estimatedDelivery ?? order.orderDate.add(const Duration(days: 4));
