@@ -54,6 +54,7 @@ import 'providers/cart_provider.dart';
 import 'providers/user_provider.dart';
 import 'models/order.dart';
 import 'package:provider/provider.dart';
+import 'utils/color_utils.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -80,6 +81,42 @@ void main() async {
     await FilebaseService.initialize();
   } catch (e) {
     print('ERROR: Filebase initialization failed: $e');
+  }
+
+  // Listen for color configuration changes from Realtime Database
+  // at `/colors` and keep ColorUtils' dynamic map in sync so that
+  // UI consistently uses the latest values.
+  try {
+    FirebaseService.streamData('colors').listen(
+      (data) {
+        if (data.isEmpty) {
+          print('📦 Color stream: received empty map, skipping update');
+          return;
+        }
+
+        try {
+          // Ensure we have a simple Map<String, String> of name -> hex
+          final mapped = <String, String>{};
+          data.forEach((key, value) {
+            if (key == null || value == null) return;
+            mapped[key.toString()] = value.toString();
+          });
+
+          if (mapped.isNotEmpty) {
+            ColorUtils.updateColorMap(mapped);
+          } else {
+            print('📦 Color stream: no valid entries after mapping');
+          }
+        } catch (e) {
+          print('⚠️ Error processing color stream data: $e');
+        }
+      },
+      onError: (error) {
+        print('⚠️ Error in color stream: $error');
+      },
+    );
+  } catch (e) {
+    print('⚠️ Failed to start color stream listener: $e');
   }
 
   // Don't call readAndPrintRealtimeData() on startup - it causes issues
