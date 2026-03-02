@@ -35,6 +35,7 @@ import 'screens/shop/checkout/payment_success_screen.dart';
 import 'screens/shop/checkout/order_receipt_screen.dart';
 import 'screens/shop/profile/edit_profile_screen.dart';
 import 'screens/shop/profile/coupons_screen.dart';
+import 'screens/shop/wishlist_screen.dart';
 import 'screens/shop/notifications_screen.dart';
 import 'screens/shop/popular_products_screen.dart';
 import 'screens/shop/all_products_screen.dart';
@@ -303,6 +304,7 @@ class MyApp extends StatelessWidget {
           // Profile routes
           '/edit-profile': (context) => const EditProfileScreen(),
           '/coupons': (context) => const CouponsScreen(),
+          '/wishlist': (context) => const WishlistScreen(),
         },
       ),
     );
