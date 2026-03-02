@@ -757,7 +757,8 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
             MaterialPageRoute(
               builder: (context) => ThreeDViewerScreen(
                 localPath: localPath!,
-                productName: widget.product.name,
+                product: widget.product,
+                variation: _selectedVariation,
               ),
             ),
           );

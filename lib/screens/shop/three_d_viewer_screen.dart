@@ -1,16 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:model_viewer_plus/model_viewer_plus.dart';
-
-enum LightingMode { front, leftSide, rightSide }
+import 'package:provider/provider.dart';
+import '../../models/product.dart';
+import '../../providers/cart_provider.dart';
 
 class ThreeDViewerScreen extends StatefulWidget {
   final String localPath;
-  final String productName;
+  final Product product;
+  final ProductVariation? variation;
 
   const ThreeDViewerScreen({
     super.key,
     required this.localPath,
-    required this.productName,
+    required this.product,
+    this.variation,
   });
 
   @override
@@ -18,8 +21,7 @@ class ThreeDViewerScreen extends StatefulWidget {
 }
 
 class _ThreeDViewerScreenState extends State<ThreeDViewerScreen> {
-  LightingMode _lightingMode = LightingMode.front;
-  double _brightness = 1.0;
+  final double _brightness = 1.0;
 
   @override
   Widget build(BuildContext context) {
@@ -27,7 +29,7 @@ class _ThreeDViewerScreenState extends State<ThreeDViewerScreen> {
       backgroundColor: Colors.white,
       appBar: AppBar(
         title: Text(
-          widget.productName,
+          widget.product.name,
           style: const TextStyle(
             color: Color(0xFF1E3A8A),
             fontWeight: FontWeight.bold,
@@ -42,10 +44,10 @@ class _ThreeDViewerScreenState extends State<ThreeDViewerScreen> {
       ),
       body: Stack(
         children: [
-          // Fixed World Background (unaffected by brightness)
+          // Fixed World Background
           Positioned.fill(child: Container(color: Colors.white)),
 
-          // 3D Viewer with Realtime Brightness via ColorFilter
+          // 3D Viewer
           ColorFiltered(
             colorFilter: ColorFilter.matrix([
               _brightness,
@@ -70,31 +72,19 @@ class _ThreeDViewerScreenState extends State<ThreeDViewerScreen> {
               0,
             ]),
             child: ModelViewer(
-              key: ValueKey('${widget.localPath}_${_lightingMode.index}'),
+              key: ValueKey('${widget.localPath}_view'),
               src: 'file://${widget.localPath}',
-              alt: widget.productName,
+              alt: widget.product.name,
               autoRotate: true,
               cameraControls: true,
-              backgroundColor:
-                  Colors.transparent, // Important: keep underlying pixels clear
-              // Keep base exposure at 1.0; the ColorFilter handles the intensity
+              backgroundColor: Colors.transparent,
               exposure: 1.0,
-              orientation: _lightingMode == LightingMode.front
-                  ? "0deg 0deg 0deg"
-                  : (_lightingMode == LightingMode.leftSide
-                        ? "0deg 90deg 0deg"
-                        : "0deg -90deg 0deg"),
-              cameraOrbit: _lightingMode == LightingMode.front
-                  ? "0deg 75deg auto"
-                  : (_lightingMode == LightingMode.leftSide
-                        ? "90deg 75deg auto"
-                        : "-90deg 75deg auto"),
               shadowIntensity: 1.0,
-              shadowSoftness: 1.0, // Maximum softness for ray-traced feel
+              shadowSoftness: 1.0,
             ),
           ),
 
-          // Tools Panel
+          // Bottom Action Panel
           Align(
             alignment: Alignment.bottomCenter,
             child: Container(
@@ -117,166 +107,96 @@ class _ThreeDViewerScreenState extends State<ThreeDViewerScreen> {
                   Row(
                     children: [
                       const Icon(
-                        Icons.light_mode,
+                        Icons.shopping_bag_outlined,
                         color: Color(0xFF1E3A8A),
                         size: 20,
                       ),
                       const SizedBox(width: 8),
-                      const Text(
-                        'Lighting Options',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFF1E3A8A),
-                        ),
-                      ),
-                      const Spacer(),
-                      Text(
-                        _lightingMode == LightingMode.front
-                            ? 'Frontal'
-                            : (_lightingMode == LightingMode.leftSide
-                                  ? 'Left Side'
-                                  : 'Right Side'),
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: const Color(0xFF1E3A8A).withValues(alpha: 0.7),
-                          fontWeight: FontWeight.w600,
+                      Expanded(
+                        child: Text(
+                          widget.variation != null
+                              ? '${widget.product.name} (${widget.variation!.color})'
+                              : widget.product.name,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF1E3A8A),
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
                       ),
                     ],
                   ),
                   const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _buildLightingButton(
-                          mode: LightingMode.leftSide,
-                          icon: Icons.wb_twilight_rounded,
-                          label: 'Left',
+                  Consumer<CartProvider>(
+                    builder: (context, cartProvider, child) {
+                      return SizedBox(
+                        width: double.infinity,
+                        height: 56,
+                        child: ElevatedButton(
+                          onPressed: () async {
+                            try {
+                              await cartProvider.addToCart(
+                                product: widget.product,
+                                quantity: 1,
+                                colorOverride: widget.variation?.color,
+                                imageUrlOverride: widget.variation?.imageUrl,
+                              );
+                              if (mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text('Added to cart successfully'),
+                                    backgroundColor: Colors.green,
+                                    behavior: SnackBarBehavior.floating,
+                                    margin: const EdgeInsets.all(20),
+                                    action: SnackBarAction(
+                                      label: 'View Cart',
+                                      textColor: Colors.white,
+                                      onPressed: () =>
+                                          Navigator.pushNamed(context, '/cart'),
+                                    ),
+                                  ),
+                                );
+                              }
+                            } catch (e) {
+                              if (mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text('Error: $e'),
+                                    backgroundColor: Colors.red,
+                                  ),
+                                );
+                              }
+                            }
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF6200EE),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            elevation: 0,
+                          ),
+                          child: const Text(
+                            'Add to Cart',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                          ),
                         ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: _buildLightingButton(
-                          mode: LightingMode.front,
-                          icon: Icons.wb_sunny_rounded,
-                          label: 'Front',
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: _buildLightingButton(
-                          mode: LightingMode.rightSide,
-                          icon: Icons.wb_twilight_rounded,
-                          label: 'Right',
-                        ),
-                      ),
-                    ],
+                      );
+                    },
                   ),
-                  const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      const Icon(
-                        Icons.brightness_6,
-                        color: Color(0xFF1E3A8A),
-                        size: 16,
-                      ),
-                      const SizedBox(width: 8),
-                      const Text(
-                        'Brightness',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Color(0xFF1E3A8A),
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      const Spacer(),
-                      Text(
-                        '${(_brightness * 100).toInt()}%',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: const Color(0xFF1E3A8A).withValues(alpha: 0.7),
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ],
-                  ),
-                  SliderTheme(
-                    data: SliderTheme.of(context).copyWith(
-                      trackHeight: 4,
-                      thumbShape: const RoundSliderThumbShape(
-                        enabledThumbRadius: 6,
-                      ),
-                      overlayShape: const RoundSliderOverlayShape(
-                        overlayRadius: 14,
-                      ),
-                      activeTrackColor: const Color(0xFF1E3A8A),
-                      inactiveTrackColor: const Color(
-                        0xFF1E3A8A,
-                      ).withValues(alpha: 0.1),
-                      thumbColor: const Color(0xFF1E3A8A),
-                    ),
-                    child: Slider(
-                      value: _brightness,
-                      min: 0.1,
-                      max: 1.0,
-                      onChanged: (value) {
-                        setState(() {
-                          _brightness = value;
-                        });
-                      },
-                    ),
-                  ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 12),
                   const Text(
                     'Pinch to zoom • Drag to rotate • Two fingers to pan',
-                    style: TextStyle(fontSize: 12, color: Colors.grey),
+                    style: TextStyle(fontSize: 11, color: Colors.grey),
                   ),
                 ],
               ),
             ),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildLightingButton({
-    required LightingMode mode,
-    required IconData icon,
-    required String label,
-  }) {
-    bool isSelected = _lightingMode == mode;
-    return GestureDetector(
-      onTap: () {
-        setState(() {
-          _lightingMode = mode;
-        });
-      },
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFF1E3A8A) : Colors.transparent,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: const Color(0xFF1E3A8A), width: 1.5),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              icon,
-              size: 18,
-              color: isSelected ? Colors.white : const Color(0xFF1E3A8A),
-            ),
-            const SizedBox(width: 8),
-            Text(
-              label,
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                color: isSelected ? Colors.white : const Color(0xFF1E3A8A),
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }
