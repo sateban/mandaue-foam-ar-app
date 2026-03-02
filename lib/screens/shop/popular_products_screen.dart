@@ -426,7 +426,10 @@ class _PopularProductsScreenState extends State<PopularProductsScreen> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
-                        '₱${product.price.toStringAsFixed(2)}',
+                        '₱${product.price.toStringAsFixed(2).replaceAllMapped(
+                              RegExp(r'(\d)(?=(\d{3})+\.)'),
+                              (Match m) => '${m[1]},',
+                            )}',
                         style: const TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.bold,

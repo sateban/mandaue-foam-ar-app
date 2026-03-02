@@ -328,7 +328,10 @@ class _NewArrivalsScreenState extends State<NewArrivalsScreen> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
-                        '₱${product.price.toStringAsFixed(2)}',
+                        '₱${product.price.toStringAsFixed(2).replaceAllMapped(
+                              RegExp(r'(\d)(?=(\d{3})+\.)'),
+                              (Match m) => '${m[1]},',
+                            )}',
                         style: const TextStyle(
                           color: Color(0xFF1E3A8A),
                           fontSize: 14,

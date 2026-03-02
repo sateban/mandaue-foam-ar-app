@@ -215,7 +215,13 @@ class _FilterModalState extends State<FilterModal> {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 16),
       child: Text(
-        '₱${_minPrice.toStringAsFixed(0)}-₱${_maxPrice.toStringAsFixed(0)}',
+        '₱${_minPrice.toStringAsFixed(0).replaceAllMapped(
+              RegExp(r'(\d)(?=(\d{3})+$)'),
+              (Match m) => '${m[1]},',
+            )}-₱${_maxPrice.toStringAsFixed(0).replaceAllMapped(
+              RegExp(r'(\d)(?=(\d{3})+$)'),
+              (Match m) => '${m[1]},',
+            )}',
         style: const TextStyle(
           color: Colors.grey,
           fontSize: 16,

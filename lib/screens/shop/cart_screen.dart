@@ -298,7 +298,10 @@ class _CartScreenState extends State<CartScreen> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  '₱${item.price.toStringAsFixed(2)}',
+                  '₱${item.price.toStringAsFixed(2).replaceAllMapped(
+                        RegExp(r'(\d)(?=(\d{3})+\.)'),
+                        (Match m) => '${m[1]},',
+                      )}',
                   style: const TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
@@ -464,8 +467,14 @@ class _CartScreenState extends State<CartScreen> {
           ),
           Text(
             isDiscount
-                ? '-₱${amount.abs().toStringAsFixed(2)}'
-                : '₱${amount.toStringAsFixed(2)}',
+                ? '-₱${amount.abs().toStringAsFixed(2).replaceAllMapped(
+                      RegExp(r'(\d)(?=(\d{3})+\.)'),
+                      (Match m) => '${m[1]},',
+                    )}'
+                : '₱${amount.toStringAsFixed(2).replaceAllMapped(
+                      RegExp(r'(\d)(?=(\d{3})+\.)'),
+                      (Match m) => '${m[1]},',
+                    )}',
             style: TextStyle(
               fontSize: isTotal ? 16 : 14,
               fontWeight: isTotal ? FontWeight.bold : FontWeight.w600,

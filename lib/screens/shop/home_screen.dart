@@ -1127,7 +1127,10 @@ class _HomeScreenState extends State<HomeScreen> {
                                 overflow: TextOverflow.ellipsis,
                               ),
                               subtitle: Text(
-                                '₱${(product['price'] ?? 0.0).toStringAsFixed(2)}',
+                                '₱${(product['price'] ?? 0.0).toStringAsFixed(2).replaceAllMapped(
+                                      RegExp(r'(\d)(?=(\d{3})+\.)'),
+                                      (Match m) => '${m[1]},',
+                                    )}',
                                 style: const TextStyle(
                                   fontSize: 12,
                                   color: Colors.grey,
@@ -1468,7 +1471,10 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    '₱${product.price.toStringAsFixed(2)}',
+                    '₱${product.price.toStringAsFixed(2).replaceAllMapped(
+                          RegExp(r'(\d)(?=(\d{3})+\.)'),
+                          (Match m) => '${m[1]},',
+                        )}',
                     style: const TextStyle(
                       color: Color(0xFF1E3A8A),
                       fontSize: 14,
@@ -1554,7 +1560,10 @@ class _HomeScreenState extends State<HomeScreen> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
-                        '₱${product.price.toStringAsFixed(2)}',
+                        '₱${product.price.toStringAsFixed(2).replaceAllMapped(
+                              RegExp(r'(\d)(?=(\d{3})+\.)'),
+                              (Match m) => '${m[1]},',
+                            )}',
                         style: const TextStyle(
                           color: Color(0xFF1E3A8A),
                           fontSize: 14,

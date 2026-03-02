@@ -228,7 +228,10 @@ class _OrdersScreenState extends State<OrdersScreen>
                 children: [
                   const Text('Total: ', style: TextStyle(color: Colors.grey)),
                   Text(
-                    '₱${order.total.toStringAsFixed(2)}',
+                  '₱${order.total.toStringAsFixed(2).replaceAllMapped(
+                        RegExp(r'(\d)(?=(\d{3})+\.)'),
+                        (Match m) => '${m[1]},',
+                      )}',
                     style: const TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 16,
@@ -380,7 +383,10 @@ class _OrdersScreenState extends State<OrdersScreen>
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  '₱${(item.price * item.quantity).toStringAsFixed(2)}',
+                  '₱${(item.price * item.quantity).toStringAsFixed(2).replaceAllMapped(
+                        RegExp(r'(\d)(?=(\d{3})+\.)'),
+                        (Match m) => '${m[1]},',
+                      )}',
                   style: const TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.bold,
@@ -553,7 +559,10 @@ class _OrdersScreenState extends State<OrdersScreen>
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  '₱${(item.price * item.quantity).toStringAsFixed(2)}',
+                  '₱${(item.price * item.quantity).toStringAsFixed(2).replaceAllMapped(
+                        RegExp(r'(\d)(?=(\d{3})+\.)'),
+                        (Match m) => '${m[1]},',
+                      )}',
                   style: const TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.bold,
@@ -667,7 +676,10 @@ class _OrdersScreenState extends State<OrdersScreen>
               ),
               const SizedBox(height: 4),
               Text(
-                '${item.quantity} x ₱${item.price.toStringAsFixed(2)}',
+                '${item.quantity} x ₱${item.price.toStringAsFixed(2).replaceAllMapped(
+                      RegExp(r'(\d)(?=(\d{3})+\.)'),
+                      (Match m) => '${m[1]},',
+                    )}',
                 style: TextStyle(color: Colors.grey[600], fontSize: 13),
               ),
             ],

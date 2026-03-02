@@ -145,7 +145,10 @@ class CompletedOrderScreen extends StatelessWidget {
                                 ),
                                 const SizedBox(height: 4),
                                 Text(
-                                  '₱${firstItem.price.toStringAsFixed(2)}',
+                                  '₱${firstItem.price.toStringAsFixed(2).replaceAllMapped(
+                                        RegExp(r'(\d)(?=(\d{3})+\.)'),
+                                        (Match m) => '${m[1]},',
+                                      )}',
                                   style: const TextStyle(
                                     fontSize: 15,
                                     fontWeight: FontWeight.bold,
@@ -168,7 +171,10 @@ class CompletedOrderScreen extends StatelessWidget {
                   const SizedBox(height: 12),
                   _buildDetailRow(
                     'Total Amount',
-                    '₱${order.total.toStringAsFixed(2)}',
+                    '₱${order.total.toStringAsFixed(2).replaceAllMapped(
+                          RegExp(r'(\d)(?=(\d{3})+\.)'),
+                          (Match m) => '${m[1]},',
+                        )}',
                     isBold: true,
                   ),
                 ],

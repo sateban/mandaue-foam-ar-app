@@ -368,7 +368,10 @@ class _SearchProductsScreenState extends State<SearchProductsScreen> {
                       ),
                       // Price
                       Text(
-                        '₱${product.price.toStringAsFixed(2)}',
+                        '₱${product.price.toStringAsFixed(2).replaceAllMapped(
+                              RegExp(r'(\d)(?=(\d{3})+\.)'),
+                              (Match m) => '${m[1]},',
+                            )}',
                         style: const TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,

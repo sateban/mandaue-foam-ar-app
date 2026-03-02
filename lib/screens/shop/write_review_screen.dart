@@ -168,7 +168,10 @@ class _WriteReviewScreenState extends State<WriteReviewScreen> {
                               ),
                               const SizedBox(height: 4),
                               Text(
-                                '₱${(widget.item.price * widget.item.quantity).toStringAsFixed(2)}',
+                                '₱${(widget.item.price * widget.item.quantity).toStringAsFixed(2).replaceAllMapped(
+                                      RegExp(r'(\d)(?=(\d{3})+\.)'),
+                                      (Match m) => '${m[1]},',
+                                    )}',
                                 style: const TextStyle(
                                   fontSize: 15,
                                   fontWeight: FontWeight.bold,
