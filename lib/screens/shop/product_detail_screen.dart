@@ -10,6 +10,7 @@ import '../../providers/product_provider.dart';
 import '../onboarding/ar_viewer_screen.dart';
 import 'three_d_viewer_screen.dart';
 import '../../widgets/authenticated_image.dart';
+import '../../utils/color_utils.dart';
 
 class ProductDetailScreen extends StatefulWidget {
   final Product product;
@@ -558,79 +559,89 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     final variations = widget.product.getAllVariations();
     if (variations.length <= 1) return const SizedBox.shrink();
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Available Colors',
-          style: TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-            color: Color(0xFF1E3A8A),
-          ),
-        ),
-        const SizedBox(height: 12),
-        SizedBox(
-          height: 48,
-          child: ListView.separated(
-            padding: const EdgeInsets.symmetric(horizontal: 4),
-            scrollDirection: Axis.horizontal,
-            itemCount: variations.length,
-            separatorBuilder: (context, index) => const SizedBox(width: 12),
-            itemBuilder: (context, index) {
-              final variation = variations[index];
-              final isSelected = _selectedVariation?.color == variation.color;
+    return Consumer<ProductProvider>(
+      builder: (context, provider, child) {
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Available Colors',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF1E3A8A),
+              ),
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              height: 48,
+              child: ListView.separated(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                scrollDirection: Axis.horizontal,
+                itemCount: variations.length,
+                separatorBuilder: (context, index) => const SizedBox(width: 12),
+                itemBuilder: (context, index) {
+                  final variation = variations[index];
+                  final isSelected =
+                      _selectedVariation?.color == variation.color;
+                  final colorValue = ColorUtils.getColorFromName(
+                    variation.color,
+                  );
+                  final contrastColor = ColorUtils.getContrastColor(colorValue);
 
-              return GestureDetector(
-                onTap: () {
-                  setState(() {
-                    _selectedVariation = variation;
-                  });
-                },
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 20,
-                    vertical: 8,
-                  ),
-                  decoration: BoxDecoration(
-                    color: isSelected ? const Color(0xFF1E3A8A) : Colors.white,
-                    borderRadius: BorderRadius.circular(24),
-                    border: Border.all(
-                      color: const Color(0xFF1E3A8A),
-                      width: 1.5,
-                    ),
-                    boxShadow: isSelected
-                        ? [
-                            BoxShadow(
-                              color: const Color(
-                                0xFF1E3A8A,
-                              ).withValues(alpha: 0.3),
-                              blurRadius: 8,
-                              offset: const Offset(0, 4),
-                            ),
-                          ]
-                        : null,
-                  ),
-                  child: Center(
-                    child: Text(
-                      variation.color,
-                      style: TextStyle(
-                        color: isSelected
-                            ? Colors.white
-                            : const Color(0xFF1E3A8A),
-                        fontWeight: isSelected
-                            ? FontWeight.bold
-                            : FontWeight.normal,
+                  return GestureDetector(
+                    onTap: () {
+                      setState(() {
+                        _selectedVariation = variation;
+                      });
+                    },
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 200),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 10,
+                      ),
+                      decoration: BoxDecoration(
+                        color: isSelected ? colorValue : Colors.white,
+                        borderRadius: BorderRadius.circular(24),
+                        border: Border.all(
+                          color: isSelected
+                              ? colorValue
+                              : colorValue.withAlpha(120),
+                          width: 1.5,
+                        ),
+                        boxShadow: isSelected
+                            ? [
+                                BoxShadow(
+                                  color: colorValue.withAlpha(76),
+                                  blurRadius: 8,
+                                  offset: const Offset(0, 4),
+                                ),
+                              ]
+                            : null,
+                      ),
+                      child: Center(
+                        child: Text(
+                          variation.color,
+                          style: TextStyle(
+                            color: isSelected
+                                ? contrastColor
+                                : const Color(0xFF1E3A8A),
+                            fontWeight: isSelected
+                                ? FontWeight.bold
+                                : FontWeight.w600,
+                            fontSize: 14,
+                          ),
+                        ),
                       ),
                     ),
-                  ),
-                ),
-              );
-            },
-          ),
-        ),
-      ],
+                  );
+                },
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 

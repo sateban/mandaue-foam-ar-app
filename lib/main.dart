@@ -132,7 +132,9 @@ class MyApp extends StatelessWidget {
     return MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (context) => UserProvider()),
-        ChangeNotifierProvider(create: (context) => ProductProvider()),
+        ChangeNotifierProvider(
+          create: (context) => ProductProvider()..loadProducts(),
+        ),
         ChangeNotifierProxyProvider<UserProvider, CartProvider>(
           create: (context) => CartProvider(),
           update: (context, userProvider, cartProvider) =>
@@ -149,6 +151,62 @@ class MyApp extends StatelessWidget {
           ),
           useMaterial3: true,
         ),
+        builder: (context, child) {
+          return Stack(
+            children: [
+              if (child != null) child,
+              // Background faint watermark
+              Positioned(
+                bottom: 20,
+                // right: -20,
+                right: 6,
+                child: IgnorePointer(
+                  child: Transform.rotate(
+                    // angle: -0.5,
+                    angle: 0,
+                    child: Text(
+                      'DEVELOPED BY KB²',
+                      style: TextStyle(
+                        color: Colors.black.withAlpha(80),
+                        fontSize: 16,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 1.5,
+                        decoration: TextDecoration.none,
+                        fontFamily: 'monospace',
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              // Clear foreground watermark
+              // Positioned(
+              //   bottom: 16,
+              //   right: 16,
+              //   child: IgnorePointer(
+              //     child: Container(
+              //       padding: const EdgeInsets.symmetric(
+              //         horizontal: 10,
+              //         vertical: 5,
+              //       ),
+              //       decoration: BoxDecoration(
+              //         color: const Color(0xFF1E3A8A).withAlpha(40),
+              //         borderRadius: BorderRadius.circular(4),
+              //       ),
+              //       child: const Text(
+              //         '© KB²',
+              //         style: TextStyle(
+              //           color: Colors.black45,
+              //           fontSize: 11,
+              //           fontWeight: FontWeight.bold,
+              //           decoration: TextDecoration.none,
+              //         ),
+              //       ),
+              //     ),
+              //   ),
+              // ),
+            ],
+          );
+        },
         home: const AuthenticationWrapper(),
         onGenerateRoute: (settings) {
           // Handle routes that need arguments
