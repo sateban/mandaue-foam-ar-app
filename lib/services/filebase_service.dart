@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:flutter/services.dart';
 import 'package:minio/minio.dart';
 import 'package:minio/io.dart';
+import 'package:crypto/crypto.dart';
 
 /// Filebase Service for S3-compatible storage using official MinIO package
 /// Handles all CRUD operations for file management
@@ -664,18 +665,28 @@ class FilebaseService {
   }
 
   /// Get a unique filename from a URL or object path to prevent collisions
+  /// Uses a combination of the basename and a hash of the full URL
   String getUniqueFileName(String url) {
     if (url.isEmpty) return 'unknown_file';
     try {
       final uri = Uri.parse(url);
-      // Remove query parameters which might contain tokens
       final path = uri.path;
-      // Replace slashes with underscores to create a flat unique filename
-      // and remove leading slash
-      return path.replaceFirst('/', '').replaceAll('/', '_');
+      final fileName = path.split('/').last;
+
+      // Create a hash of the full URL (including query/fragment) to ensure absolute uniqueness
+      final bytes = utf8.encode(url);
+      final hash = sha256.convert(bytes).toString().substring(0, 8);
+
+      // Return name like: chair_abc123.glb
+      if (fileName.contains('.')) {
+        final parts = fileName.split('.');
+        final ext = parts.last;
+        final name = parts.sublist(0, parts.length - 1).join('.');
+        return '${name}_$hash.$ext';
+      }
+      return '${fileName}_$hash';
     } catch (e) {
-      // Fallback: simple split if URL is not a valid URI
-      return url.split('/').last;
+      return 'model_${DateTime.now().millisecondsSinceEpoch}.glb';
     }
   }
 

@@ -378,8 +378,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                   ),
                   const SizedBox(height: 32),
                   // AR and 3D Buttons
-                  if (widget.product.modelUrl != null &&
-                      widget.product.modelUrl!.isNotEmpty)
+                  if (_hasAnyModel())
                     Row(
                       children: [
                         Expanded(
@@ -666,14 +665,36 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     );
   }
 
+  bool _hasAnyModel() {
+    // Check base product
+    if (widget.product.modelUrl != null &&
+        widget.product.modelUrl!.isNotEmpty) {
+      return true;
+    }
+    // Check all variations
+    final variations = widget.product.getAllVariations();
+    for (final v in variations) {
+      if (v.modelUrl != null && v.modelUrl!.isNotEmpty) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   Future<void> _handleModelView({bool isAR = true}) async {
-    final modelUrl = _selectedVariation?.modelUrl ?? widget.product.modelUrl;
+    // Correctly prioritize variation model, then fallback to base product model
+    String? modelUrl = _selectedVariation?.modelUrl;
+
+    // If variation model is null or empty, use the base product model
+    if (modelUrl == null || modelUrl.isEmpty) {
+      modelUrl = widget.product.modelUrl;
+    }
 
     if (modelUrl == null || modelUrl.isEmpty) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('No 3D model available for this variation'),
+            content: Text('No 3D model available for this selection'),
           ),
         );
       }
@@ -724,7 +745,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
             MaterialPageRoute(
               builder: (context) => ARViewerScreen(
                 productName: widget.product.name,
-                modelUrl: modelUrl,
+                modelUrl: modelUrl!,
                 modelScale: widget.product.modelScale,
                 localModelPath: localPath!,
               ),
