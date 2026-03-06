@@ -148,19 +148,6 @@ class _WishlistScreenState extends State<WishlistScreen> {
       ),
       child: Row(
         children: [
-          Container(
-            width: 100,
-            height: 100,
-            decoration: BoxDecoration(
-              color: Colors.grey[200],
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: AuthenticatedImage(imageUrl: product.imageUrl),
-            ),
-          ),
-          const SizedBox(width: 16),
           Expanded(
             child: GestureDetector(
               onTap: () {
@@ -168,52 +155,71 @@ class _WishlistScreenState extends State<WishlistScreen> {
                   context,
                 ).push(slideRoute(ProductDetailScreen(product: product)));
               },
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              child: Row(
                 children: [
-                  Text(
-                    product.name,
-                    style: const TextStyle(
-                      color: Color(0xFF1E3A8A),
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
+                  Container(
+                    width: 100,
+                    height: 100,
+                    decoration: BoxDecoration(
+                      color: Colors.grey[200],
+                      borderRadius: BorderRadius.circular(8),
                     ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: AuthenticatedImage(imageUrl: product.imageUrl),
+                    ),
                   ),
-                  const SizedBox(height: 8),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        '₱${product.price.toStringAsFixed(2).replaceAllMapped(
-                              RegExp(r'(\\d)(?=(\\d{3})+\\.)'),
-                              (Match m) => '${m[1]},',
-                            )}',
-                        style: const TextStyle(
-                          color: Color(0xFF1E3A8A),
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          product.name,
+                          style: const TextStyle(
+                            color: Color(0xFF1E3A8A),
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
                         ),
-                      ),
-                      Row(
-                        children: [
-                          const Icon(
-                            Icons.star,
-                            color: Color(0xFFFDB022),
-                            size: 14,
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            '${product.rating}',
-                            style: const TextStyle(
-                              color: Colors.grey,
-                              fontSize: 12,
+                        const SizedBox(height: 8),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              '₱${product.price.toStringAsFixed(2).replaceAllMapped(
+                                    RegExp(r'(\\d)(?=(\\d{3})+\\.)'),
+                                    (Match m) => '${m[1]},',
+                                  )}',
+                              style: const TextStyle(
+                                color: Color(0xFF1E3A8A),
+                                fontSize: 14,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
-                          ),
-                        ],
-                      ),
-                    ],
+                            Row(
+                              children: [
+                                const Icon(
+                                  Icons.star,
+                                  color: Color(0xFFFDB022),
+                                  size: 14,
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  '${product.rating}',
+                                  style: const TextStyle(
+                                    color: Colors.grey,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
                 ],
               ),
