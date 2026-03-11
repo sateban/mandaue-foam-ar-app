@@ -17,10 +17,10 @@ class WishlistScreen extends StatelessWidget {
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Color(0xFF1E3A8A)),
-          onPressed: () => Navigator.pop(context),
-        ),
+        // leading: IconButton(
+        //   icon: const Icon(Icons.arrow_back, color: Color(0xFF1E3A8A)),
+        //   onPressed: () => Navigator.pop(context),
+        // ),
         title: const Text(
           'Favorites',
           style: TextStyle(
@@ -53,17 +53,17 @@ class WishlistScreen extends StatelessWidget {
                 child: Text(
                   'No items in your favorites yet.\nTap the heart icon on a product to add it here.',
                   textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: Color(0xFF1E3A8A),
-                    fontSize: 16,
-                  ),
+                  style: TextStyle(color: Color(0xFF1E3A8A), fontSize: 16),
                 ),
               ),
             );
           }
 
           return ListView.builder(
-            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+            padding: const EdgeInsets.symmetric(
+              horizontal: 16.0,
+              vertical: 12.0,
+            ),
             itemCount: favoriteProducts.length,
             itemBuilder: (context, index) {
               final product = favoriteProducts[index];
@@ -76,7 +76,10 @@ class WishlistScreen extends StatelessWidget {
   }
 
   Widget _buildWishlistItem(
-      BuildContext context, ProductProvider provider, Product product) {
+    BuildContext context,
+    ProductProvider provider,
+    Product product,
+  ) {
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.all(16),
@@ -89,8 +92,9 @@ class WishlistScreen extends StatelessWidget {
           Expanded(
             child: GestureDetector(
               onTap: () {
-                Navigator.of(context)
-                    .push(slideRoute(ProductDetailScreen(product: product)));
+                Navigator.of(
+                  context,
+                ).push(slideRoute(ProductDetailScreen(product: product)));
               },
               child: Row(
                 children: [
@@ -126,10 +130,7 @@ class WishlistScreen extends StatelessWidget {
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             Text(
-                              '₱${product.price.toStringAsFixed(2).replaceAllMapped(
-                                    RegExp(r'(\d)(?=(\d{3})+\.)'),
-                                    (Match m) => '${m[1]},',
-                                  )}',
+                              '₱${product.price.toStringAsFixed(2).replaceAllMapped(RegExp(r'(\d)(?=(\d{3})+\.)'), (Match m) => '${m[1]},')}',
                               style: const TextStyle(
                                 color: Color(0xFF1E3A8A),
                                 fontSize: 14,
@@ -138,8 +139,11 @@ class WishlistScreen extends StatelessWidget {
                             ),
                             Row(
                               children: [
-                                const Icon(Icons.star,
-                                    color: Color(0xFFFDB022), size: 14),
+                                const Icon(
+                                  Icons.star,
+                                  color: Color(0xFFFDB022),
+                                  size: 14,
+                                ),
                                 const SizedBox(width: 4),
                                 Text(
                                   '${product.rating}',
@@ -173,7 +177,9 @@ class WishlistScreen extends StatelessWidget {
             },
             child: Icon(
               // provider.isFavorite always returns the live truth
-              provider.isFavorite(product.id) ? Icons.favorite : Icons.favorite_border,
+              provider.isFavorite(product.id)
+                  ? Icons.favorite
+                  : Icons.favorite_border,
               color: provider.isFavorite(product.id) ? Colors.red : Colors.grey,
               size: 20,
             ),

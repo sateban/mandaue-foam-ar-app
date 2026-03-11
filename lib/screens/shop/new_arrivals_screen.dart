@@ -281,35 +281,33 @@ class _NewArrivalsScreenState extends State<NewArrivalsScreen> {
   }
 
   Widget _buildNewArrivalItem(Product product) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.grey[100],
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 100,
-            height: 100,
-            decoration: BoxDecoration(
-              color: Colors.grey[200],
-              borderRadius: BorderRadius.circular(8),
+    return GestureDetector(
+      onTap: () {
+        Navigator.of(context).push(slideRoute(ProductDetailScreen(product: product)));
+      },
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 16),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.grey[100],
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 100,
+              height: 100,
+              decoration: BoxDecoration(
+                color: Colors.grey[200],
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: AuthenticatedImage(imageUrl: product.imageUrl),
+              ),
             ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: AuthenticatedImage(imageUrl: product.imageUrl),
-            ),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: GestureDetector(
-              onTap: () {
-                Navigator.of(
-                  context,
-                ).push(slideRoute(ProductDetailScreen(product: product)));
-              },
+            const SizedBox(width: 16),
+            Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -360,32 +358,36 @@ class _NewArrivalsScreenState extends State<NewArrivalsScreen> {
                 ],
               ),
             ),
-          ),
-          Consumer<ProductProvider>(
-            builder: (context, provider, _) {
-              final isFav = provider.isFavorite(product.id);
-              return GestureDetector(
-                onTap: () {
-                  provider.toggleProductFavorite(product.id).catchError((e) {
-                    if (mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Failed to update favorites'),
-                          duration: Duration(seconds: 2),
-                        ),
-                      );
-                    }
-                  });
-                },
-                child: Icon(
-                  isFav ? Icons.favorite : Icons.favorite_border,
-                  color: isFav ? Colors.red : Colors.grey,
-                  size: 20,
-                ),
-              );
-            },
-          ),
-        ],
+            // Favourite button — tap is isolated so it doesn't trigger card navigation
+            Consumer<ProductProvider>(
+              builder: (context, provider, _) {
+                final isFav = provider.isFavorite(product.id);
+                return GestureDetector(
+                  onTap: () {
+                    provider.toggleProductFavorite(product.id).catchError((e) {
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Failed to update favorites'),
+                            duration: Duration(seconds: 2),
+                          ),
+                        );
+                      }
+                    });
+                  },
+                  child: Padding(
+                    padding: const EdgeInsets.only(left: 8.0),
+                    child: Icon(
+                      isFav ? Icons.favorite : Icons.favorite_border,
+                      color: isFav ? Colors.red : Colors.grey,
+                      size: 20,
+                    ),
+                  ),
+                );
+              },
+            ),
+          ],
+        ),
       ),
     );
   }
