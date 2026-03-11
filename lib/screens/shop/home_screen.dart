@@ -1045,14 +1045,45 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                    child: ListView.builder(
-                      physics: const NeverScrollableScrollPhysics(),
-                      shrinkWrap: true,
-                      itemCount: _newArrivalProducts.take(4).length,
-                      itemBuilder: (context, index) {
-                        final product = _newArrivalProducts[index];
-                        return _buildNewArrivalItem(product);
-                      },
+                    child: Column(
+                      children: [
+                        ListView.builder(
+                          physics: const NeverScrollableScrollPhysics(),
+                          shrinkWrap: true,
+                          itemCount: _newArrivalProducts.take(4).length,
+                          itemBuilder: (context, index) {
+                            final product = _newArrivalProducts[index];
+                            return _buildNewArrivalItem(product);
+                          },
+                        ),
+                        const SizedBox(height: 16),
+                        SizedBox(
+                          width: double.infinity,
+                          height: 50,
+                          child: OutlinedButton(
+                            onPressed: () {
+                              Navigator.pushNamed(context, '/all-products');
+                            },
+                            style: OutlinedButton.styleFrom(
+                              side: const BorderSide(
+                                color: Color(0xFF1E3A8A),
+                                width: 1.5,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                            child: const Text(
+                              'See All Products',
+                              style: TextStyle(
+                                color: Color(0xFF1E3A8A),
+                                fontSize: 14,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
 

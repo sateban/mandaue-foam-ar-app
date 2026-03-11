@@ -194,28 +194,28 @@ class MyApp extends StatelessWidget {
             children: [
               if (child != null) child,
               // Background faint watermark
-              Positioned(
-                bottom: 20,
-                // right: -20,
-                right: 6,
-                child: IgnorePointer(
-                  child: Transform.rotate(
-                    // angle: -0.5,
-                    angle: 0,
-                    child: Text(
-                      'DEVELOPED BY KB²',
-                      style: TextStyle(
-                        color: Colors.black.withAlpha(80),
-                        fontSize: 16,
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: 1.5,
-                        decoration: TextDecoration.none,
-                        fontFamily: 'monospace',
-                      ),
-                    ),
-                  ),
-                ),
-              ),
+              // Positioned(
+              //   bottom: 20,
+              //   // right: -20,
+              //   right: 6,
+              //   child: IgnorePointer(
+              //     child: Transform.rotate(
+              //       // angle: -0.5,
+              //       angle: 0,
+              //       child: Text(
+              //         'DEVELOPED BY KB²',
+              //         style: TextStyle(
+              //           color: Colors.black.withAlpha(80),
+              //           fontSize: 16,
+              //           fontWeight: FontWeight.w900,
+              //           letterSpacing: 1.5,
+              //           decoration: TextDecoration.none,
+              //           fontFamily: 'monospace',
+              //         ),
+              //       ),
+              //     ),
+              //   ),
+              // ),
               // Clear foreground watermark
               // Positioned(
               //   bottom: 16,
