@@ -361,70 +361,29 @@ class _ItemCategoryScreenState extends State<ItemCategoryScreen> {
                   Positioned(
                     top: 8,
                     right: 8,
-                    child: GestureDetector(
-                      onTap: () {
-                        try {
-                          final productProvider = context
-                              .read<ProductProvider>();
-                          final wasFavorite = product.isFavorite;
-
-                          // Optimistic update - update UI immediately
-                          product.isFavorite = !wasFavorite;
-                          setState(() {});
-
-                          if (mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text(
-                                  product.isFavorite
-                                      ? 'Added to favorites'
-                                      : 'Removed from favorites',
-                                ),
-                                duration: const Duration(seconds: 1),
-                              ),
-                            );
-                          }
-
-                          // Update Firebase in background without awaiting
-                          productProvider
-                              .toggleProductFavorite(product.id)
-                              .catchError((e) {
-                                // Rollback on error
-                                product.isFavorite = wasFavorite;
-                                if (mounted) {
-                                  setState(() {});
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text(
-                                        'Failed to update favorites',
-                                      ),
-                                      duration: Duration(seconds: 2),
-                                    ),
-                                  );
-                                }
-                                print('Error toggling favorite: $e');
-                              });
-                        } catch (e) {
-                          if (mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text(
-                                  'Please sign in to add favorites',
-                                ),
-                                duration: Duration(seconds: 2),
-                              ),
-                            );
-                          }
-                          print('Error toggling favorite: $e');
-                        }
+                    child: Consumer<ProductProvider>(
+                      builder: (context, provider, _) {
+                        final isFav = provider.isFavorite(product.id);
+                        return GestureDetector(
+                          onTap: () {
+                            provider.toggleProductFavorite(product.id).catchError((e) {
+                              if (mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('Failed to update favorites'),
+                                    duration: Duration(seconds: 2),
+                                  ),
+                                );
+                              }
+                            });
+                          },
+                          child: Icon(
+                            isFav ? Icons.favorite : Icons.favorite_border,
+                            color: isFav ? Colors.red : Colors.grey,
+                            size: 24,
+                          ),
+                        );
                       },
-                      child: Icon(
-                        product.isFavorite
-                            ? Icons.favorite
-                            : Icons.favorite_border,
-                        color: product.isFavorite ? Colors.red : Colors.grey,
-                        size: 24,
-                      ),
                     ),
                   ),
                 ],

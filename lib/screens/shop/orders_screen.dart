@@ -580,7 +580,7 @@ class _OrdersScreenState extends State<OrdersScreen>
                 onPressed: () {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
-                      content: Text('${item.productName} added to cart'),
+                      content: Text('${item.productName} added to favorites'),
                       backgroundColor: const Color(0xFFFDB022),
                     ),
                   );

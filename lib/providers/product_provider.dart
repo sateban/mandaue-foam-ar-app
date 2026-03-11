@@ -5,208 +5,221 @@ import '../services/filebase_service.dart';
 
 class ProductProvider extends ChangeNotifier {
   List<Map<String, dynamic>> _products = [];
+  Set<String> _favoriteIds = {};
   bool _isLoading = false;
   String? _error;
+
+  // Single subscription for products stream
   StreamSubscription<List<Map<String, dynamic>>>? _productsSubscription;
-  bool _isListeningToRealtime = false;
+  // Single subscription for favorites stream
+  StreamSubscription<List<String>>? _favoritesSubscription;
 
   List<Map<String, dynamic>> get products => _products;
+
+  /// Returns only the favorited products
+  List<Map<String, dynamic>> get favoriteProducts =>
+      _products.where((p) => _favoriteIds.contains(p['id']?.toString() ?? '')).toList();
+
   bool get isLoading => _isLoading;
   String? get error => _error;
+  Set<String> get favoriteIds => Set.unmodifiable(_favoriteIds);
 
-  /// Load products from Firebase Realtime Database with real-time listening
+  /// Called once on app start. Loads products + favorites, then starts real-time listeners.
   Future<void> loadProducts() async {
+    if (_isLoading) return; // Guard against concurrent loads
     _isLoading = true;
     _error = null;
     notifyListeners();
 
     try {
-      print('ProductProvider: Loading products from Firebase...');
-      final loadedProducts = await FirebaseService.readListData('/products');
-      
-      // Transform Firebase paths to full Filebase URLs
+      print('ProductProvider: Starting initial load...');
+
+      // Step 1 – Load favorite IDs for current user (one-shot read)
+      final user = FirebaseService.getCurrentUser();
+      if (user != null) {
+        final ids = await FirebaseService.getFavoriteProductIds(user.uid);
+        _favoriteIds = ids.toSet();
+        print('ProductProvider: Loaded ${_favoriteIds.length} favorite IDs');
+
+        // Step 2 – Start favourites real-time listener ONCE
+        _startFavoritesListener(user.uid);
+      }
+
+      // Step 3 – One-shot read for products (fast initial paint)
+      final rawProducts = await FirebaseService.readListData('/products');
       final filebaseService = FilebaseService();
-      _products = filebaseService.transformProductsWithFilebaseUrls(loadedProducts);
-      
-      print('ProductProvider: Successfully loaded ${_products.length} products');
-      _error = null;
+      _products = filebaseService.transformProductsWithFilebaseUrls(rawProducts);
+      _applyFavoritesToProducts();
+
+      print('ProductProvider: Loaded ${_products.length} products');
     } catch (e) {
-      print('ProductProvider: Error loading products: $e');
+      print('ProductProvider: Error on initial load: $e');
       _error = 'Failed to load products: $e';
-      _products = [];
     } finally {
       _isLoading = false;
       notifyListeners();
     }
 
-    // Start listening to real-time updates if not already listening
-    _startRealtimeListener();
+    // Step 4 – Start products real-time listener ONCE
+    _startProductsListener();
   }
 
-  /// Start listening to real-time product updates
-  void _startRealtimeListener() {
-    if (_isListeningToRealtime) return;
-    
-    _isListeningToRealtime = true;
-    print('ProductProvider: Starting real-time listener for products...');
-    
-    _productsSubscription = FirebaseService.streamListData('/products').listen(
-      (productsList) {
-        if (productsList.isEmpty) {
-          print('ProductProvider: Received empty product list');
-          return;
-        }
+  // ─── Private: real-time listeners ─────────────────────────────────────────
 
-        // Transform Firebase paths to full Filebase URLs
+  void _startProductsListener() {
+    if (_productsSubscription != null) return; // Already listening
+
+    print('ProductProvider: Starting products real-time listener...');
+    _productsSubscription = FirebaseService.streamListData('/products').listen(
+      (rawList) {
+        if (rawList.isEmpty) return;
+
         final filebaseService = FilebaseService();
-        final updatedProducts = filebaseService.transformProductsWithFilebaseUrls(productsList);
-        
-        // Check if products actually changed to avoid unnecessary rebuilds
-        if (_hasProductsChanged(updatedProducts)) {
-          _products = updatedProducts;
-          print('ProductProvider: Updated ${_products.length} products from real-time stream');
-          notifyListeners();
-        }
-      },
-      onError: (error) {
-        print('ProductProvider: Error in real-time listener: $error');
-        _error = 'Real-time update error: $error';
-        _isListeningToRealtime = false;
+        final updated = filebaseService.transformProductsWithFilebaseUrls(rawList);
+        _applyFavoritesToList(updated);
+        _products = updated;
+
+        print('ProductProvider: Products stream update – ${_products.length} items');
         notifyListeners();
+      },
+      onError: (e) {
+        print('ProductProvider: Products stream error: $e');
       },
     );
   }
 
-  /// Check if products have changed
-  bool _hasProductsChanged(List<Map<String, dynamic>> newProducts) {
-    if (newProducts.length != _products.length) return true;
-    
-    // Compare products
-    for (int i = 0; i < newProducts.length; i++) {
-      final newProduct = newProducts[i];
-      final oldProduct = _products[i];
-      
-      // Check if critical fields changed (stock, price, etc.)
-      if (newProduct['id'] != oldProduct['id'] ||
-          newProduct['stock'] != oldProduct['stock'] ||
-          newProduct['price'] != oldProduct['price']) {
-        return true;
-      }
-    }
-    
-    return false;
-  }
+  void _startFavoritesListener(String userId) {
+    // Cancel any existing subscription before creating a new one
+    _favoritesSubscription?.cancel();
+    _favoritesSubscription = null;
 
-  /// Stream products from Firebase Realtime Database
-  Stream<List<Map<String, dynamic>>> get productStream {
-    return FirebaseService.streamListData('/products');
-  }
-
-  /// Get product by ID
-  Map<String, dynamic>? getProductById(String productId) {
-    try {
-      return _products.firstWhere((product) => product['id'] == productId);
-    } catch (e) {
-      return null;
-    }
-  }
-
-  /// Filter products by category
-  List<Map<String, dynamic>> getProductsByCategory(String category) {
-    return _products
-        .where((product) => product['category']?.toString().toLowerCase() == category.toLowerCase())
-        .toList();
-  }
-
-  /// Search products by name
-  List<Map<String, dynamic>> searchProducts(String query) {
-    final lowerQuery = query.toLowerCase();
-    return _products
-        .where((product) =>
-            product['name']?.toString().toLowerCase().contains(lowerQuery) ?? false)
-        .toList();
-  }
-
-  /// Toggle favorite status for a product
-  Future<void> toggleProductFavorite(String productId) async {
-    try {
-      final user = FirebaseService.getCurrentUser();
-      if (user == null) {
-        throw Exception('User is not authenticated');
-      }
-
-      // Toggle on Firebase
-      final isFavorite = await FirebaseService.toggleFavorite(user.uid, productId);
-
-      // Update local product list
-      final productIndex = _products.indexWhere((p) => p['id'] == productId);
-      if (productIndex != -1) {
-        _products[productIndex]['isFavorite'] = isFavorite;
+    print('ProductProvider: Starting favourites real-time listener for $userId...');
+    _favoritesSubscription = FirebaseService.streamFavoriteProductIds(userId).listen(
+      (ids) {
+        final newSet = ids.toSet();
+        if (newSet.length == _favoriteIds.length && newSet.containsAll(_favoriteIds)) {
+          // No actual change – skip notify to avoid spurious rebuilds
+          return;
+        }
+        _favoriteIds = newSet;
+        _applyFavoritesToProducts();
+        print('ProductProvider: Favourites stream update – ${_favoriteIds.length} favourites');
         notifyListeners();
-        print('ProductProvider: Product $productId favorite toggled to $isFavorite');
-      }
+      },
+      onError: (e) {
+        print('ProductProvider: Favourites stream error: $e');
+      },
+    );
+  }
+
+  // ─── Favorite helpers ──────────────────────────────────────────────────────
+
+  void _applyFavoritesToProducts() => _applyFavoritesToList(_products);
+
+  void _applyFavoritesToList(List<Map<String, dynamic>> list) {
+    for (final p in list) {
+      p['isFavorite'] = _favoriteIds.contains(p['id']?.toString() ?? '');
+    }
+  }
+
+  // ─── Public API ────────────────────────────────────────────────────────────
+
+  /// Toggle a product's favourite status.
+  /// Does an optimistic local update immediately, then syncs to Firebase.
+  /// The real-time favourites stream will re-confirm the final state.
+  Future<void> toggleProductFavorite(String productId) async {
+    final user = FirebaseService.getCurrentUser();
+    if (user == null) throw Exception('User not authenticated');
+
+    // -- Optimistic update --
+    final wasFavorite = _favoriteIds.contains(productId);
+    if (wasFavorite) {
+      _favoriteIds.remove(productId);
+    } else {
+      _favoriteIds.add(productId);
+    }
+    _applyFavoritesToProducts();
+    notifyListeners(); // <-- ONE notify, reflecting optimistic state
+
+    try {
+      // Sync to Firebase (the favourites stream will fire afterwards and confirm)
+      await FirebaseService.toggleFavorite(user.uid, productId);
+      print('ProductProvider: Toggled favourite for $productId → ${!wasFavorite}');
     } catch (e) {
-      print('ProductProvider: Error toggling favorite: $e');
+      print('ProductProvider: Error toggling favourite – rolling back: $e');
+      // Rollback
+      if (wasFavorite) {
+        _favoriteIds.add(productId);
+      } else {
+        _favoriteIds.remove(productId);
+      }
+      _applyFavoritesToProducts();
+      notifyListeners();
       rethrow;
     }
   }
 
-  /// Load favorites from Firebase for the current user
-  Future<void> loadUserFavorites() async {
+  /// Returns the live product map for a given id (with up-to-date isFavorite).
+  Map<String, dynamic>? getProductById(String productId) {
     try {
-      final user = FirebaseService.getCurrentUser();
-      if (user == null) {
-        // Not logged in, clear favorites
-        for (var product in _products) {
-          product['isFavorite'] = false;
-        }
-        notifyListeners();
-        return;
-      }
-
-      // Get user's favorite product IDs
-      final favoriteIds = await FirebaseService.getFavoriteProductIds(user.uid);
-
-      // Update product list with favorite status
-      for (var product in _products) {
-        product['isFavorite'] = favoriteIds.contains(product['id']);
-      }
-
-      notifyListeners();
-      print('ProductProvider: Loaded ${favoriteIds.length} favorites from Firebase');
-    } catch (e) {
-      print('ProductProvider: Error loading favorites: $e');
+      return _products.firstWhere((p) => p['id']?.toString() == productId);
+    } catch (_) {
+      return null;
     }
   }
 
-  /// Stream user's favorites in real-time
-  Stream<List<String>> streamUserFavorites() {
+  /// Whether a product id is currently favourited.
+  bool isFavorite(String productId) => _favoriteIds.contains(productId);
+
+  /// Reload favourites from Firebase (e.g. after sign-in).
+  Future<void> loadUserFavorites() async {
     final user = FirebaseService.getCurrentUser();
     if (user == null) {
-      return Stream.value([]);
+      _favoriteIds = {};
+      _applyFavoritesToProducts();
+      notifyListeners();
+      return;
     }
-    return FirebaseService.streamFavoriteProductIds(user.uid);
+
+    try {
+      final ids = await FirebaseService.getFavoriteProductIds(user.uid);
+      _favoriteIds = ids.toSet();
+      _applyFavoritesToProducts();
+
+      // Re-attach listener in case user just signed in
+      _startFavoritesListener(user.uid);
+
+      notifyListeners();
+      print('ProductProvider: loadUserFavorites – ${_favoriteIds.length} IDs');
+    } catch (e) {
+      print('ProductProvider: Error loading user favourites: $e');
+    }
   }
 
-  /// Clear products
-
+  /// Called when the user signs out.
   void clearProducts() {
     _products = [];
+    _favoriteIds = {};
     _error = null;
+    _productsSubscription?.cancel();
+    _productsSubscription = null;
+    _favoritesSubscription?.cancel();
+    _favoritesSubscription = null;
     notifyListeners();
   }
 
-  /// Update products list (used for real-time updates)
+  /// Used by HomeScreen stream to push transformed products.
+  /// Kept for backward compat but ProductProvider now owns the stream itself.
   void updateProducts(List<Map<String, dynamic>> newProducts) {
+    _applyFavoritesToList(newProducts);
     _products = newProducts;
     notifyListeners();
   }
 
-  /// Dispose and clean up resources
   @override
   void dispose() {
     _productsSubscription?.cancel();
-    _isListeningToRealtime = false;
+    _favoritesSubscription?.cancel();
     super.dispose();
   }
 }

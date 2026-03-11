@@ -332,75 +332,36 @@ class _PopularProductsScreenState extends State<PopularProductsScreen> {
                   Positioned(
                     top: 12,
                     right: 12,
-                    child: GestureDetector(
-                      onTap: () {
-                        try {
-                          final productProvider = context
-                              .read<ProductProvider>();
-                          final wasIsFavorite = product.isFavorite;
-
-                          // Optimistic update
-                          product.isFavorite = !wasIsFavorite;
-                          setState(() {});
-
-                          if (mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text(
-                                  product.isFavorite
-                                      ? 'Added to favorites'
-                                      : 'Removed from favorites',
-                                ),
-                                duration: const Duration(seconds: 1),
-                              ),
-                            );
-                          }
-
-                          // Update Firebase
-                          productProvider
-                              .toggleProductFavorite(product.id)
-                              .catchError((e) {
-                                // Rollback on error
-                                product.isFavorite = wasIsFavorite;
-                                if (mounted) {
-                                  setState(() {});
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text(
-                                        'Failed to update favorites',
-                                      ),
-                                      duration: Duration(seconds: 2),
-                                    ),
-                                  );
-                                }
-                              });
-                        } catch (e) {
-                          if (mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text(
-                                  'Please sign in to add favorites',
-                                ),
-                                duration: Duration(seconds: 2),
-                              ),
-                            );
-                          }
-                        }
+                    child: Consumer<ProductProvider>(
+                      builder: (context, provider, _) {
+                        final isFav = provider.isFavorite(product.id);
+                        return GestureDetector(
+                          onTap: () {
+                            provider.toggleProductFavorite(product.id).catchError((e) {
+                              if (mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('Failed to update favorites'),
+                                    duration: Duration(seconds: 2),
+                                  ),
+                                );
+                              }
+                            });
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.all(6),
+                            decoration: const BoxDecoration(
+                              color: Colors.white,
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(
+                              isFav ? Icons.favorite : Icons.favorite_border,
+                              size: 18,
+                              color: isFav ? Colors.red : Colors.grey,
+                            ),
+                          ),
+                        );
                       },
-                      child: Container(
-                        padding: const EdgeInsets.all(6),
-                        decoration: const BoxDecoration(
-                          color: Colors.white,
-                          shape: BoxShape.circle,
-                        ),
-                        child: Icon(
-                          product.isFavorite
-                              ? Icons.favorite
-                              : Icons.favorite_border,
-                          size: 18,
-                          color: product.isFavorite ? Colors.red : Colors.grey,
-                        ),
-                      ),
                     ),
                   ),
                 ],

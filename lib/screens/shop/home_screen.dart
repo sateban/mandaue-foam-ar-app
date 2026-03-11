@@ -8,7 +8,7 @@ import '../../utils/slide_route.dart';
 import '../../services/firebase_service.dart';
 import '../../services/filebase_service.dart';
 import '../../models/product.dart';
-import 'cart_screen.dart';
+import 'wishlist_screen.dart';
 import 'orders_screen.dart';
 import 'profile_screen.dart';
 import 'product_detail_screen.dart';
@@ -28,13 +28,7 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  List<Map<String, dynamic>> _filteredProducts = [];
   List<Map<String, dynamic>> _allFirebaseProducts = [];
-  List<String> _selectedCategories = [];
-  double _minPrice = 0;
-  double _maxPrice = 500;
-  List<String> _selectedMaterials = [];
-  List<String> _selectedColors = [];
   List<Product> _popularProducts = [];
   List<Product> _newArrivalProducts = [];
   // Hero carousel
@@ -60,29 +54,28 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _onProductProviderUpdate() {
     if (!mounted) return;
-    final productProvider = context.read<ProductProvider>();
-    setState(() {
-      // Update maps in local storage
-      for (var p in _allFirebaseProducts) {
-        final provP = productProvider.getProductById(p['id']?.toString() ?? '');
-        if (provP != null) {
-          p['isFavorite'] = provP['isFavorite'] ?? false;
-        }
-      }
+    _deriveListsFromProvider();
+  }
 
-      // Update Product model objects
-      for (var p in _popularProducts) {
-        final provP = productProvider.getProductById(p.id);
-        if (provP != null) {
-          p.isFavorite = provP['isFavorite'] ?? false;
-        }
-      }
-      for (var p in _newArrivalProducts) {
-        final provP = productProvider.getProductById(p.id);
-        if (provP != null) {
-          p.isFavorite = provP['isFavorite'] ?? false;
-        }
-      }
+  void _deriveListsFromProvider() {
+    final productProvider = context.read<ProductProvider>();
+    final allProducts = productProvider.products;
+
+    setState(() {
+      _allFirebaseProducts = allProducts;
+      
+      // Update section-specific lists using Product model
+      _popularProducts = allProducts
+          .where((p) => p['isPopular'] == true)
+          .map<Product>((p) => Product.fromMap(p))
+          .toList();
+          
+      _newArrivalProducts = allProducts
+          .where((p) => p['isNewArrival'] == true)
+          .map<Product>((p) => Product.fromMap(p))
+          .toList();
+
+      _updateHeroSlidesFromProducts(allProducts);
 
       // Refresh search results if active
       if (_searchController.text.isNotEmpty) {
@@ -101,38 +94,16 @@ class _HomeScreenState extends State<HomeScreen> {
     // Register listener for ProductProvider to sync favorites across screens
     context.read<ProductProvider>().addListener(_onProductProviderUpdate);
 
-    // Get products from ProductProvider (loaded from Firebase after sign-in)
-    final productProvider = context.read<ProductProvider>();
-    _filteredProducts = List.from(productProvider.products);
-
-    // Load user's favorites from Firebase
-    _loadUserFavorites();
-
-    // Load Firebase products
-    _loadFirebaseProducts();
+    // Initial derivation
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _deriveListsFromProvider();
+    });
 
     // Test Filebase credentials to diagnose 403 issue
     _testFilebaseConnection();
 
-    // prepare hero slides (take up to 5 product images as slides)
-    _heroSlides = _filteredProducts
-        .take(5)
-        .map<String>((p) => (p['imageUrl'] as String?) ?? '')
-        .toList();
-    _heroNames = _filteredProducts
-        .take(5)
-        .map<String>((p) => (p['name'] as String?) ?? '')
-        .toList();
-    if (_heroSlides.isEmpty) {
-      _heroSlides = List.filled(5, '');
-      _heroNames = List.filled(5, 'Astra Wood\nChair');
-    } else if (_heroSlides.length < 5) {
-      // pad to 5 slides
-      _heroSlides = List.from(_heroSlides)
-        ..addAll(List.filled(5 - _heroSlides.length, ''));
-      _heroNames = List.from(_heroNames)
-        ..addAll(List.filled(5 - _heroNames.length, 'Astra Wood\nChair'));
-    }
+    _heroSlides = List.filled(5, '');
+    _heroNames = List.filled(5, 'Astra Wood\nChair');
     _heroPageController = PageController();
     _heroTimer = Timer.periodic(const Duration(seconds: 5), (timer) {
       if (!_heroPageController.hasClients) return;
@@ -147,144 +118,16 @@ class _HomeScreenState extends State<HomeScreen> {
       }
 
       _heroCurrentIndex = (_heroCurrentIndex + 1) % _heroSlides.length;
-      _heroPageController.animateToPage(
-        _heroCurrentIndex,
-        duration: const Duration(milliseconds: 400),
-        curve: Curves.easeInOut,
-      );
+      if (_heroPageController.hasClients) {
+        _heroPageController.animateToPage(
+          _heroCurrentIndex,
+          duration: const Duration(milliseconds: 400),
+          curve: Curves.easeInOut,
+        );
+      }
     });
   }
 
-  Future<void> _loadFirebaseProducts() async {
-    try {
-      final List<Map<String, dynamic>> productsData =
-          await FirebaseService.readListData('products');
-
-      print("✅ Products loaded from Firebase: ${productsData.length}");
-
-      // Show first product path before transformation
-      if (productsData.isNotEmpty) {
-        print("📝 Sample Firebase imageUrl: ${productsData.first['imageUrl']}");
-        print("📝 Sample Firebase modelUrl: ${productsData.first['modelUrl']}");
-      }
-
-      // Transform Firebase paths to full Filebase URLs
-      final filebaseService = FilebaseService();
-      final transformedProducts = filebaseService
-          .transformProductsWithFilebaseUrls(productsData);
-
-      // Show first product path after transformation
-      if (transformedProducts.isNotEmpty) {
-        print(
-          "🔄 After transformation imageUrl: ${transformedProducts.first['imageUrl']}",
-        );
-        print(
-          "🔄 After transformation modelUrl: ${transformedProducts.first['modelUrl']}",
-        );
-      }
-
-      // Update hero slides from products with isHeroBanner == true
-      _updateHeroSlidesFromProducts(transformedProducts);
-
-      // Cancel previous subscription if it exists
-      _productsSubscription?.cancel();
-
-      // Listen to real-time updates
-      _productsSubscription = FirebaseService.streamListData('/products')
-          .listen(
-            (productsList) {
-              // ignore: avoid_print
-              print('Stream products received: ${productsList.length} items');
-              if (!mounted) return;
-
-              // Transform Firebase paths to full Filebase URLs
-              final transformedStreamProducts = filebaseService
-                  .transformProductsWithFilebaseUrls(productsList);
-
-              // Update hero slides from products with isHeroBanner == true
-              _updateHeroSlidesFromProducts(transformedStreamProducts);
-
-              // Update the ProductProvider with new products
-              final productProvider = context.read<ProductProvider>();
-              productProvider.updateProducts(transformedStreamProducts);
-
-              setState(() {
-                _allFirebaseProducts = transformedStreamProducts;
-                _filteredProducts = List.from(_allFirebaseProducts);
-
-                // Update section-specific lists using Product model
-                _popularProducts = _allFirebaseProducts
-                    .where((p) => p['isPopular'] == true)
-                    .map<Product>((p) => Product.fromMap(p))
-                    .toList();
-                _newArrivalProducts = _allFirebaseProducts
-                    .where((p) => p['isNewArrival'] == true)
-                    .map<Product>((p) => Product.fromMap(p))
-                    .toList();
-              });
-
-              // Reload user favorites to update isFavorite status
-              _loadUserFavorites();
-
-              // Re-run search if there's an active search query
-              if (_searchController.text.isNotEmpty) {
-                _searchProducts(_searchController.text);
-              }
-            },
-            onError: (error) {
-              // ignore: avoid_print
-              print('Error reading products: $error');
-            },
-          );
-
-      if (!mounted) return;
-
-      setState(() {
-        _allFirebaseProducts = transformedProducts;
-        _filteredProducts = List.from(_allFirebaseProducts);
-
-        // Update section-specific lists using Product model
-        _popularProducts = _allFirebaseProducts
-            .where((p) => p['isPopular'] == true)
-            .map<Product>((p) => Product.fromMap(p))
-            .toList();
-        _newArrivalProducts = _allFirebaseProducts
-            .where((p) => p['isNewArrival'] == true)
-            .map<Product>((p) => Product.fromMap(p))
-            .toList();
-      });
-    } catch (e) {
-      if (!mounted) return;
-      print('Error loading Firebase products: $e');
-    }
-  }
-
-  /// Test Filebase connection and credentials
-  Future<void> _testFilebaseConnection() async {
-    final filebaseService = FilebaseService();
-    final result = await filebaseService.testCredentials();
-    print('\n🧪 Filebase Credential Test Result:');
-    print('   Status Code: ${result['statusCode']}');
-    print('   Success: ${result['success']}');
-    print('   Message: ${result['message']}');
-  }
-
-  /// Load user's favorites from Firebase and update product list
-  Future<void> _loadUserFavorites() async {
-    try {
-      final productProvider = context.read<ProductProvider>();
-      await productProvider.loadUserFavorites();
-
-      if (mounted) {
-        setState(() {
-          _filteredProducts = List.from(productProvider.products);
-        });
-      }
-      print('✅ User favorites loaded successfully');
-    } catch (e) {
-      print('Error loading user favorites: $e');
-    }
-  }
 
   @override
   @override
@@ -303,39 +146,18 @@ class _HomeScreenState extends State<HomeScreen> {
     super.dispose();
   }
 
-  // ignore: unused_element
-  void _applyFilters(
-    List<String> categories,
-    double minPrice,
-    double maxPrice,
-    List<String> materials,
-    List<String> colors,
-  ) {
-    setState(() {
-      _selectedCategories = categories;
-      _minPrice = minPrice;
-      _maxPrice = maxPrice;
-      _selectedMaterials = materials;
-      _selectedColors = colors;
-      _filterProducts();
-    });
-  }
-
-  void _filterProducts() {
-    _filteredProducts = _allFirebaseProducts.where((product) {
-      bool categoryMatch =
-          _selectedCategories.isEmpty ||
-          _selectedCategories.contains(product['category']);
-      bool priceMatch =
-          product['price'] >= _minPrice && product['price'] <= _maxPrice;
-      bool materialMatch =
-          _selectedMaterials.isEmpty ||
-          _selectedMaterials.contains(product['material']);
-      bool colorMatch =
-          _selectedColors.isEmpty || _selectedColors.contains(product['color']);
-
-      return categoryMatch && priceMatch && materialMatch && colorMatch;
-    }).toList();
+  /// Test Filebase connection and credentials
+  Future<void> _testFilebaseConnection() async {
+    try {
+      final filebaseService = FilebaseService();
+      final result = await filebaseService.testCredentials();
+      print('\n🧪 Filebase Credential Test Result:');
+      print('   Status Code: ${result['statusCode']}');
+      print('   Success: ${result['success']}');
+      print('   Message: ${result['message']}');
+    } catch (e) {
+      print('Error testing Filebase connection: $e');
+    }
   }
 
   /// Update categories scroll button visibility based on scroll position
@@ -527,7 +349,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             ),
                             IconButton(
                               icon: const Icon(
-                                Icons.shopping_cart_outlined,
+                                Icons.favorite_outline,
                                 color: Color(0xFF1E3A8A),
                               ),
                               onPressed: () {
@@ -536,9 +358,9 @@ class _HomeScreenState extends State<HomeScreen> {
                                   shell.setTab(1);
                                   return;
                                 }
-                                Navigator.of(
-                                  context,
-                                ).push(slideRoute(const CartScreen()));
+                                Navigator.of(context).push(
+                                  slideRoute(const WishlistScreen()),
+                                );
                               },
                             ),
                           ],
@@ -1268,7 +1090,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                       ),
                     ),
-                    // Cart
+                    // Favorites
                     GestureDetector(
                       onTap: () {
                         final shell = ShopShellScope.maybeOf(context);
@@ -1276,9 +1098,9 @@ class _HomeScreenState extends State<HomeScreen> {
                           shell.setTab(1);
                           return;
                         }
-                        Navigator.of(
-                          context,
-                        ).push(slideRoute(const CartScreen()));
+                        Navigator.of(context).push(
+                          slideRoute(const WishlistScreen()),
+                        );
                       },
                       child: Container(
                         padding: const EdgeInsets.all(12),
@@ -1287,7 +1109,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           shape: BoxShape.circle,
                         ),
                         child: const Icon(
-                          Icons.shopping_cart,
+                          Icons.favorite,
                           color: Colors.grey,
                           size: 24,
                         ),
@@ -1354,15 +1176,10 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildProductCard(Product product) {
     final imageUrl = product.imageUrl;
-    if (imageUrl.isNotEmpty) {
-      print('🖼️  Product: ${product.name} | URL: $imageUrl');
-    }
 
     return GestureDetector(
       onTap: () {
-        Navigator.of(
-          context,
-        ).push(slideRoute(ProductDetailScreen(product: product)));
+        Navigator.of(context).push(slideRoute(ProductDetailScreen(product: product)));
       },
       child: Container(
         decoration: BoxDecoration(
@@ -1400,10 +1217,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       top: 8,
                       left: 8,
                       child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 4,
-                        ),
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                         decoration: BoxDecoration(
                           color: const Color(0xFFFDB022),
                           borderRadius: BorderRadius.circular(6),
@@ -1418,70 +1232,42 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                       ),
                     ),
-                  // FAVORITE BUTTON COMMENTED OUT ON HOME PAGE
-                  // Can be uncommented to show favorite button on home page
-                  // Positioned(
-                  //   top: 8,
-                  //   right: 8,
-                  //   child: GestureDetector(
-                  //     onTap: () {
-                  //       try {
-                  //         final productProvider = context.read<ProductProvider>();
-                  //         final wasIsFavorite = product['isFavorite'] ?? false;
-                  //
-                  //         // Optimistic update - update UI immediately
-                  //         product['isFavorite'] = !wasIsFavorite;
-                  //         setState(() {});
-                  //
-                  //         // Show feedback
-                  //         if (mounted) {
-                  //           ScaffoldMessenger.of(context).showSnackBar(
-                  //             SnackBar(
-                  //               content: Text(
-                  //                 product['isFavorite'] ? 'Added to favorites' : 'Removed from favorites',
-                  //               ),
-                  //               duration: const Duration(seconds: 1),
-                  //             ),
-                  //           );
-                  //         }
-                  //
-                  //         // Update Firebase in background without awaiting
-                  //         productProvider.toggleProductFavorite(product['id']?.toString() ?? '')
-                  //           .catchError((e) {
-                  //             // Rollback on error
-                  //             product['isFavorite'] = wasIsFavorite;
-                  //             if (mounted) {
-                  //               setState(() {});
-                  //               ScaffoldMessenger.of(context).showSnackBar(
-                  //                 const SnackBar(
-                  //                   content: Text('Failed to update favorites'),
-                  //                   duration: Duration(seconds: 2),
-                  //                 ),
-                  //               );
-                  //             }
-                  //             print('Error toggling favorite: $e');
-                  //           });
-                  //       } catch (e) {
-                  //         if (mounted) {
-                  //           ScaffoldMessenger.of(context).showSnackBar(
-                  //             const SnackBar(
-                  //               content: Text('Please sign in to add favorites'),
-                  //               duration: Duration(seconds: 2),
-                  //             ),
-                  //           );
-                  //         }
-                  //         print('Error toggling favorite: $e');
-                  //       }
-                  //     },
-                  //     child: Icon(
-                  //       product['isFavorite']
-                  //           ? Icons.favorite
-                  //           : Icons.favorite_border,
-                  //       color: product['isFavorite'] ? Colors.red : Colors.grey,
-                  //       size: 24,
-                  //     ),
-                  //   ),
-                  // ),
+                  // Favourite button — reads state from ProductProvider, not local Product object
+                  Positioned(
+                    top: 8,
+                    right: 8,
+                    child: Consumer<ProductProvider>(
+                      builder: (context, provider, _) {
+                        final isFav = provider.isFavorite(product.id);
+                        return GestureDetector(
+                          onTap: () {
+                            provider.toggleProductFavorite(product.id).catchError((e) {
+                              if (mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('Failed to update favorites'),
+                                    duration: Duration(seconds: 2),
+                                  ),
+                                );
+                              }
+                            });
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.all(6),
+                            decoration: const BoxDecoration(
+                              color: Colors.white,
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(
+                              isFav ? Icons.favorite : Icons.favorite_border,
+                              color: isFav ? Colors.red : Colors.grey,
+                              size: 20,
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -1515,18 +1301,11 @@ class _HomeScreenState extends State<HomeScreen> {
                   const SizedBox(height: 4),
                   Row(
                     children: [
-                      const Icon(
-                        Icons.star,
-                        color: Color(0xFFFDB022),
-                        size: 14,
-                      ),
+                      const Icon(Icons.star, color: Color(0xFFFDB022), size: 14),
                       const SizedBox(width: 4),
                       Text(
                         '${product.rating}',
-                        style: const TextStyle(
-                          color: Colors.grey,
-                          fontSize: 12,
-                        ),
+                        style: const TextStyle(color: Colors.grey, fontSize: 12),
                       ),
                     ],
                   ),

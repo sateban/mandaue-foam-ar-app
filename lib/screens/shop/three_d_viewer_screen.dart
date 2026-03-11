@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:model_viewer_plus/model_viewer_plus.dart';
 import 'package:provider/provider.dart';
 import '../../models/product.dart';
-import '../../providers/cart_provider.dart';
+import '../../providers/product_provider.dart';
 
 class ThreeDViewerScreen extends StatefulWidget {
   final String localPath;
@@ -22,6 +22,13 @@ class ThreeDViewerScreen extends StatefulWidget {
 
 class _ThreeDViewerScreenState extends State<ThreeDViewerScreen> {
   final double _brightness = 1.0;
+  bool _isFavorite = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _isFavorite = widget.product.isFavorite;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -127,60 +134,76 @@ class _ThreeDViewerScreenState extends State<ThreeDViewerScreen> {
                     ],
                   ),
                   const SizedBox(height: 16),
-                  Consumer<CartProvider>(
-                    builder: (context, cartProvider, child) {
+                  Consumer<ProductProvider>(
+                    builder: (context, productProvider, child) {
                       return SizedBox(
                         width: double.infinity,
                         height: 56,
-                        child: ElevatedButton(
+                        child: ElevatedButton.icon(
                           onPressed: () async {
                             try {
-                              await cartProvider.addToCart(
-                                product: widget.product,
-                                quantity: 1,
-                                colorOverride: widget.variation?.color,
-                                imageUrlOverride: widget.variation?.imageUrl,
-                              );
-                              if (mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text('Added to cart successfully'),
-                                    backgroundColor: Colors.green,
-                                    behavior: SnackBarBehavior.floating,
-                                    margin: const EdgeInsets.all(20),
-                                    action: SnackBarAction(
-                                      label: 'View Cart',
-                                      textColor: Colors.white,
-                                      onPressed: () =>
-                                          Navigator.pushNamed(context, '/cart'),
-                                    ),
+                              final wasFavorite = _isFavorite;
+                              
+                              // Optimistic update
+                              setState(() {
+                                _isFavorite = !_isFavorite;
+                              });
+
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                    _isFavorite
+                                        ? 'Added to favorites'
+                                        : 'Removed from favorites',
                                   ),
-                                );
-                              }
+                                  duration: const Duration(seconds: 1),
+                                  behavior: SnackBarBehavior.floating,
+                                  margin: const EdgeInsets.all(20),
+                                ),
+                              );
+
+                              await productProvider.toggleProductFavorite(
+                                widget.product.id,
+                              );
                             } catch (e) {
+                              // Rollback
+                              setState(() {
+                                _isFavorite = !_isFavorite;
+                              });
                               if (mounted) {
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   SnackBar(
                                     content: Text('Error: $e'),
                                     backgroundColor: Colors.red,
+                                    behavior: SnackBarBehavior.floating,
+                                    margin: const EdgeInsets.all(20),
                                   ),
                                 );
                               }
                             }
                           },
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF6200EE),
+                            backgroundColor:
+                                _isFavorite
+                                    ? Colors.grey[200]
+                                    : const Color(0xFF6200EE),
+                            foregroundColor:
+                                _isFavorite ? Colors.red : Colors.white,
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(16),
                             ),
                             elevation: 0,
                           ),
-                          child: const Text(
-                            'Add to Cart',
-                            style: TextStyle(
+                          icon: Icon(
+                            _isFavorite ? Icons.favorite : Icons.favorite_border,
+                          ),
+                          label: Text(
+                            _isFavorite
+                                ? 'Remove from Favorites'
+                                : 'Add to Favorites',
+                            style: const TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.bold,
-                              color: Colors.white,
                             ),
                           ),
                         ),

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import 'cart_screen.dart';
+import 'wishlist_screen.dart';
 import 'home_screen.dart';
 import 'orders_screen.dart';
 import 'profile_screen.dart';
@@ -21,7 +21,7 @@ class _ShopShellState extends State<ShopShell> {
 
   final List<Widget> _pages = const [
     HomeScreen(showBottomNav: false),
-    CartScreen(showBottomNav: false),
+    WishlistScreen(),
     OrdersScreen(),
     ProfileScreen(showBottomNav: false),
   ];
@@ -109,8 +109,8 @@ class _BottomNav extends StatelessWidget {
               onTap: () => onTap(0),
             ),
             _NavItem(
-              label: 'Cart',
-              icon: Icons.shopping_cart,
+              label: 'Favorites',
+              icon: Icons.favorite,
               selected: currentIndex == 1,
               onTap: () => onTap(1),
             ),

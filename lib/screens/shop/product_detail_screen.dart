@@ -22,7 +22,6 @@ class ProductDetailScreen extends StatefulWidget {
 }
 
 class _ProductDetailScreenState extends State<ProductDetailScreen> {
-  bool _isFavorite = false;
   int _quantity = 1;
   bool _isDownloadingModel = false;
   double _downloadProgress = 0.0;
@@ -31,7 +30,6 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   @override
   void initState() {
     super.initState();
-    _isFavorite = widget.product.isFavorite;
     final variations = widget.product.getAllVariations();
     if (variations.isNotEmpty) {
       _selectedVariation = variations.first;
@@ -49,61 +47,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
           icon: const Icon(Icons.arrow_back, color: Color(0xFF1E3A8A)),
           onPressed: () => Navigator.pop(context),
         ),
-        actions: [
-          IconButton(
-            icon: Icon(
-              _isFavorite ? Icons.favorite : Icons.favorite_border,
-              color: Colors.red,
-            ),
-            onPressed: () {
-              try {
-                final productProvider = context.read<ProductProvider>();
-                final wasFavorite = _isFavorite;
-
-                // Optimistic update - update UI immediately
-                setState(() {
-                  _isFavorite = !_isFavorite;
-                });
-
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(
-                      _isFavorite
-                          ? 'Added to favorites'
-                          : 'Removed from favorites',
-                    ),
-                    duration: const Duration(seconds: 1),
-                  ),
-                );
-
-                // Update Firebase in background without awaiting
-                productProvider
-                    .toggleProductFavorite(widget.product.id)
-                    .catchError((e) {
-                      // Rollback on error
-                      setState(() {
-                        _isFavorite = wasFavorite;
-                      });
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Failed to update favorites'),
-                          duration: Duration(seconds: 2),
-                        ),
-                      );
-                      print('Error toggling favorite: $e');
-                    });
-              } catch (e) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Please sign in to add favorites'),
-                    duration: Duration(seconds: 2),
-                  ),
-                );
-                print('Error toggling favorite: $e');
-              }
-            },
-          ),
-        ],
+        actions: const [],
       ),
       body: SingleChildScrollView(
         child: Column(
@@ -487,35 +431,30 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                       ),
                     ),
                   const SizedBox(height: 32),
-                  // Add to Cart Button
+                  // Favorite Button (Replaces Add to Cart)
                   SizedBox(
                     width: double.infinity,
                     height: 56,
-                    child: Consumer<CartProvider>(
-                      builder: (context, cartProvider, child) {
-                        return ElevatedButton(
+                    child: Consumer<ProductProvider>(
+                      builder: (context, productProvider, child) {
+                        final currentProduct = productProvider.getProductById(widget.product.id);
+                        final isFavorite = currentProduct?['isFavorite'] ?? widget.product.isFavorite;
+                        
+                        return ElevatedButton.icon(
                           onPressed: () async {
                             try {
-                              await cartProvider.addToCart(
-                                product: widget.product,
-                                quantity: _quantity,
-                                colorOverride: _selectedVariation?.color,
-                                imageUrlOverride: _selectedVariation?.imageUrl,
+                              // Optimistic update handled by provider
+                              await productProvider.toggleProductFavorite(
+                                widget.product.id,
                               );
+                              
                               if (mounted) {
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   SnackBar(
                                     content: Text(
-                                      '$_quantity ${widget.product.name} added to cart',
+                                      isFavorite ? 'Removed from favorites' : 'Added to favorites',
                                     ),
-                                    backgroundColor: Colors.green,
-                                    duration: const Duration(seconds: 2),
-                                    action: SnackBarAction(
-                                      label: 'View Cart',
-                                      textColor: Colors.white,
-                                      onPressed: () =>
-                                          Navigator.pushNamed(context, '/cart'),
-                                    ),
+                                    duration: const Duration(seconds: 1),
                                   ),
                                 );
                               }
@@ -523,26 +462,34 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                               if (mounted) {
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   SnackBar(
-                                    content: Text('Error adding to cart: $e'),
+                                    content: Text('Error: $e'),
                                     backgroundColor: Colors.red,
-                                    duration: const Duration(seconds: 2),
                                   ),
                                 );
                               }
                             }
                           },
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF6200EE),
+                            backgroundColor:
+                                isFavorite
+                                    ? Colors.grey[200]
+                                    : const Color(0xFF6200EE),
+                            foregroundColor:
+                                isFavorite ? Colors.red : Colors.white,
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(12),
                             ),
                           ),
-                          child: const Text(
-                            'Add to Cart',
-                            style: TextStyle(
+                          icon: Icon(
+                            isFavorite ? Icons.favorite : Icons.favorite_border,
+                          ),
+                          label: Text(
+                            isFavorite
+                                ? 'Remove from Favorites'
+                                : 'Add to Favorites',
+                            style: const TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.bold,
-                              color: Colors.white,
                             ),
                           ),
                         );
