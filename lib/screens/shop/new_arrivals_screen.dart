@@ -69,8 +69,7 @@ class _NewArrivalsScreenState extends State<NewArrivalsScreen> {
     try {
       final productProvider = context.read<ProductProvider>();
       await productProvider.loadUserFavorites();
-    } catch (e) {
-    }
+    } catch (e) {}
   }
 
   Future<void> _loadNewArrivalProducts() async {
@@ -83,33 +82,34 @@ class _NewArrivalsScreenState extends State<NewArrivalsScreen> {
 
       _productsSubscription?.cancel();
 
-      _productsSubscription = FirebaseService.streamListData('/products').listen(
-        (productsList) {
-          if (!mounted) return;
+      _productsSubscription = FirebaseService.streamListData('/products')
+          .listen(
+            (productsList) {
+              if (!mounted) return;
 
-          final newArrivalProducts = productsList.where((product) {
-            return product['isNewArrival'] == true;
-          }).toList();
+              final newArrivalProducts = productsList.where((product) {
+                return product['isNewArrival'] == true;
+              }).toList();
 
-          final transformedProducts = filebaseService
-              .transformProductsWithFilebaseUrls(newArrivalProducts);
+              final transformedProducts = filebaseService
+                  .transformProductsWithFilebaseUrls(newArrivalProducts);
 
-          final convertedProducts = transformedProducts.map<Product>((map) {
-            return Product.fromMap(map);
-          }).toList();
+              final convertedProducts = transformedProducts.map<Product>((map) {
+                return Product.fromMap(map);
+              }).toList();
 
-          setState(() {
-            _products = convertedProducts;
-            _filteredProducts = List.from(_products);
-            _isLoadingProducts = false;
-          });
-        },
-        onError: (error) {
-          setState(() {
-            _isLoadingProducts = false;
-          });
-        },
-      );
+              setState(() {
+                _products = convertedProducts;
+                _filteredProducts = List.from(_products);
+                _isLoadingProducts = false;
+              });
+            },
+            onError: (error) {
+              setState(() {
+                _isLoadingProducts = false;
+              });
+            },
+          );
     } catch (e) {
       setState(() {
         _isLoadingProducts = false;
@@ -151,7 +151,7 @@ class _NewArrivalsScreenState extends State<NewArrivalsScreen> {
       _selectedMaterials = materials;
       _selectedColors = colors;
       _filterProducts();
-      _itemsToShow = 4; 
+      _itemsToShow = 4;
     });
   }
 
@@ -268,7 +268,9 @@ class _NewArrivalsScreenState extends State<NewArrivalsScreen> {
   Widget _buildNewArrivalItem(Product product) {
     return GestureDetector(
       onTap: () {
-        Navigator.of(context).push(slideRoute(ProductDetailScreen(product: product)));
+        Navigator.of(
+          context,
+        ).push(slideRoute(ProductDetailScreen(product: product)));
       },
       child: Container(
         margin: const EdgeInsets.only(bottom: 16),
@@ -311,10 +313,7 @@ class _NewArrivalsScreenState extends State<NewArrivalsScreen> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
-                        '₱${product.price.toStringAsFixed(2).replaceAllMapped(
-                              RegExp(r'(\d)(?=(\d{3})+\.)'),
-                              (Match m) => '${m[1]},',
-                            )}',
+                        '₱${product.price.toStringAsFixed(2).replaceAllMapped(RegExp(r'(\d)(?=(\d{3})+\.)'), (Match m) => '${m[1]},')}',
                         style: const TextStyle(
                           color: Color(0xFF1E3A8A),
                           fontSize: 14,
