@@ -1,6 +1,6 @@
 class CartItem {
-  final String id; // Unique cart item ID (Firebase key)
-  final String productId; // Reference to the product
+  final String id; 
+  final String productId; 
   final String name;
   final String color;
   final double price;
@@ -21,7 +21,6 @@ class CartItem {
     required this.updatedAt,
   });
 
-  /// Create CartItem from JSON (Firebase data)
   factory CartItem.fromJson(String id, Map<String, dynamic> json) {
     return CartItem(
       id: id,
@@ -40,7 +39,6 @@ class CartItem {
     );
   }
 
-  /// Convert CartItem to JSON (for Firebase)
   Map<String, dynamic> toJson() {
     return {
       'productId': productId,
@@ -54,7 +52,6 @@ class CartItem {
     };
   }
 
-  /// Create a copy with updated fields
   CartItem copyWith({
     String? id,
     String? productId,
@@ -79,6 +76,5 @@ class CartItem {
     );
   }
 
-  /// Calculate total price for this item
   double get totalPrice => price * quantity;
 }

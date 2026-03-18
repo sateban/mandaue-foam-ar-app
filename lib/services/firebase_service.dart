@@ -11,18 +11,10 @@ class FirebaseService {
   static final FirebaseAuth _auth = FirebaseAuth.instance;
   static final FirebaseStorage _storage = FirebaseStorage.instance;
 
-  /// Get Firebase Database instance
   static FirebaseDatabase getDatabase() => _database;
-
-  /// Get Firebase Auth instance
   static FirebaseAuth getAuth() => _auth;
-
-  /// Get current user
   static User? getCurrentUser() => _auth.currentUser;
 
-  // ==================== AUTHENTICATION METHODS ====================
-
-  /// Register user with email and password
   static Future<User?> registerWithEmailPassword({
     required String email,
     required String password,
@@ -33,7 +25,6 @@ class FirebaseService {
     try {
       print('DEBUG: Attempting to register user with email: $email');
       
-      // Create user account
       final UserCredential userCredential = await _auth.createUserWithEmailAndPassword(
         email: email,
         password: password,
@@ -42,10 +33,8 @@ class FirebaseService {
       final User? user = userCredential.user;
       
       if (user != null) {
-        // Update user profile
         await user.updateDisplayName('$firstName $lastName');
         
-        // Save additional user data to Realtime Database
         await writeData('users/${user.uid}', {
           'uid': user.uid,
           'email': email,
@@ -72,7 +61,6 @@ class FirebaseService {
     }
   }
 
-  /// Sign in user with email and password
   static Future<User?> signInWithEmailPassword({
     required String email,
     required String password,
@@ -90,7 +78,6 @@ class FirebaseService {
       if (user != null) {
         print('DEBUG: User signed in successfully: ${user.email}');
         
-        // Update last login timestamp
         await updateData('users/${user.uid}', {
           'lastLogin': DateTime.now().toIso8601String(),
         });
@@ -107,7 +94,6 @@ class FirebaseService {
     }
   }
 
-  /// Sign out current user
   static Future<void> signOut() async {
     try {
       print('DEBUG: Signing out user...');
@@ -119,7 +105,6 @@ class FirebaseService {
     }
   }
 
-  /// Send password reset email
   static Future<void> sendPasswordResetEmail(String email) async {
     try {
       print('DEBUG: Sending password reset email to: $email');
@@ -135,7 +120,6 @@ class FirebaseService {
     }
   }
 
-  /// Update user password
   static Future<void> updatePassword(String newPassword) async {
     try {
       final User? user = _auth.currentUser;
@@ -156,7 +140,6 @@ class FirebaseService {
     }
   }
 
-  /// Update user profile
   static Future<void> updateUserProfile({
     String? firstName,
     String? lastName,
@@ -170,13 +153,11 @@ class FirebaseService {
 
       print('DEBUG: Updating profile for user: ${user.email}');
 
-      // Update display name if provided
       if (firstName != null || lastName != null) {
         final displayName = '${firstName ?? ''} ${lastName ?? ''}'.trim();
         await user.updateDisplayName(displayName);
       }
 
-      // Update user data in Realtime Database
       final Map<String, dynamic> updateData = {};
       if (firstName != null) updateData['firstName'] = firstName;
       if (lastName != null) updateData['lastName'] = lastName;
@@ -200,7 +181,6 @@ class FirebaseService {
     }
   }
 
-  /// Upload profile picture to Firebase Storage
   static Future<String?> uploadProfilePicture(File imageFile) async {
     try {
       final user = _auth.currentUser;
@@ -210,19 +190,15 @@ class FirebaseService {
 
       print('DEBUG: Uploading profile picture for user: ${user.uid}');
 
-      // Create a reference to the user's profile picture
       final fileName = 'profile_${user.uid}_${DateTime.now().millisecondsSinceEpoch}.jpg';
       final ref = _storage.ref('profiles/${user.uid}/$fileName');
 
-      // Upload file
       final uploadTask = ref.putFile(imageFile);
       final taskSnapshot = await uploadTask;
 
-      // Get download URL
       final downloadUrl = await taskSnapshot.ref.getDownloadURL();
       print('DEBUG: Profile picture uploaded successfully: $downloadUrl');
 
-      // Save the URL to the database
       await updateData('users/${user.uid}', {
         'profilePicsUrl': downloadUrl,
       });
@@ -234,7 +210,6 @@ class FirebaseService {
     }
   }
 
-  /// Delete old profile picture from Firebase Storage
   static Future<void> deleteOldProfilePicture() async {
     try {
       final user = _auth.currentUser;
@@ -250,13 +225,10 @@ class FirebaseService {
     }
   }
 
-  /// Compress and resize profile image to reduce file size
-  /// Max width/height: 500px, Quality: 85%
   static Future<File> compressProfileImage(File imageFile) async {
     try {
       print('DEBUG: Compressing profile image...');
       
-      // Read image
       final bytes = await imageFile.readAsBytes();
       final image = img.decodeImage(bytes);
       
@@ -264,7 +236,6 @@ class FirebaseService {
         throw Exception('Failed to decode image');
       }
 
-      // Resize to max 500x500
       int width = image.width;
       int height = image.height;
       
@@ -280,7 +251,6 @@ class FirebaseService {
         print('DEBUG: Resizing image to ${width}x${height}');
       }
 
-      // Resize image
       final resized = img.copyResize(
         image,
         width: width,
@@ -288,10 +258,8 @@ class FirebaseService {
         interpolation: img.Interpolation.linear,
       );
 
-      // Encode to JPEG with 85% quality
       final compressed = img.encodeJpg(resized, quality: 85);
       
-      // Save compressed image to temp file
       final tempDir = Directory.systemTemp;
       final compressedFile = File('${tempDir.path}/profile_compressed_${DateTime.now().millisecondsSinceEpoch}.jpg');
       await compressedFile.writeAsBytes(compressed);
@@ -307,10 +275,7 @@ class FirebaseService {
     }
   }
 
-  /// Upload profile picture to Filebase (S3-compatible storage)
-  /// This replaces Firebase Storage to avoid payment requirements
   static Future<String?> uploadProfilePictureWithFilebase(File imageFile) async {
-
     try {
       final user = _auth.currentUser;
       if (user == null) {
@@ -319,14 +284,11 @@ class FirebaseService {
 
       print('DEBUG: Uploading profile picture to Filebase for user: ${user.uid}');
 
-      // Compress image before upload
       final compressedFile = await compressProfileImage(imageFile);
 
-      // Create unique filename
       final fileName = 'profile_${user.uid}_${DateTime.now().millisecondsSinceEpoch}.jpg';
       final folderPath = 'profiles/${user.uid}';
       
-      // Upload compressed image to Filebase
       final objectPath = await FilebaseService().uploadFile(
         filePath: compressedFile.path,
         fileName: fileName,
@@ -341,7 +303,6 @@ class FirebaseService {
         throw Exception('Filebase upload returned null');
       }
 
-      // Generate presigned URL for secure file access (valid for 7 days)
       final presignedUrl = await FilebaseService().buildPresignedImageUrl(objectPath);
       
       if (presignedUrl == null) {
@@ -350,13 +311,11 @@ class FirebaseService {
 
       print('DEBUG: Profile picture uploaded successfully to Filebase: $presignedUrl');
 
-      // Save the presigned URL to Firebase Realtime Database
       await updateData('users/${user.uid}', {
         'profilePicsUrl': presignedUrl,
         'profilePictureUpdatedAt': DateTime.now().toIso8601String(),
       });
 
-      // Clean up temporary compressed file
       try {
         await compressedFile.delete();
       } catch (_) {}
@@ -368,7 +327,6 @@ class FirebaseService {
     }
   }
 
-  /// Check if email exists
   static Future<bool> isEmailRegistered(String email) async {
     try {
       final list = await _auth.fetchSignInMethodsForEmail(email);
@@ -380,15 +338,12 @@ class FirebaseService {
     }
   }
 
-  /// Sign in with Google and create/update user profile
   static Future<User?> signInWithGoogle(GoogleSignInAccount googleUser) async {
     try {
       print('DEBUG: Attempting Firebase authentication with Google');
       
-      // Get Google Sign-In authentication
       final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
       
-      // Create credential using ID token and access token
       final AuthCredential credential = GoogleAuthProvider.credential(
         idToken: googleAuth.idToken,
         accessToken: googleAuth.accessToken,
@@ -396,18 +351,15 @@ class FirebaseService {
       
       print('DEBUG: Created Google credential');
       
-      // Sign in with Firebase using the credential
       final UserCredential userCredential = await _auth.signInWithCredential(credential);
       final User? user = userCredential.user;
       
       if (user != null) {
         print('DEBUG: Successfully signed in with Firebase via Google: ${user.email}');
         
-        // Check if user data exists in database
         final existingData = await readData('users/${user.uid}');
         
         if (existingData == null) {
-          // Create new user profile in database
           await writeData('users/${user.uid}', {
             'uid': user.uid,
             'email': user.email ?? googleUser.email,
@@ -421,7 +373,6 @@ class FirebaseService {
           
           print('DEBUG: Created new Google user profile');
         } else {
-          // Update existing user profile with latest info
           await updateData('users/${user.uid}', {
             'lastLogin': DateTime.now().toIso8601String(),
             'displayName': user.displayName ?? googleUser.displayName,
@@ -445,7 +396,6 @@ class FirebaseService {
     }
   }
 
-  /// Get user data from Realtime Database
   static Future<Map<dynamic, dynamic>?> getUserData(String userId) async {
     try {
       return await readData('users/$userId');
@@ -455,12 +405,10 @@ class FirebaseService {
     }
   }
 
-  /// Stream user data in real-time
   static Stream<Map<dynamic, dynamic>> streamUserData(String userId) {
     return streamData('users/$userId');
   }
 
-  /// Read single data once
   static Future<Map<dynamic, dynamic>?> readData(String path) async {
     try {
       final snapshot = await _database.ref(path).get();
@@ -474,7 +422,6 @@ class FirebaseService {
     }
   }
 
-  /// Read list data once
   static Future<List<Map<String, dynamic>>> readListData(String path) async {
     try {
       final snapshot = await _database.ref(path).get();
@@ -484,14 +431,12 @@ class FirebaseService {
         final data = snapshot.value;
 
         if (data is Map) {
-          // Handle Map data structure (Firebase returns as Map with keys)
           data.forEach((key, value) {
             if (value is Map) {
               list.add({'id': key, ...Map<String, dynamic>.from(value)});
             }
           });
         } else if (data is List) {
-          // Handle List data structure
           for (int i = 0; i < data.length; i++) {
             if (data[i] is Map) {
               list.add({
@@ -509,7 +454,6 @@ class FirebaseService {
     }
   }
 
-  /// Stream data in real-time
   static Stream<Map<dynamic, dynamic>> streamData(String path) {
     return _database.ref(path).onValue.map((event) {
       if (event.snapshot.exists) {
@@ -519,7 +463,6 @@ class FirebaseService {
     });
   }
 
-  /// Stream list data in real-time
   static Stream<List<Map<String, dynamic>>> streamListData(String path) {
     return _database.ref(path).onValue.map((event) {
       List<Map<String, dynamic>> list = [];
@@ -527,14 +470,12 @@ class FirebaseService {
         final data = event.snapshot.value;
 
         if (data is Map) {
-          // Handle Map data structure (Firebase returns as Map with keys)
           data.forEach((key, value) {
             if (value is Map) {
               list.add({'id': key, ...Map<String, dynamic>.from(value)});
             }
           });
         } else if (data is List) {
-          // Handle List data structure
           for (int i = 0; i < data.length; i++) {
             if (data[i] is Map) {
               list.add({
@@ -549,7 +490,6 @@ class FirebaseService {
     });
   }
 
-  /// Write data
   static Future<void> writeData(String path, Map<String, dynamic> data) async {
     try {
       await _database.ref(path).set(data);
@@ -558,7 +498,6 @@ class FirebaseService {
     }
   }
 
-  /// Update data
   static Future<void> updateData(String path, Map<String, dynamic> data) async {
     try {
       await _database.ref(path).update(data);
@@ -567,7 +506,6 @@ class FirebaseService {
     }
   }
 
-  /// Delete data
   static Future<void> deleteData(String path) async {
     try {
       await _database.ref(path).remove();
@@ -576,8 +514,6 @@ class FirebaseService {
     }
   }
 
-  /// Delete data
-  // Address Management
   static Future<void> saveAddress(
     String userId,
     Map<String, dynamic> addressData,
@@ -585,12 +521,10 @@ class FirebaseService {
     try {
       final String? addressId = addressData['id'];
       if (addressId == null || addressId.isEmpty) {
-        // Create new
         final newRef = _database.ref('users/$userId/addresses').push();
         addressData['id'] = newRef.key;
         await newRef.set(addressData);
       } else {
-        // Update existing
         await _database
             .ref('users/$userId/addresses/$addressId')
             .set(addressData);
@@ -627,14 +561,13 @@ class FirebaseService {
     }
   }
 
-  // Order Management
   static Future<void> createOrder(
     String userId,
     Map<String, dynamic> orderData,
   ) async {
     try {
       final newRef = _database.ref('users/$userId/orders').push();
-      orderData['id'] = newRef.key; // Ensure ID matches key
+      orderData['id'] = newRef.key;
       await newRef.set(orderData);
     } catch (e) {
       print('Error creating order: $e');
@@ -655,7 +588,6 @@ class FirebaseService {
           });
         }
       }
-      // Sort by date, newest first
       list.sort((a, b) {
         DateTime? dateA = DateTime.tryParse(a['orderDate'] ?? '');
         DateTime? dateB = DateTime.tryParse(b['orderDate'] ?? '');
@@ -666,20 +598,16 @@ class FirebaseService {
     });
   }
 
-  // Favorites Management
-  /// Toggle product favorite status for user
   static Future<bool> toggleFavorite(String userId, String productId) async {
     try {
       final favoritePath = 'users/$userId/favorites/$productId';
       final snapshot = await _database.ref(favoritePath).get();
       
       if (snapshot.exists) {
-        // Remove from favorites
         await _database.ref(favoritePath).remove();
         print('DEBUG: Removed product $productId from favorites');
         return false;
       } else {
-        // Add to favorites
         await _database.ref(favoritePath).set({
           'productId': productId,
           'addedAt': DateTime.now().toIso8601String(),
@@ -693,7 +621,6 @@ class FirebaseService {
     }
   }
 
-  /// Check if a product is in user's favorites
   static Future<bool> isFavorite(String userId, String productId) async {
     try {
       final snapshot = await _database.ref('users/$userId/favorites/$productId').get();
@@ -704,7 +631,6 @@ class FirebaseService {
     }
   }
 
-  /// Get user's favorite products
   static Future<List<String>> getFavoriteProductIds(String userId) async {
     try {
       final snapshot = await _database.ref('users/$userId/favorites').get();
@@ -722,7 +648,6 @@ class FirebaseService {
     }
   }
 
-  /// Stream user's favorite products in real-time
   static Stream<List<String>> streamFavoriteProductIds(String userId) {
     return _database.ref('users/$userId/favorites').onValue.map((event) {
       List<String> favorites = [];
@@ -732,4 +657,5 @@ class FirebaseService {
       }
       return favorites;
     });
-  }}
+  }
+}

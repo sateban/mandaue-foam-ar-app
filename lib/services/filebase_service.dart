@@ -7,8 +7,6 @@ import 'package:minio/minio.dart';
 import 'package:minio/io.dart';
 import 'package:crypto/crypto.dart';
 
-/// Filebase Service for S3-compatible storage using official MinIO package
-/// Handles all CRUD operations for file management
 class FilebaseService {
   static final FilebaseService _instance = FilebaseService._internal();
   late String _apiKey;
@@ -17,10 +15,8 @@ class FilebaseService {
   late String _region;
   late Minio _minioClient;
 
-  /// Image cache to avoid re-downloading: URL -> Uint8List
   final Map<String, Uint8List> _imageCache = {};
 
-  /// Pending download futures to avoid duplicate requests
   final Map<String, Future<Uint8List?>> _pendingDownloads = {};
 
   factory FilebaseService() {
@@ -29,12 +25,9 @@ class FilebaseService {
 
   FilebaseService._internal();
 
-  /// Initialize Filebase service with configuration
-  /// Uses official MinIO client for proper S3 compatibility
   static Future<void> initialize() async {
     final instance = FilebaseService();
     try {
-      // Load configuration from filebase_config.json
       final configString = await rootBundle.loadString('filebase_config.json');
       final config = jsonDecode(configString);
       final filebaseConfig = config['filebase'] ?? {};
@@ -44,8 +37,6 @@ class FilebaseService {
       instance._bucketName = filebaseConfig['bucket_name'] ?? '';
       instance._region = filebaseConfig['region'] ?? 'us-east-1';
 
-      // Initialize MinIO client with Filebase S3 endpoint
-      // Note: Filebase uses s3.filebase.com as the endpoint, not bucket-specific
       instance._minioClient = Minio(
         endPoint: 's3.filebase.com',
         accessKey: instance._apiKey,
@@ -66,20 +57,16 @@ class FilebaseService {
     }
   }
 
-  /// Build Filebase image URL from relative path
-  /// Uses presigned URLs (temporary signed access) for secure file access
-  /// Presigned URLs are valid for 7 days and don't require bucket to be public
   Future<String?> buildPresignedImageUrl(String objectPath) async {
     try {
       if (objectPath.isEmpty) return null;
 
       print('DEBUG: Generating presigned URL for: $objectPath');
 
-      // Generate presigned GET URL valid for 7 days (604800 seconds)
       final presignedUrl = await _minioClient.presignedGetObject(
         _bucketName,
         objectPath,
-        expires: 7 * 24 * 60 * 60, // 7 days in seconds
+        expires: 7 * 24 * 60 * 60,
       );
 
       print('✓ Presigned URL generated (valid 7 days): $presignedUrl');
@@ -90,14 +77,10 @@ class FilebaseService {
     }
   }
 
-  /// Convert direct URL to presigned URL if needed
-  /// If URL already has presigned parameters, return as-is
-  /// If URL is a direct link, regenerate with presigned signature
   Future<String?> ensurePresignedUrl(String? imageUrl) async {
     if (imageUrl == null || imageUrl.isEmpty) return null;
 
     try {
-      // Check if already presigned (contains signature parameter)
       if (imageUrl.contains('X-Amz-Signature')) {
         print('DEBUG: URL already presigned, using as-is');
         return imageUrl;
@@ -105,67 +88,52 @@ class FilebaseService {
 
       print('DEBUG: Converting direct URL to presigned URL');
 
-      // Extract object path from URL
-      // URLs look like: https://bucket.s3.filebase.com/path/to/object
       final uri = Uri.parse(imageUrl);
       String objectPath = uri.path;
 
-      // Remove leading slash if present
       if (objectPath.startsWith('/')) {
         objectPath = objectPath.substring(1);
       }
 
       print('DEBUG: Extracted object path: $objectPath');
 
-      // Generate presigned URL
       return await buildPresignedImageUrl(objectPath);
     } catch (e) {
       print('✗ Error converting URL to presigned: $e');
-      return imageUrl; // Return original URL if conversion fails
+      return imageUrl;
     }
   }
 
-  /// Build direct public URL (only works if bucket is public)
-  /// For private buckets, use buildPresignedImageUrl instead
   String buildFilebaseImageUrl(String relativePath) {
     return 'https://$_bucketName.s3.filebase.com/$relativePath';
   }
 
-  /// Transform Firebase product data with Filebase image URLs
-  /// Converts relative image paths to full Filebase URLs
   List<Map<String, dynamic>> transformProductsWithFilebaseUrls(
     List<Map<String, dynamic>> products,
   ) {
     return products.map((product) {
       final transformedProduct = Map<String, dynamic>.from(product);
 
-      // Transform imageUrl
       if (product['imageUrl'] is String && product['imageUrl'].isNotEmpty) {
         final imageUrl = product['imageUrl'] as String;
 
-        // If already a full URL, use as-is
         if (imageUrl.startsWith('http')) {
           transformedProduct['imageUrl'] = imageUrl;
         } else {
-          // Convert relative path to full Filebase URL
           transformedProduct['imageUrl'] = buildFilebaseImageUrl(imageUrl);
         }
       }
 
-      // Transform modelUrl (for 3D models in AR)
       if (product['modelUrl'] is String && product['modelUrl'].isNotEmpty) {
         final modelUrl = product['modelUrl'] as String;
 
-        // If already a full URL, use as-is
         if (modelUrl.startsWith('http')) {
           transformedProduct['modelUrl'] = modelUrl;
         } else {
-          // Convert relative path to full Filebase URL
           transformedProduct['modelUrl'] = buildFilebaseImageUrl(modelUrl);
         }
       }
 
-      // Transform variations
       if (product['variation'] is Map) {
         final variations = Map<String, dynamic>.from(product['variation']);
         final transformedVariations = <String, dynamic>{};
@@ -200,12 +168,6 @@ class FilebaseService {
     }).toList();
   }
 
-  /// Get image bytes from Filebase with proper authentication
-  /// Uses MinIO client for secure S3-compatible access
-  /// Implements caching and deduplication to minimize data usage
-  /// Get cached image bytes without downloading
-  /// Returns null if image is not in cache
-  /// Use this to check if image is already cached before displaying
   Uint8List? getCachedImageBytes(String imageUrl) {
     if (imageUrl.isEmpty) return null;
 
@@ -224,13 +186,11 @@ class FilebaseService {
     try {
       if (imageUrl.isEmpty) return null;
 
-      // Check cache first - avoid re-downloading
       if (_imageCache.containsKey(imageUrl)) {
         print('✨ Image cached (no re-download): ${imageUrl.split('/').last}');
         return _imageCache[imageUrl];
       }
 
-      // Check if download is already in progress - share the future
       if (_pendingDownloads.containsKey(imageUrl)) {
         print(
           '⏳ Waiting for in-progress download: ${imageUrl.split('/').last}',
@@ -240,9 +200,6 @@ class FilebaseService {
 
       print('\n🔍 Fetching Image: $imageUrl');
 
-      // Extract object name from URL and support both URL formats:
-      // 1) https://s3.filebase.com/<bucket>/<path/to/object>
-      // 2) https://<bucket>.s3.filebase.com/<path/to/object>
       final uri = Uri.parse(imageUrl);
       final pathSegments = uri.pathSegments;
       final host = uri.host;
@@ -250,20 +207,16 @@ class FilebaseService {
       String objectPath;
 
       if (host == 's3.filebase.com') {
-        // style 1: bucket is first path segment
         if (pathSegments.length < 2) {
           print('❌ Invalid URL format: $imageUrl');
           return null;
         }
         objectPath = pathSegments.sublist(1).join('/');
       } else if (host.endsWith('.s3.filebase.com')) {
-        // style 2: bucket is subdomain
         objectPath = pathSegments.join('/');
       } else if (pathSegments.isNotEmpty && pathSegments[0] == _bucketName) {
-        // fallback: path begins with bucket name
         objectPath = pathSegments.sublist(1).join('/');
       } else if (pathSegments.isNotEmpty) {
-        // last-resort fallback: use full path
         objectPath = pathSegments.join('/');
       } else {
         print('❌ Invalid URL format: $imageUrl');
@@ -273,19 +226,14 @@ class FilebaseService {
       print('📋 Bucket: $_bucketName');
       print('📋 Object: $objectPath');
 
-      // Create download future
       final downloadFuture = _downloadAndCacheImage(imageUrl, objectPath);
 
-      // Track this download to prevent duplicate requests
       _pendingDownloads[imageUrl] = downloadFuture;
 
-      // Wait for download and cache result
       final result = await downloadFuture;
 
-      // Remove from pending once complete
       _pendingDownloads.remove(imageUrl);
 
-      // Cache the result if successful
       if (result != null) {
         _imageCache[imageUrl] = result;
       }
@@ -297,19 +245,16 @@ class FilebaseService {
     }
   }
 
-  /// Helper method to download and cache image bytes
   Future<Uint8List?> _downloadAndCacheImage(
     String imageUrl,
     String objectPath,
   ) async {
     try {
-      // Use MinIO to get the object
       final stream = await _minioClient.getObject(_bucketName, objectPath);
 
       print('✅ Object retrieved successfully');
       print('📊 Content Length: ${stream.contentLength}');
 
-      // Convert stream to bytes
       final bytes = await stream.toList();
       final data = bytes.expand((chunk) => chunk).toList();
       final result = Uint8List.fromList(data);
@@ -322,27 +267,22 @@ class FilebaseService {
     }
   }
 
-  /// Pre-cache multiple images to avoid delays during slideshow
-  /// Useful for hero banners and frequently used images
   Future<void> preCacheImages(List<String> imageUrls) async {
     print('\n📥 Pre-caching ${imageUrls.length} hero banner images...');
 
     final stopwatch = Stopwatch()..start();
 
-    // Download all images in parallel for speed
     final futures = <Future<void>>[];
 
     for (final url in imageUrls) {
       if (url.isNotEmpty && !_imageCache.containsKey(url)) {
         futures.add(
           getImageBytes(url).then((_) {
-            // Result already cached in getImageBytes
           }),
         );
       }
     }
 
-    // Wait for all downloads (with timeout to prevent hanging)
     try {
       await Future.wait(
         futures,
@@ -361,13 +301,11 @@ class FilebaseService {
     );
   }
 
-  /// Clear image cache to free memory
   void clearImageCache() {
     _imageCache.clear();
     print('🗑️  Image cache cleared');
   }
 
-  /// Get cache statistics
   Map<String, dynamic> getCacheStats() {
     int totalBytes = 0;
     for (final bytes in _imageCache.values) {
@@ -380,8 +318,6 @@ class FilebaseService {
     };
   }
 
-  /// Download 3D model file from Filebase with proper authentication
-  /// Returns the local file path where the model was saved
   Future<String?> downloadModelFile({
     required String modelUrl,
     required String localFilePath,
@@ -392,7 +328,6 @@ class FilebaseService {
 
       print('\n🔍 Downloading 3D Model: $modelUrl');
 
-      // Extract object path from URL (same logic as getImageBytes)
       final uri = Uri.parse(modelUrl);
       final pathSegments = uri.pathSegments;
       final host = uri.host;
@@ -400,20 +335,16 @@ class FilebaseService {
       String objectPath;
 
       if (host == 's3.filebase.com') {
-        // style 1: bucket is first path segment
         if (pathSegments.length < 2) {
           print('❌ Invalid URL format: $modelUrl');
           return null;
         }
         objectPath = pathSegments.sublist(1).join('/');
       } else if (host.endsWith('.s3.filebase.com')) {
-        // style 2: bucket is subdomain
         objectPath = pathSegments.join('/');
       } else if (pathSegments.isNotEmpty && pathSegments[0] == _bucketName) {
-        // fallback: path begins with bucket name
         objectPath = pathSegments.sublist(1).join('/');
       } else if (pathSegments.isNotEmpty) {
-        // last-resort fallback: use full path
         objectPath = pathSegments.join('/');
       } else {
         print('❌ Invalid URL format: $modelUrl');
@@ -424,7 +355,6 @@ class FilebaseService {
       print('📋 Object: $objectPath');
       print('📋 Save to: $localFilePath');
 
-      // Get object metadata for size
       int totalBytes = -1;
       try {
         final stat = await _minioClient.statObject(_bucketName, objectPath);
@@ -433,13 +363,11 @@ class FilebaseService {
         print('⚠️ Could not get object stats: $e');
       }
 
-      // Use MinIO getObject (stream) instead of fGetObject to track progress
       final stream = await _minioClient.getObject(_bucketName, objectPath);
 
       final file = File(localFilePath);
       final sink = file.openWrite();
 
-      // Handle the stream and track progress
       int receivedBytes = 0;
       await stream.listen((chunk) {
         sink.add(chunk);
@@ -449,7 +377,6 @@ class FilebaseService {
         }
       }, cancelOnError: true).asFuture();
 
-      // Ensure sink is fully flushed and closed
       await sink.flush();
       await sink.close();
 
@@ -461,7 +388,6 @@ class FilebaseService {
     }
   }
 
-  /// Test if credentials are valid by checking bucket access
   Future<Map<String, dynamic>> testCredentials() async {
     try {
       print('\n🔐 === TESTING FILEBASE CREDENTIALS ===');
@@ -472,14 +398,11 @@ class FilebaseService {
       print('Bucket: $_bucketName');
       print('Region: $_region');
 
-      // Check if bucket exists
-      print('\n📤 Checking bucket access...');
       final exists = await _minioClient.bucketExists(_bucketName);
 
       if (exists) {
         print('✅ Bucket exists and is accessible');
 
-        // Try to list objects to verify full access
         print('📤 Listing objects in bucket...');
         var objectCount = 0;
         await _minioClient.listObjects(_bucketName).forEach((chunk) {
@@ -510,11 +433,6 @@ class FilebaseService {
     }
   }
 
-  /// Update metadata for an existing object (best-effort/stub)
-  /// Note: Some S3-compatible servers require copying the object to itself
-  /// with metadata replacement. This implementation currently logs intent
-  /// and returns false by default. Replace with a proper copy-with-metadata
-  /// implementation when needed.
   Future<bool> updateFileMeta({
     required String objectPath,
     required Map<String, String> metadata,
@@ -522,8 +440,6 @@ class FilebaseService {
     try {
       print('\n🔁 updateFileMeta called for: $objectPath');
       print('   Metadata: $metadata');
-      // TODO: Implement actual metadata update using copyObject or equivalent
-      // Returning false to indicate metadata was not changed by the stub.
       return false;
     } catch (e) {
       print('❌ Error updating metadata: $e');
@@ -531,7 +447,6 @@ class FilebaseService {
     }
   }
 
-  /// Upload file to Filebase
   Future<String?> uploadFile({
     required String filePath,
     required String fileName,
@@ -563,7 +478,6 @@ class FilebaseService {
     }
   }
 
-  /// Download file from Filebase
   Future<bool> downloadFile({
     required String objectPath,
     required String localSavePath,
@@ -584,7 +498,6 @@ class FilebaseService {
     }
   }
 
-  /// Delete file from Filebase
   Future<bool> deleteFile(String objectPath) async {
     try {
       print('\n🗑️  Deleting from Filebase:');
@@ -601,7 +514,6 @@ class FilebaseService {
     }
   }
 
-  /// List files in bucket
   Future<List<String>> listFiles(String folderPath) async {
     try {
       print('\n📋 Listing files in: $folderPath');
@@ -625,7 +537,6 @@ class FilebaseService {
     }
   }
 
-  /// Check if file exists
   Future<bool> fileExists(String objectPath) async {
     try {
       await _minioClient.statObject(_bucketName, objectPath);
@@ -635,7 +546,6 @@ class FilebaseService {
     }
   }
 
-  /// Get file size
   Future<int?> getFileSize(String objectPath) async {
     try {
       final stat = await _minioClient.statObject(_bucketName, objectPath);
@@ -646,7 +556,6 @@ class FilebaseService {
     }
   }
 
-  /// Generate presigned URL for temporary access (1 hour by default)
   Future<String?> generatePresignedUrl(
     String objectPath, {
     int expirationSeconds = 3600,
@@ -664,8 +573,6 @@ class FilebaseService {
     }
   }
 
-  /// Get a unique filename from a URL or object path to prevent collisions
-  /// Uses a combination of the basename and a hash of the full URL
   String getUniqueFileName(String url) {
     if (url.isEmpty) return 'unknown_file';
     try {
@@ -673,11 +580,9 @@ class FilebaseService {
       final path = uri.path;
       final fileName = path.split('/').last;
 
-      // Create a hash of the full URL (including query/fragment) to ensure absolute uniqueness
       final bytes = utf8.encode(url);
       final hash = sha256.convert(bytes).toString().substring(0, 8);
 
-      // Return name like: chair_abc123.glb
       if (fileName.contains('.')) {
         final parts = fileName.split('.');
         final ext = parts.last;
@@ -690,7 +595,6 @@ class FilebaseService {
     }
   }
 
-  // Getters
   String get apiKey => _apiKey;
   String get apiSecret => _apiSecret;
   String get bucketName => _bucketName;

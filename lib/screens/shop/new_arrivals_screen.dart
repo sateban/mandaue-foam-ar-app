@@ -36,7 +36,6 @@ class _NewArrivalsScreenState extends State<NewArrivalsScreen> {
     if (!mounted) return;
     final productProvider = context.read<ProductProvider>();
     setState(() {
-      // Update Product model objects in our local lists
       for (var p in _products) {
         final provP = productProvider.getProductById(p.id);
         if (provP != null) {
@@ -44,8 +43,6 @@ class _NewArrivalsScreenState extends State<NewArrivalsScreen> {
         }
       }
 
-      // _filteredProducts contains the same objects, so they should be updated already.
-      // But we can re-sync just to be sure if some filtering based on isFavorite is added later.
       for (var p in _filteredProducts) {
         final provP = productProvider.getProductById(p.id);
         if (provP != null) {
@@ -62,7 +59,6 @@ class _NewArrivalsScreenState extends State<NewArrivalsScreen> {
     _filteredProducts = [];
     _scrollController.addListener(_onScroll);
 
-    // Register listener for ProductProvider to sync favorites across screens
     context.read<ProductProvider>().addListener(_onProductProviderUpdate);
 
     _loadNewArrivalProducts();
@@ -73,9 +69,7 @@ class _NewArrivalsScreenState extends State<NewArrivalsScreen> {
     try {
       final productProvider = context.read<ProductProvider>();
       await productProvider.loadUserFavorites();
-      print('✅ User favorites loaded in NewArrivalsScreen');
     } catch (e) {
-      print('Error loading user favorites: $e');
     }
   }
 
@@ -87,24 +81,19 @@ class _NewArrivalsScreenState extends State<NewArrivalsScreen> {
 
       final filebaseService = FilebaseService();
 
-      // Cancel previous subscription if it exists
       _productsSubscription?.cancel();
 
-      // Listen to real-time updates from Firebase
       _productsSubscription = FirebaseService.streamListData('/products').listen(
         (productsList) {
           if (!mounted) return;
 
-          // Filter only new arrival products (isNewArrival == true)
           final newArrivalProducts = productsList.where((product) {
             return product['isNewArrival'] == true;
           }).toList();
 
-          // Transform Firebase paths to full Filebase URLs
           final transformedProducts = filebaseService
               .transformProductsWithFilebaseUrls(newArrivalProducts);
 
-          // Convert to Product models for robust mapping and to fix null errors
           final convertedProducts = transformedProducts.map<Product>((map) {
             return Product.fromMap(map);
           }).toList();
@@ -116,14 +105,12 @@ class _NewArrivalsScreenState extends State<NewArrivalsScreen> {
           });
         },
         onError: (error) {
-          print('Error loading new arrival products: $error');
           setState(() {
             _isLoadingProducts = false;
           });
         },
       );
     } catch (e) {
-      print('Error in _loadNewArrivalProducts: $e');
       setState(() {
         _isLoadingProducts = false;
       });
@@ -132,7 +119,6 @@ class _NewArrivalsScreenState extends State<NewArrivalsScreen> {
 
   @override
   void dispose() {
-    // Unregister ProductProvider listener
     try {
       context.read<ProductProvider>().removeListener(_onProductProviderUpdate);
     } catch (_) {}
@@ -165,7 +151,7 @@ class _NewArrivalsScreenState extends State<NewArrivalsScreen> {
       _selectedMaterials = materials;
       _selectedColors = colors;
       _filterProducts();
-      _itemsToShow = 4; // Reset to initial items when filtering
+      _itemsToShow = 4; 
     });
   }
 
@@ -261,7 +247,6 @@ class _NewArrivalsScreenState extends State<NewArrivalsScreen> {
               itemBuilder: (context, index) {
                 if (index == _itemsToShow &&
                     _itemsToShow < _filteredProducts.length) {
-                  // Loading indicator
                   return Padding(
                     padding: const EdgeInsets.all(16.0),
                     child: Center(
@@ -358,7 +343,6 @@ class _NewArrivalsScreenState extends State<NewArrivalsScreen> {
                 ],
               ),
             ),
-            // Favourite button — tap is isolated so it doesn't trigger card navigation
             Consumer<ProductProvider>(
               builder: (context, provider, _) {
                 final isFav = provider.isFavorite(product.id);

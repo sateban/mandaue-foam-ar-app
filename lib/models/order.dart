@@ -60,7 +60,6 @@ class Order {
   final double tax;
   final String? trackingNumber;
   final DateTime? estimatedDelivery;
-  // New fields
   final Map<String, dynamic>? shippingAddress;
   final String? paymentMethod;
   final String? paymentStatus;
@@ -106,7 +105,7 @@ class Order {
       'userId': userId,
       'orderNumber': orderNumber,
       'orderDate': orderDate.toIso8601String(),
-      'status': status.toString(), // or status.name if Dart >= 2.15
+      'status': status.toString(),
       'items': items.map((item) => item.toJson()).toList(),
       'subtotal': subtotal,
       'shippingCharge': shippingCharge,
@@ -136,8 +135,8 @@ class Order {
       ),
       items:
           (json['items'] as List?)
-              ?.map((item) => OrderItem.fromJson(item as Map<String, dynamic>))
-              .toList() ??
+               ?.map((item) => OrderItem.fromJson(item as Map<String, dynamic>))
+               .toList() ??
           [],
       subtotal: (json['subtotal'] as num?)?.toDouble() ?? 0.0,
       shippingCharge: (json['shippingCharge'] as num?)?.toDouble() ?? 0.0,

@@ -1,4 +1,3 @@
-/// Model for Filebase file metadata
 class FilebaseFile {
   final String fileName;
   final String filePath;
@@ -20,7 +19,6 @@ class FilebaseFile {
     this.versionId,
   });
 
-  /// Convert to JSON
   Map<String, dynamic> toJson() {
     return {
       'fileName': fileName,
@@ -34,7 +32,6 @@ class FilebaseFile {
     };
   }
 
-  /// Create from JSON
   factory FilebaseFile.fromJson(Map<String, dynamic> json) {
     return FilebaseFile(
       fileName: json['fileName'] as String,
@@ -50,10 +47,8 @@ class FilebaseFile {
     );
   }
 
-  /// Get file size in MB
   String get sizeMB => (sizeBytes / (1024 * 1024)).toStringAsFixed(2);
 
-  /// Get file extension
   String get extension {
     final parts = fileName.split('.');
     return parts.isNotEmpty ? '.${parts.last}' : '';
@@ -64,7 +59,6 @@ class FilebaseFile {
       'FilebaseFile($fileName, $sizeBytes bytes, uploaded: $uploadedAt)';
 }
 
-/// Model for upload response
 class UploadResponse {
   final bool success;
   final String? filePath;
@@ -78,7 +72,6 @@ class UploadResponse {
     this.responseData,
   });
 
-  /// Convert to JSON
   Map<String, dynamic> toJson() {
     return {
       'success': success,
@@ -88,7 +81,6 @@ class UploadResponse {
     };
   }
 
-  /// Create from JSON
   factory UploadResponse.fromJson(Map<String, dynamic> json) {
     return UploadResponse(
       success: json['success'] as bool,
@@ -99,7 +91,6 @@ class UploadResponse {
   }
 }
 
-/// Model for download response
 class DownloadResponse {
   final bool success;
   final String? localPath;
@@ -113,7 +104,6 @@ class DownloadResponse {
     this.errorMessage,
   });
 
-  /// Convert to JSON
   Map<String, dynamic> toJson() {
     return {
       'success': success,
@@ -123,7 +113,6 @@ class DownloadResponse {
     };
   }
 
-  /// Create from JSON
   factory DownloadResponse.fromJson(Map<String, dynamic> json) {
     return DownloadResponse(
       success: json['success'] as bool,
@@ -134,7 +123,6 @@ class DownloadResponse {
   }
 }
 
-/// Model for bucket statistics
 class BucketStats {
   final String bucketName;
   final int totalFiles;
@@ -150,15 +138,12 @@ class BucketStats {
     required this.region,
   });
 
-  /// Get total size in MB
   String get totalSizeMB =>
       (totalSizeBytes / (1024 * 1024)).toStringAsFixed(2);
 
-  /// Get total size in GB
   String get totalSizeGB =>
       (totalSizeBytes / (1024 * 1024 * 1024)).toStringAsFixed(2);
 
-  /// Convert to JSON
   Map<String, dynamic> toJson() {
     return {
       'bucketName': bucketName,
@@ -171,7 +156,6 @@ class BucketStats {
     };
   }
 
-  /// Create from JSON
   factory BucketStats.fromJson(Map<String, dynamic> json) {
     return BucketStats(
       bucketName: json['bucket_name'] ?? json['bucketName'] as String,
@@ -188,7 +172,6 @@ class BucketStats {
       'BucketStats($bucketName: $totalFiles files, ${totalSizeMB}MB)';
 }
 
-/// Model for file operation result
 class FileOperationResult {
   final bool success;
   final String? filePath;
@@ -204,7 +187,6 @@ class FileOperationResult {
     DateTime? timestamp,
   }) : timestamp = timestamp ?? DateTime.now();
 
-  /// Convert to JSON
   Map<String, dynamic> toJson() {
     return {
       'success': success,
@@ -215,7 +197,6 @@ class FileOperationResult {
     };
   }
 
-  /// Create from JSON
   factory FileOperationResult.fromJson(Map<String, dynamic> json) {
     return FileOperationResult(
       success: json['success'] as bool,

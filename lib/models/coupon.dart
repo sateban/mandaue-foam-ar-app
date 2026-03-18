@@ -6,7 +6,7 @@ class Coupon {
   final String title;
   final String description;
   final CouponType type;
-  final double value; // Percentage (0-100) or fixed amount
+  final double value; 
   final DateTime expiryDate;
   final double? minimumPurchase;
   final bool isActive;

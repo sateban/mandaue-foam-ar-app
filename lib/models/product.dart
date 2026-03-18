@@ -49,14 +49,11 @@ class Product {
     this.variations,
   });
 
-  /// Returns all variations including the default one
   List<ProductVariation> getAllVariations() {
     final list = <ProductVariation>[];
-    // Add base variation first
     list.add(
       ProductVariation(color: color, imageUrl: imageUrl, modelUrl: modelUrl),
     );
-    // Add variations from the map
     if (variations != null) {
       list.addAll(variations!.values);
     }

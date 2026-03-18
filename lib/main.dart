@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-// import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
 import 'package:ar_flutter_plugin_updated/ar_flutter_plugin.dart';
 import 'package:ar_flutter_plugin_updated/datatypes/config_planedetection.dart';
@@ -84,9 +83,6 @@ void main() async {
     print('ERROR: Filebase initialization failed: $e');
   }
 
-  // Listen for color configuration changes from Realtime Database
-  // at `/colors` and keep ColorUtils' dynamic map in sync so that
-  // UI consistently uses the latest values.
   try {
     FirebaseService.streamData('colors').listen(
       (data) {
@@ -96,7 +92,6 @@ void main() async {
         }
 
         try {
-          // Ensure we have a simple Map<String, String> of name -> hex
           final mapped = <String, String>{};
           data.forEach((key, value) {
             if (key == null || value == null) return;
@@ -120,13 +115,9 @@ void main() async {
     print('⚠️ Failed to start color stream listener: $e');
   }
 
-  // Don't call readAndPrintRealtimeData() on startup - it causes issues
-  // readAndPrintRealtimeData();
-
   runApp(const MyApp());
 }
 
-/// Widget that checks authentication state and routes accordingly
 class AuthenticationWrapper extends StatelessWidget {
   const AuthenticationWrapper({super.key});
 
@@ -135,26 +126,21 @@ class AuthenticationWrapper extends StatelessWidget {
     return StreamBuilder<User?>(
       stream: FirebaseAuth.instance.authStateChanges(),
       builder: (context, snapshot) {
-        // Handle connection states
         if (snapshot.connectionState == ConnectionState.waiting) {
-          // While checking auth state, show splash screen
           print('DEBUG: Checking authentication state...');
           return const SplashScreenV1();
         }
 
-        // If there's an error, show splash screen
         if (snapshot.hasError) {
           print('DEBUG: Authentication error: ${snapshot.error}');
           return const SplashScreenV1();
         }
 
-        // If user is authenticated, show home screen
         if (snapshot.hasData && snapshot.data != null) {
           print('DEBUG: User authenticated, navigating to home');
           return const ShopShell();
         }
 
-        // If no user is authenticated, show splash screen
         print('DEBUG: No user authenticated, showing splash screen');
         return const SplashScreenV1();
       },
@@ -193,61 +179,11 @@ class MyApp extends StatelessWidget {
           return Stack(
             children: [
               if (child != null) child,
-              // Background faint watermark
-              // Positioned(
-              //   bottom: 20,
-              //   // right: -20,
-              //   right: 6,
-              //   child: IgnorePointer(
-              //     child: Transform.rotate(
-              //       // angle: -0.5,
-              //       angle: 0,
-              //       child: Text(
-              //         'DEVELOPED BY KB²',
-              //         style: TextStyle(
-              //           color: Colors.black.withAlpha(80),
-              //           fontSize: 16,
-              //           fontWeight: FontWeight.w900,
-              //           letterSpacing: 1.5,
-              //           decoration: TextDecoration.none,
-              //           fontFamily: 'monospace',
-              //         ),
-              //       ),
-              //     ),
-              //   ),
-              // ),
-              // Clear foreground watermark
-              // Positioned(
-              //   bottom: 16,
-              //   right: 16,
-              //   child: IgnorePointer(
-              //     child: Container(
-              //       padding: const EdgeInsets.symmetric(
-              //         horizontal: 10,
-              //         vertical: 5,
-              //       ),
-              //       decoration: BoxDecoration(
-              //         color: const Color(0xFF1E3A8A).withAlpha(40),
-              //         borderRadius: BorderRadius.circular(4),
-              //       ),
-              //       child: const Text(
-              //         '© KB²',
-              //         style: TextStyle(
-              //           color: Colors.black45,
-              //           fontSize: 11,
-              //           fontWeight: FontWeight.bold,
-              //           decoration: TextDecoration.none,
-              //         ),
-              //       ),
-              //     ),
-              //   ),
-              // ),
             ],
           );
         },
         home: const AuthenticationWrapper(),
         onGenerateRoute: (settings) {
-          // Handle routes that need arguments
           if (settings.name == '/track-order') {
             final order = settings.arguments as Order;
             return MaterialPageRoute(
@@ -257,11 +193,9 @@ class MyApp extends StatelessWidget {
           return null;
         },
         routes: {
-          // Onboarding routes
           '/welcome': (context) => const WelcomeScreen(),
           '/walkthrough': (context) => const WalkthroughScreen(),
 
-          // Authentication routes
           '/lets-you-in': (context) => const LetsYouInScreen(),
           '/sign-in': (context) => const SignInScreen(),
           '/sign-up': (context) => const SignUpScreen(),
@@ -274,13 +208,11 @@ class MyApp extends StatelessWidget {
               const PasswordResetSuccessScreen(),
           '/forgot-password': (context) => const ForgotPasswordScreen(),
 
-          // Main app routes
           '/home': (context) => const ShopShell(),
           '/cart': (context) => const ShopShell(initialIndex: 1),
           '/orders': (context) => const ShopShell(initialIndex: 2),
           '/profile': (context) => const ShopShell(initialIndex: 3),
 
-          // Shop routes
           '/notifications': (context) => const NotificationsScreen(),
           '/popular-products': (context) => const PopularProductsScreen(),
           '/all-products': (context) => const AllProductsScreen(),
@@ -293,7 +225,6 @@ class MyApp extends StatelessWidget {
           },
           '/search-products': (context) => const SearchProductsScreen(),
 
-          // Checkout routes
           '/shipping-address': (context) => const ShippingAddressScreen(),
           '/address-list': (context) => const AddressListScreen(),
           '/add-address': (context) => const AddAddressScreen(),
@@ -301,7 +232,6 @@ class MyApp extends StatelessWidget {
           '/payment-success': (context) => const PaymentSuccessScreen(),
           '/order-receipt': (context) => const OrderReceiptScreen(),
 
-          // Profile routes
           '/edit-profile': (context) => const EditProfileScreen(),
           '/coupons': (context) => const CouponsScreen(),
           '/wishlist': (context) => const WishlistScreen(),
@@ -318,16 +248,13 @@ class SplashScreen extends StatefulWidget {
   State<SplashScreen> createState() => _SplashScreenState();
 }
 
-// ignore: unused_element
 Future<void> _loadUserData() async {
-  // Your Firebase calls
 }
 
 class _SplashScreenState extends State<SplashScreen> {
   @override
   void initState() {
     super.initState();
-    // _loadUserData();
     Timer(const Duration(seconds: 5), () {
       if (mounted) {
         Navigator.of(context).pushReplacement(
@@ -344,7 +271,7 @@ class _SplashScreenState extends State<SplashScreen> {
       body: Center(
         child: Image.asset(
           'assets/images/logo.png',
-          width: 200, // Adjust size as needed
+          width: 200,
         ),
       ),
     );
@@ -416,7 +343,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            // Skip button
             Align(
               alignment: Alignment.topRight,
               child: TextButton(
@@ -428,7 +354,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               ),
             ),
 
-            // PageView
             Expanded(
               child: PageView.builder(
                 controller: _pageController,
@@ -440,7 +365,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               ),
             ),
 
-            // Page indicators
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 16.0),
               child: Row(
@@ -452,7 +376,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               ),
             ),
 
-            // Next/Get Started button
             Padding(
               padding: const EdgeInsets.all(24.0),
               child: SizedBox(
@@ -490,7 +413,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          // Image
           Expanded(
             flex: 3,
             child: Center(
@@ -500,7 +422,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
           const SizedBox(height: 40),
 
-          // Title
           Text(
             page.title,
             textAlign: TextAlign.center,
@@ -514,7 +435,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
           const SizedBox(height: 16),
 
-          // Description
           Text(
             page.description,
             textAlign: TextAlign.center,
@@ -558,227 +478,8 @@ class OnboardingPage {
   });
 }
 
-// class ThreeDViewerDashboard extends StatefulWidget {
-//   const ThreeDViewerDashboard({super.key});
-
-//   @override
-//   State<ThreeDViewerDashboard> createState() => _ThreeDViewerDashboardState();
-// }
-
-// class _ThreeDViewerDashboardState extends State<ThreeDViewerDashboard> {
-//   ARSessionManager? arSessionManager;
-//   ARObjectManager? arObjectManager;
-
-//   ARNode? astronautNode;
-
-//   @override
-//   void dispose() {
-//     super.dispose();
-//     arSessionManager?.dispose();
-//   }
-
-//   @override
-//   Widget build(BuildContext context) {
-//     return Scaffold(
-//       backgroundColor: Colors.black,
-//       appBar: AppBar(
-//         title: const Text('AR Astronaut Viewer'),
-//         centerTitle: true,
-//         backgroundColor: Colors.black,
-//         foregroundColor: Colors.white,
-//       ),
-//       body: Stack(
-//         children: [
-//           ARView(
-//             onARViewCreated: onARViewCreated,
-//             planeDetectionConfig: PlaneDetectionConfig.horizontalAndVertical,
-//           ),
-//           Positioned(
-//             bottom: 0,
-//             left: 0,
-//             right: 0,
-//             child: Padding(
-//               padding: EdgeInsets.fromLTRB(
-//                 20,
-//                 0,
-//                 20,
-//                 MediaQuery.of(context).padding.bottom + 20,
-//               ),
-//               child: Container(
-//                 padding: const EdgeInsets.all(16),
-//                 decoration: BoxDecoration(
-//                   color: Colors.black.withValues(alpha: 0.5),
-//                   borderRadius: BorderRadius.circular(20),
-//                   border: Border.all(
-//                     color: Colors.white.withValues(alpha: 0.2),
-//                   ),
-//                 ),
-//                 child: Column(
-//                   mainAxisSize: MainAxisSize.min,
-//                   children: [
-//                     const Text(
-//                       'Integrated AR Mode',
-//                       style: TextStyle(
-//                         color: Colors.white,
-//                         fontSize: 20,
-//                         fontWeight: FontWeight.bold,
-//                       ),
-//                     ),
-//                     const SizedBox(height: 8),
-//                     Text(
-//                       astronautNode == null
-//                           ? 'Looking for surfaces... Model will appear automatically.'
-//                           : 'Model placed! Move around to view.',
-//                       textAlign: TextAlign.center,
-//                       style: const TextStyle(
-//                         color: Colors.white70,
-//                         fontSize: 14,
-//                       ),
-//                     ),
-//                     const SizedBox(height: 12),
-
-//                     if (astronautNode == null)
-//                       ElevatedButton.icon(
-//                         onPressed: _addModel,
-//                         icon: const Icon(Icons.add_a_photo),
-//                         label: const Text('Try Adding Manually'),
-//                         style: ElevatedButton.styleFrom(
-//                           backgroundColor: Colors.white,
-//                           foregroundColor: Colors.black,
-//                         ),
-//                       ),
-//                   ],
-//                 ),
-//               ),
-//             ),
-//           ),
-//         ],
-//       ),
-//     );
-//   }
-
-//   void onARViewCreated(
-//     ARSessionManager arSessionManager,
-//     ARObjectManager arObjectManager,
-//     ARAnchorManager arAnchorManager,
-//     ARLocationManager arLocationManager,
-//   ) {
-//     this.arSessionManager = arSessionManager;
-//     this.arObjectManager = arObjectManager;
-//     this.arSessionManager!.onInitialize(
-//       showFeaturePoints: false,
-//       showPlanes: true,
-//       showWorldOrigin: false,
-//       handleTaps: true,
-//     );
-//     this.arObjectManager!.onInitialize();
-
-//     // Force model placement immediately without waiting for AR detection
-//     // _addModel();
-
-//     // Commented out: Automatically load the model after a longer delay
-//     // Future.delayed(const Duration(seconds: 4), () {
-//     //   if (mounted && astronautNode == null) {
-//     //     _addModel();
-//     //   }
-//     // });
-//   }
-
-//   Future<void> _addModel() async {
-//     if (astronautNode != null) return;
-
-//     // Verify asset exists from Dart side
-//     try {
-//       await rootBundle.load('assets/models/Astronaut.glb');
-//       debugPrint(
-//         'Asset assets/models/Astronaut.glb loaded successfully from rootBundle',
-//       );
-//     } catch (e) {
-//       debugPrint('Error loading asset from rootBundle: $e');
-//       return;
-//     }
-
-//     bool? didAddNode;
-//     ARNode? newNode;
-//     try {
-//       final Directory docDir = await getApplicationDocumentsDirectory();
-//       final String localPath = '${docDir.path}/Astronaut.glb';
-//       final File localFile = File(localPath);
-
-//       if (!await localFile.exists()) {
-//         debugPrint('Copying asset to local storage...');
-//         final ByteData data = await rootBundle.load(
-//           'assets/models/Astronaut.glb',
-//         );
-//         final List<int> bytes = data.buffer.asUint8List(
-//           data.offsetInBytes,
-//           data.lengthInBytes,
-//         );
-//         await localFile.writeAsBytes(bytes);
-//         debugPrint('Asset copied to: $localPath');
-//       } else {
-//         debugPrint('Asset already exists at: $localPath');
-//       }
-
-//       // For fileSystemAppFolderGLB, use just the filename
-//       var nodePath = 'Astronaut.glb';
-//       newNode = ARNode(
-//         type: NodeType.fileSystemAppFolderGLB,
-//         uri: nodePath,
-//         scale: vector.Vector3(1.0, 1.0, 1.0), // Much larger scale
-//         position: vector.Vector3(0, 0, -2.0), // 2 meters in front
-//         rotation: vector.Vector4(1, 0, 0, 0),
-//       );
-
-//       debugPrint('Attempting to add node from local storage: $nodePath');
-//       didAddNode = await arObjectManager!.addNode(newNode);
-//       debugPrint('ARNode add result (local storage): $didAddNode');
-
-//       if (didAddNode != true) {
-//         nodePath = 'assets/models/Astronaut.glb';
-//         newNode = ARNode(
-//           type: NodeType.localGLTF2,
-//           uri: nodePath,
-//           scale: vector.Vector3(0.5, 0.5, 0.5),
-//           position: vector.Vector3(0, 0, -1.5),
-//           rotation: vector.Vector4(1, 0, 0, 0),
-//         );
-//         didAddNode = await arObjectManager!.addNode(newNode);
-//         debugPrint('ARNode add result (fallback assets): $didAddNode');
-//       }
-//     } catch (e) {
-//       debugPrint('Exception while adding node: $e');
-//       if (mounted) {
-//         ScaffoldMessenger.of(
-//           context,
-//         ).showSnackBar(SnackBar(content: Text('Error adding model: $e')));
-//       }
-//     }
-
-//     if (didAddNode == true) {
-//       if (mounted) {
-//         setState(() {
-//           astronautNode = newNode;
-//         });
-//         ScaffoldMessenger.of(context).showSnackBar(
-//           const SnackBar(content: Text('Model loaded successfully!')),
-//         );
-//       }
-//     } else {
-//       if (mounted) {
-//         ScaffoldMessenger.of(context).showSnackBar(
-//           const SnackBar(content: Text('Failed to load model - check logs.')),
-//         );
-//       }
-//     }
-//   }
-// }
-
-// Add this function to read and print realtime database data
 void readAndPrintRealtimeData() {
-  const String path =
-      '/'; // Replace with your actual database path, e.g., '/users'
-  print('Realtime data:');
+  const String path = '/'; 
   FirebaseService.streamData(path).listen(
     (data) {
       print('Realtime data: $data');
