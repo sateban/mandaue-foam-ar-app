@@ -49,11 +49,12 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
     // Get quantity from first product in each category
     for (final product in products) {
       final category = product['category'] as String? ?? 'Other';
+      print("categoryx: ${category}");
       // Only set if not already set (first product in category)
-      if (!categoryQuantities.containsKey(category)) {
-        final quantity = product['quantity'] as int? ?? 0;
-        categoryQuantities[category] = quantity;
-      }
+      // if (!categoryQuantities.containsKey(category)) {
+        // final quantity = product['quantity'] as int? ?? 0;
+        categoryQuantities[category] = (categoryQuantities[category] ?? 0) + 1;
+      // }
     }
 
     setState(() {
