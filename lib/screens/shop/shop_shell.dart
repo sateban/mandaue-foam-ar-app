@@ -114,12 +114,12 @@ class _BottomNav extends StatelessWidget {
               selected: currentIndex == 1,
               onTap: () => onTap(1),
             ),
-            _NavItem(
-              label: 'Orders',
-              icon: Icons.shopping_bag,
-              selected: currentIndex == 2,
-              onTap: () => onTap(2),
-            ),
+            // _NavItem(
+            //   label: 'Orders',
+            //   icon: Icons.shopping_bag,
+            //   selected: currentIndex == 2,
+            //   onTap: () => onTap(2),
+            // ),
             _NavItem(
               label: 'Profile',
               icon: Icons.person,

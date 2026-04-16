@@ -265,65 +265,65 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                   _buildSpecificationRow('Category', widget.product.category),
                   const SizedBox(height: 24),
                   // Quantity Selector
-                  const Text(
-                    'Quantity',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFF1E3A8A),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 12,
-                    ),
-                    decoration: BoxDecoration(
-                      border: Border.all(color: const Color(0xFFE0E0E0)),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Row(
-                      children: [
-                        GestureDetector(
-                          onTap: _quantity > 1
-                              ? () {
-                                  setState(() {
-                                    _quantity--;
-                                  });
-                                }
-                              : null,
-                          child: Icon(
-                            Icons.remove,
-                            color: _quantity > 1
-                                ? const Color(0xFF6200EE)
-                                : const Color(0xFFCCCCCC),
-                          ),
-                        ),
-                        const SizedBox(width: 16),
-                        Text(
-                          '$_quantity',
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: Color(0xFF1E3A8A),
-                          ),
-                        ),
-                        const SizedBox(width: 16),
-                        GestureDetector(
-                          onTap: () {
-                            setState(() {
-                              _quantity++;
-                            });
-                          },
-                          child: const Icon(
-                            Icons.add,
-                            color: Color(0xFF6200EE),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
+                  // const Text(
+                  //   'Quantity',
+                  //   style: TextStyle(
+                  //     fontSize: 16,
+                  //     fontWeight: FontWeight.bold,
+                  //     color: Color(0xFF1E3A8A),
+                  //   ),
+                  // ),
+                  // const SizedBox(height: 12),
+                  // Container(
+                  //   padding: const EdgeInsets.symmetric(
+                  //     horizontal: 16,
+                  //     vertical: 12,
+                  //   ),
+                  //   decoration: BoxDecoration(
+                  //     border: Border.all(color: const Color(0xFFE0E0E0)),
+                  //     borderRadius: BorderRadius.circular(8),
+                  //   ),
+                  //   child: Row(
+                  //     children: [
+                  //       GestureDetector(
+                  //         onTap: _quantity > 1
+                  //             ? () {
+                  //                 setState(() {
+                  //                   _quantity--;
+                  //                 });
+                  //               }
+                  //             : null,
+                  //         child: Icon(
+                  //           Icons.remove,
+                  //           color: _quantity > 1
+                  //               ? const Color(0xFF6200EE)
+                  //               : const Color(0xFFCCCCCC),
+                  //         ),
+                  //       ),
+                  //       const SizedBox(width: 16),
+                  //       Text(
+                  //         '$_quantity',
+                  //         style: const TextStyle(
+                  //           fontSize: 16,
+                  //           fontWeight: FontWeight.bold,
+                  //           color: Color(0xFF1E3A8A),
+                  //         ),
+                  //       ),
+                  //       const SizedBox(width: 16),
+                  //       GestureDetector(
+                  //         onTap: () {
+                  //           setState(() {
+                  //             _quantity++;
+                  //           });
+                  //         },
+                  //         child: const Icon(
+                  //           Icons.add,
+                  //           color: Color(0xFF6200EE),
+                  //         ),
+                  //       ),
+                  //     ],
+                  //   ),
+                  // ),
                   const SizedBox(height: 32),
                   // AR and 3D Buttons
                   if (_hasAnyModel())

@@ -1140,6 +1140,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                       ),
                     ),
+                    
                     // Profile
                     GestureDetector(
                       onTap: () {
