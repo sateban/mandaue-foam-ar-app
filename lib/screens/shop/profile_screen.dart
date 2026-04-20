@@ -161,18 +161,18 @@ class ProfileScreen extends StatelessWidget {
               title: 'Edit Profile',
               onTap: () => Navigator.pushNamed(context, '/edit-profile'),
             ),
-            _buildMenuItem(
-              context,
-              icon: Icons.local_offer_outlined,
-              title: 'Coupons',
-              onTap: () => Navigator.pushNamed(context, '/coupons'),
-            ),
-            _buildMenuItem(
-              context,
-              icon: Icons.location_on_outlined,
-              title: 'Shipping Address',
-              onTap: () => Navigator.pushNamed(context, '/shipping-address'),
-            ),
+            // _buildMenuItem(
+            //   context,
+            //   icon: Icons.local_offer_outlined,
+            //   title: 'Coupons',
+            //   onTap: () => Navigator.pushNamed(context, '/coupons'),
+            // ),
+            // _buildMenuItem(
+            //   context,
+            //   icon: Icons.location_on_outlined,
+            //   title: 'Shipping Address',
+            //   onTap: () => Navigator.pushNamed(context, '/shipping-address'),
+            // ),
             // _buildMenuItem(
             //   context,
             //   icon: Icons.shopping_bag_outlined,
