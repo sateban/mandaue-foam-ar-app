@@ -4,6 +4,26 @@ import 'otp_verification_screen.dart';
 import 'sign_in_screen.dart';
 import '../../services/firebase_service.dart';
 
+// Password validation result model
+class PasswordValidationResult {
+  final bool hasMinLength;
+  final bool hasUppercase;
+  final bool hasLowercase;
+  final bool hasDigit;
+  final bool hasSpecialChar;
+
+  PasswordValidationResult({
+    required this.hasMinLength,
+    required this.hasUppercase,
+    required this.hasLowercase,
+    required this.hasDigit,
+    required this.hasSpecialChar,
+  });
+
+  bool get isValid =>
+      hasMinLength && hasUppercase && hasLowercase && hasDigit && hasSpecialChar;
+}
+
 class SignUpScreen extends StatefulWidget {
   const SignUpScreen({super.key});
 
@@ -25,6 +45,22 @@ class _SignUpScreenState extends State<SignUpScreen> {
   String? _lastNameError;
   String? _emailError;
   String? _passwordError;
+
+  // Password validation state
+  late PasswordValidationResult _passwordValidation;
+  bool _showPasswordValidation = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _passwordValidation = PasswordValidationResult(
+      hasMinLength: false,
+      hasUppercase: false,
+      hasLowercase: false,
+      hasDigit: false,
+      hasSpecialChar: false,
+    );
+  }
   
   // Country codes map with country names
   final Map<String, String> _countryCodes = {
@@ -82,9 +118,21 @@ class _SignUpScreenState extends State<SignUpScreen> {
     return emailRegex.hasMatch(email);
   }
 
-  bool _validatePassword(String password) {
-    // At least 6 characters
-    return password.length >= 6;
+  PasswordValidationResult _validatePassword(String password) {
+    final result = PasswordValidationResult(
+      hasMinLength: password.length >= 8,
+      hasUppercase: password.contains(RegExp(r'[A-Z]')),
+      hasLowercase: password.contains(RegExp(r'[a-z]')),
+      hasDigit: password.contains(RegExp(r'[0-9]')),
+      hasSpecialChar: password.contains(
+          RegExp(r'[!@#$%^&*()_+\-=\[\]{};:,./<>?\\|`~' + "'\"" + r']')),
+    );
+    return result;
+  }
+
+  bool _isPasswordValid(String password) {
+    final validation = _validatePassword(password);
+    return validation.isValid;
   }
 
   Future<void> _handleSignUp() async {
@@ -122,8 +170,8 @@ class _SignUpScreenState extends State<SignUpScreen> {
     if (_passwordController.text.isEmpty) {
       setState(() => _passwordError = 'Password is required');
       isValid = false;
-    } else if (!_validatePassword(_passwordController.text)) {
-      setState(() => _passwordError = 'Password must be at least 6 characters');
+    } else if (!_isPasswordValid(_passwordController.text)) {
+      setState(() => _passwordError = 'Password does not meet all requirements');
       isValid = false;
     }
 
@@ -252,6 +300,30 @@ class _SignUpScreenState extends State<SignUpScreen> {
     _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
+  }
+
+  Widget _buildPasswordValidationItem(String label, bool isValid) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        children: [
+          Icon(
+            isValid ? Icons.check_circle : Icons.cancel,
+            size: 18,
+            color: isValid ? Colors.green : Colors.red,
+          ),
+          const SizedBox(width: 8),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 13,
+              color: isValid ? Colors.green : Colors.red,
+              fontWeight: isValid ? FontWeight.w600 : FontWeight.w500,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -652,6 +724,12 @@ class _SignUpScreenState extends State<SignUpScreen> {
                         TextField(
                           controller: _passwordController,
                           obscureText: _obscurePassword,
+                          onChanged: (value) {
+                            setState(() {
+                              _passwordValidation = _validatePassword(value);
+                              _showPasswordValidation = value.isNotEmpty;
+                            });
+                          },
                           style: const TextStyle(
                             color: Colors.black,
                           ),
@@ -705,6 +783,56 @@ class _SignUpScreenState extends State<SignUpScreen> {
                             ),
                           ),
                         ),
+
+                        // Password validation requirements
+                        if (_showPasswordValidation) ...
+                          [
+                            const SizedBox(height: 12),
+                          Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF5F5F5),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(
+                                color: const Color(0xFFE0E0E0),
+                              ),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'Password requirements:',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.grey,
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                _buildPasswordValidationItem(
+                                  'At least 8 characters',
+                                  _passwordValidation.hasMinLength,
+                                ),
+                                _buildPasswordValidationItem(
+                                  'One uppercase letter (A-Z)',
+                                  _passwordValidation.hasUppercase,
+                                ),
+                                _buildPasswordValidationItem(
+                                  'One lowercase letter (a-z)',
+                                  _passwordValidation.hasLowercase,
+                                ),
+                                _buildPasswordValidationItem(
+                                  'One digit (0-9)',
+                                  _passwordValidation.hasDigit,
+                                ),
+                                _buildPasswordValidationItem(
+                                  'One special character (!@#\$%^&*)',
+                                  _passwordValidation.hasSpecialChar,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
 
                         const SizedBox(height: 16),
 

@@ -22,11 +22,11 @@ class _WalkthroughScreenState extends State<WalkthroughScreen> {
       description: 'See how products look in your home before buying',
       imagePath: '2.png',
     ),
-    WalkthroughPage(
-      title: 'Fast delivery to your doorstep',
-      description: 'Get your orders delivered quickly and safely',
-      imagePath: '3.png',
-    ),
+    // WalkthroughPage(
+    //   title: 'Fast delivery to your doorstep',
+    //   description: 'Get your orders delivered quickly and safely',
+    //   imagePath: '3.png',
+    // ),
   ];
 
   @override
