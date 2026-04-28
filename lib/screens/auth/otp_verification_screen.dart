@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
+import '../../providers/user_provider.dart';
 
 class OTPVerificationScreen extends StatefulWidget {
   final String email;
@@ -37,6 +39,18 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
   void _verifyOTP() {
     String otp = _otpControllers.map((c) => c.text).join();
     if (otp.length == 6) {
+      // Set the user identity in UserProvider for sessions
+      final userProvider = Provider.of<UserProvider>(context, listen: false);
+      // Use email as ID (sanitized) or just the email string if Firebase is bypassed
+      final sanitizedEmail = widget.email
+          .replaceAll('.', '_')
+          .replaceAll('@', '_');
+      userProvider.setGuestUser(
+        id: 'user_$sanitizedEmail',
+        email: widget.email,
+        name: widget.email.split('@').first,
+      );
+
       // Important: go through ShopShell so bottom navigation stays fixed
       // and only the page content transitions between tabs.
       Navigator.of(context).pushNamedAndRemoveUntil('/home', (route) => false);

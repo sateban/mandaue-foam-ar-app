@@ -136,7 +136,7 @@ class ARObjectManager {
       } else {
         return await _channel.invokeMethod<bool>('addNode', node.toMap());
       }
-    } on PlatformException catch (e) {
+    } on PlatformException {
       return false;
     }
   }

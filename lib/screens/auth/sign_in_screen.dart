@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'otp_verification_screen.dart';
 import 'sign_up_screen.dart';
 import 'forgot_password_screen.dart';
+import '../../services/firebase_service.dart';
 
 class SignInScreen extends StatefulWidget {
   const SignInScreen({super.key});
@@ -89,7 +90,7 @@ class _SignInScreenState extends State<SignInScreen> {
     return emailRegex.hasMatch(email);
   }
 
-  void _handleSignIn() {
+  Future<void> _handleSignIn() async {
     setState(() {
       _emailError = null;
       _passwordError = null;
@@ -110,15 +111,101 @@ class _SignInScreenState extends State<SignInScreen> {
       isValid = false;
     }
 
-    if (isValid) {
-      // Navigate to OTP verification
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) =>
-              OTPVerificationScreen(email: _emailController.text),
+    if (!isValid) {
+      return;
+    }
+
+    // Begin Firebase sign-in
+    if (!mounted) return;
+    setState(() => _isLoading = true);
+
+    try {
+      print(
+        'DEBUG: Attempting Firebase sign-in with: ${_emailController.text}',
+      );
+
+      final User? user = await FirebaseService.signInWithEmailPassword(
+        email: _emailController.text,
+        password: _passwordController.text,
+      );
+
+      if (!mounted) return;
+
+      if (user != null) {
+        print('DEBUG: Sign-in successful for user: ${user.email}');
+
+        // Show success message
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Welcome back, ${user.displayName ?? 'User'}!'),
+            duration: const Duration(seconds: 2),
+            backgroundColor: Colors.green,
+          ),
+        );
+
+        // Navigate to home screen
+        Navigator.pushNamedAndRemoveUntil(context, '/home', (route) => false);
+      }
+    } on FirebaseAuthException catch (e) {
+      if (!mounted) return;
+
+      print(
+        'DEBUG: FirebaseAuthException - Code: ${e.code}, Message: ${e.message}',
+      );
+
+      String errorMessage = 'Authentication error';
+
+      switch (e.code) {
+        case 'user-not-found':
+          errorMessage =
+              'No account found with this email address. Please sign up first.';
+          break;
+        case 'wrong-password':
+          errorMessage = 'Incorrect password. Please try again.';
+          break;
+        case 'invalid-credential':
+          errorMessage =
+              'Invalid email or password. Please check and try again.';
+          break;
+        case 'user-disabled':
+          errorMessage = 'This account has been disabled. Contact support.';
+          break;
+        case 'too-many-requests':
+          errorMessage = 'Too many login attempts. Please try again later.';
+          break;
+        case 'operation-not-allowed':
+          errorMessage = 'Email/password authentication is not enabled.';
+          break;
+        default:
+          errorMessage =
+              e.message ?? 'Authentication failed. Please try again.';
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(errorMessage),
+          duration: const Duration(seconds: 4),
+          backgroundColor: Colors.red,
         ),
       );
+
+      setState(() => _isLoading = false);
+    } catch (e) {
+      if (!mounted) return;
+
+      print('DEBUG: Unexpected error during sign-in: $e');
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text(
+            'An unexpected error occurred. Please try again.',
+          ),
+          duration: const Duration(seconds: 4),
+          backgroundColor: Colors.red,
+        ),
+      );
+
+      setState(() => _isLoading = false);
     }
   }
 
@@ -170,30 +257,51 @@ class _SignInScreenState extends State<SignInScreen> {
       // Use email-based Firebase Auth (most reliable approach)
       if (googleUser.email.isNotEmpty) {
         print(
-          'DEBUG: Attempting Firebase sign-in with email: ${googleUser.email}',
+          'DEBUG: Attempting Firebase sign-in with Google account: ${googleUser.email}',
         );
 
         try {
-          // For CONFIGURATION_NOT_FOUND errors, skip Firebase Auth entirely
-          // Just create a local user object and navigate
-          print('DEBUG: Bypassing Firebase Auth due to configuration issues');
-          print('DEBUG: Creating local user session with Google profile');
+          // Authenticate with Firebase using Google credentials
+          print('DEBUG: Authenticating with Firebase using Google credentials');
 
-          // Create a simple "virtual" user without Firebase Auth
-          // Store user info in SharedPreferences or database
-          if (mounted) {
+          final User? user = await FirebaseService.signInWithGoogle(googleUser);
+
+          if (user != null) {
+            print('DEBUG: Successfully authenticated with Firebase via Google');
+            print('DEBUG: Firebase user: ${user.email}');
+
+            if (!mounted) return;
+
+            // Show success message
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: Text(
-                  'Signing in as ${googleUser.displayName}...',
-                  style: const TextStyle(color: Colors.black),
-                ),
+                content: Text('Welcome, ${user.displayName ?? 'User'}!'),
                 duration: const Duration(seconds: 2),
-                backgroundColor: const Color.fromARGB(255, 219, 219, 219),
+                backgroundColor: Colors.green,
               ),
             );
 
-            // Navigate to home screen directly
+            // Navigate to home screen
+            Navigator.pushNamedAndRemoveUntil(
+              context,
+              '/home',
+              (route) => false,
+            );
+            return;
+          }
+
+          // Fallback: If authentication fails, just navigate anyway
+          print('DEBUG: Google authentication returned null user');
+
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Signed in with Google (limited features)'),
+                duration: Duration(seconds: 2),
+                backgroundColor: Colors.orange,
+              ),
+            );
+
             Navigator.pushNamedAndRemoveUntil(
               context,
               '/home',
@@ -202,8 +310,21 @@ class _SignInScreenState extends State<SignInScreen> {
           }
           return;
         } catch (e) {
-          print('DEBUG: Error: $e');
-          throw Exception('Failed to authenticate: $e');
+          print('DEBUG: Error during Firebase Google authentication: $e');
+
+          if (!mounted) return;
+
+          // Show error but allow fallback navigation
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Sign-in error: $e'),
+              duration: const Duration(seconds: 3),
+              backgroundColor: Colors.red,
+            ),
+          );
+
+          setState(() => _isLoading = false);
+          return;
         }
       } else {
         throw Exception('Unable to obtain email from Google account');
@@ -582,12 +703,9 @@ class _SignInScreenState extends State<SignInScreen> {
                             ),
                             TextButton(
                               onPressed: () {
-                                Navigator.push(
+                                Navigator.pushNamed(
                                   context,
-                                  MaterialPageRoute(
-                                    builder: (context) =>
-                                        const ForgotPasswordScreen(),
-                                  ),
+                                  '/forgot-password',
                                 );
                               },
                               child: const Text(
@@ -608,7 +726,7 @@ class _SignInScreenState extends State<SignInScreen> {
                           width: double.infinity,
                           height: 56,
                           child: ElevatedButton(
-                            onPressed: _handleSignIn,
+                            onPressed: _isLoading ? null : _handleSignIn,
                             style: ElevatedButton.styleFrom(
                               backgroundColor: const Color(0xFFFDB022),
                               foregroundColor: Colors.white,
@@ -616,14 +734,26 @@ class _SignInScreenState extends State<SignInScreen> {
                                 borderRadius: BorderRadius.circular(28),
                               ),
                               elevation: 0,
+                              disabledBackgroundColor: Colors.grey[300],
                             ),
-                            child: const Text(
-                              'Sign in',
-                              style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
+                            child: _isLoading
+                                ? const SizedBox(
+                                    height: 24,
+                                    width: 24,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      valueColor: AlwaysStoppedAnimation<Color>(
+                                        Colors.white,
+                                      ),
+                                    ),
+                                  )
+                                : const Text(
+                                    'Sign in',
+                                    style: TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
                           ),
                         ),
 

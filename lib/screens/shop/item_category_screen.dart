@@ -2,66 +2,46 @@ import 'dart:async';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../models/product.dart';
 import '../../services/firebase_service.dart';
 import '../../services/filebase_service.dart';
-import '../../models/product.dart';
-import '../../utils/slide_route.dart';
-import 'product_detail_screen.dart';
-import '../../widgets/authenticated_image.dart';
 import '../../providers/product_provider.dart';
 import 'filter_modal.dart';
+import 'product_detail_screen.dart';
 
-class PopularProductsScreen extends StatefulWidget {
-  const PopularProductsScreen({super.key});
+class ItemCategoryScreen extends StatefulWidget {
+  final String categoryName;
+
+  const ItemCategoryScreen({required this.categoryName, super.key});
 
   @override
-  State<PopularProductsScreen> createState() => _PopularProductsScreenState();
+  State<ItemCategoryScreen> createState() => _ItemCategoryScreenState();
 }
 
-class _PopularProductsScreenState extends State<PopularProductsScreen> {
-  late List<Product> _products;
+class _ItemCategoryScreenState extends State<ItemCategoryScreen> {
+  late List<Product> _allProducts;
   late List<Product> _filteredProducts;
   int _itemsToShow = 4;
   final int _itemsPerLoad = 4;
   List<String> _selectedCategories = [];
   double _minPrice = 0;
-  double _maxPrice = 500;
+  double _maxPrice =
+      999999; // high sentinel — will be narrowed after products load
   List<String> _selectedMaterials = [];
   List<String> _selectedColors = [];
   StreamSubscription<List<Map<String, dynamic>>>? _productsSubscription;
   bool _isLoadingProducts = false;
 
-  void _onProductProviderUpdate() {
-    if (!mounted) return;
-    final productProvider = context.read<ProductProvider>();
-    setState(() {
-      // Update Product model objects in our local lists
-      for (var p in _products) {
-        final provP = productProvider.getProductById(p.id);
-        if (provP != null) {
-          p.isFavorite = provP['isFavorite'] ?? false;
-        }
-      }
-
-      for (var p in _filteredProducts) {
-        final provP = productProvider.getProductById(p.id);
-        if (provP != null) {
-          p.isFavorite = provP['isFavorite'] ?? false;
-        }
-      }
-    });
-  }
+  // Cache for products by category
+  static final Map<String, List<Product>> _categoryCache = {};
 
   @override
   void initState() {
     super.initState();
-    _products = [];
+    _allProducts = [];
     _filteredProducts = [];
-
-    // Register listener for ProductProvider to sync favorites across screens
-    context.read<ProductProvider>().addListener(_onProductProviderUpdate);
-
-    _loadPopularProducts();
+    _selectedCategories = [widget.categoryName]; // Pre-select the category
+    _loadCategoryProducts();
     _loadUserFavorites();
   }
 
@@ -69,19 +49,17 @@ class _PopularProductsScreenState extends State<PopularProductsScreen> {
     try {
       final productProvider = context.read<ProductProvider>();
       await productProvider.loadUserFavorites();
-      print('✅ User favorites loaded in PopularProductsScreen');
+      print('✅ User favorites loaded in ItemCategoryScreen');
     } catch (e) {
       print('Error loading user favorites: $e');
     }
   }
 
-  Future<void> _loadPopularProducts() async {
+  Future<void> _loadCategoryProducts() async {
     try {
       setState(() {
         _isLoadingProducts = true;
       });
-
-      final filebaseService = FilebaseService();
 
       // Cancel previous subscription if it exists
       _productsSubscription?.cancel();
@@ -91,35 +69,51 @@ class _PopularProductsScreenState extends State<PopularProductsScreen> {
         (productsList) {
           if (!mounted) return;
 
-          // Filter only popular products (isPopular == true)
-          final popularProducts = productsList.where((product) {
-            return product['isPopular'] == true;
-          }).toList();
+          // Transform with Filebase URLs for variation support
+          final transformedList = FilebaseService()
+              .transformProductsWithFilebaseUrls(productsList);
 
-          // Transform Firebase paths to full Filebase URLs
-          final transformedProducts = filebaseService
-              .transformProductsWithFilebaseUrls(popularProducts);
-
-          // Convert to Product models for robust mapping and to fix null errors
-          final convertedProducts = transformedProducts.map<Product>((map) {
-            return Product.fromMap(map);
-          }).toList();
+          // Convert Firebase products to Product model and filter by category
+          // Use case-insensitive comparison in case Firebase stores a different case
+          final categoryLower = widget.categoryName.toLowerCase();
+          final convertedProducts = transformedList
+              .where(
+                (productMap) =>
+                    (productMap['category'] as String? ?? '').toLowerCase() ==
+                    categoryLower,
+              )
+              .map((productMap) {
+                return Product.fromMap(productMap);
+              })
+              .toList();
 
           setState(() {
-            _products = convertedProducts;
-            _filteredProducts = List.from(_products);
+            _allProducts = convertedProducts;
+            // Cache the results
+            _categoryCache[widget.categoryName] = convertedProducts;
+            // Auto-adjust max price ceiling to the highest product price
+            if (convertedProducts.isNotEmpty) {
+              final highestPrice = convertedProducts
+                  .map((p) => p.price)
+                  .reduce((a, b) => a > b ? a : b);
+              if (_maxPrice == 999999) {
+                // Only set on first load (before user touches the filter)
+                _maxPrice = (highestPrice * 1.5).ceilToDouble();
+              }
+            }
+            _filterProducts();
             _isLoadingProducts = false;
           });
         },
         onError: (error) {
-          print('Error loading popular products: $error');
+          print('Error loading category products: $error');
           setState(() {
             _isLoadingProducts = false;
           });
         },
       );
     } catch (e) {
-      print('Error in _loadPopularProducts: $e');
+      print('Error in _loadCategoryProducts: $e');
       setState(() {
         _isLoadingProducts = false;
       });
@@ -128,11 +122,6 @@ class _PopularProductsScreenState extends State<PopularProductsScreen> {
 
   @override
   void dispose() {
-    // Unregister ProductProvider listener
-    try {
-      context.read<ProductProvider>().removeListener(_onProductProviderUpdate);
-    } catch (_) {}
-
     _productsSubscription?.cancel();
     super.dispose();
   }
@@ -145,22 +134,29 @@ class _PopularProductsScreenState extends State<PopularProductsScreen> {
     List<String> colors,
   ) {
     setState(() {
-      _selectedCategories = categories;
+      // Only allow the current category to be selected
+      _selectedCategories = [widget.categoryName];
       _minPrice = minPrice;
-      _maxPrice = maxPrice;
+      // If the modal was cleared (maxPrice == 500), treat it as "no price filter"
+      _maxPrice = (maxPrice == 500 && minPrice == 0) ? 999999 : maxPrice;
       _selectedMaterials = materials;
       _selectedColors = colors;
+      _itemsToShow = 4; // Reset pagination when filters change
       _filterProducts();
     });
   }
 
   void _filterProducts() {
-    _filteredProducts = _products.where((product) {
-      bool categoryMatch =
-          _selectedCategories.isEmpty ||
-          _selectedCategories.contains(product.category);
+    final categoryLower = widget.categoryName.toLowerCase();
+    // Price is only filtered when the user has explicitly set a range
+    // (sentinel value 999999 means "no filter applied yet")
+    final bool hasPriceFilter = _maxPrice < 999999;
+    _filteredProducts = _allProducts.where((product) {
+      // Category is always the current category (case-insensitive)
+      bool categoryMatch = product.category.toLowerCase() == categoryLower;
       bool priceMatch =
-          product.price >= _minPrice && product.price <= _maxPrice;
+          !hasPriceFilter ||
+          (product.price >= _minPrice && product.price <= _maxPrice);
       bool materialMatch =
           _selectedMaterials.isEmpty ||
           _selectedMaterials.contains(product.material);
@@ -187,9 +183,9 @@ class _PopularProductsScreenState extends State<PopularProductsScreen> {
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
-        title: const Text(
-          'Popular Products',
-          style: TextStyle(
+        title: Text(
+          widget.categoryName,
+          style: const TextStyle(
             color: Color(0xFF1E3A8A),
             fontWeight: FontWeight.w600,
             fontSize: 18,
@@ -228,10 +224,11 @@ class _PopularProductsScreenState extends State<PopularProductsScreen> {
               ),
             )
           : _filteredProducts.isEmpty
-          ? const Center(
+          ? Center(
               child: Text(
-                'No popular products found',
-                style: TextStyle(color: Color(0xFF1E3A8A), fontSize: 16),
+                'No products found in ${widget.categoryName}',
+                style: const TextStyle(color: Color(0xFF1E3A8A), fontSize: 16),
+                textAlign: TextAlign.center,
               ),
             )
           : Padding(
@@ -301,21 +298,17 @@ class _PopularProductsScreenState extends State<PopularProductsScreen> {
   Widget _buildProductCard(Product product) {
     return GestureDetector(
       onTap: () {
-        Navigator.of(
+        Navigator.push(
           context,
-        ).push(slideRoute(ProductDetailScreen(product: product)));
+          MaterialPageRoute(
+            builder: (context) => ProductDetailScreen(product: product),
+          ),
+        );
       },
       child: Container(
         decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.05),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
-            ),
-          ],
+          color: Colors.grey[100],
+          borderRadius: BorderRadius.circular(12),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -323,15 +316,51 @@ class _PopularProductsScreenState extends State<PopularProductsScreen> {
             Expanded(
               child: Stack(
                 children: [
-                  ClipRRect(
-                    borderRadius: const BorderRadius.vertical(
-                      top: Radius.circular(16),
+                  Container(
+                    width: double.infinity,
+                    decoration: BoxDecoration(
+                      color: Colors.grey[200],
+                      borderRadius: const BorderRadius.only(
+                        topLeft: Radius.circular(12),
+                        topRight: Radius.circular(12),
+                      ),
                     ),
-                    child: AuthenticatedImage(imageUrl: product.imageUrl),
+                    child: ClipRRect(
+                      borderRadius: const BorderRadius.only(
+                        topLeft: Radius.circular(12),
+                        topRight: Radius.circular(12),
+                      ),
+                      child: _AuthenticatedProductImage(
+                        imageUrl: product.imageUrl,
+                      ),
+                    ),
                   ),
+                  if (product.discount != null)
+                    Positioned(
+                      top: 8,
+                      left: 8,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFDB022),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          product.discount!,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ),
                   Positioned(
-                    top: 12,
-                    right: 12,
+                    top: 8,
+                    right: 8,
                     child: Consumer<ProductProvider>(
                       builder: (context, provider, _) {
                         final isFav = provider.isFavorite(product.id);
@@ -348,17 +377,10 @@ class _PopularProductsScreenState extends State<PopularProductsScreen> {
                               }
                             });
                           },
-                          child: Container(
-                            padding: const EdgeInsets.all(6),
-                            decoration: const BoxDecoration(
-                              color: Colors.white,
-                              shape: BoxShape.circle,
-                            ),
-                            child: Icon(
-                              isFav ? Icons.favorite : Icons.favorite_border,
-                              size: 18,
-                              color: isFav ? Colors.red : Colors.grey,
-                            ),
+                          child: Icon(
+                            isFav ? Icons.favorite : Icons.favorite_border,
+                            color: isFav ? Colors.red : Colors.grey,
+                            size: 24,
                           ),
                         );
                       },
@@ -375,44 +397,40 @@ class _PopularProductsScreenState extends State<PopularProductsScreen> {
                   Text(
                     product.name,
                     style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
                       color: Color(0xFF1E3A8A),
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
                     ),
-                    maxLines: 1,
+                    maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ),
                   const SizedBox(height: 4),
+                  Text(
+                    '₱${product.price.toStringAsFixed(2).replaceAllMapped(
+                          RegExp(r'(\d)(?=(\d{3})+\.)'),
+                          (Match m) => '${m[1]},',
+                        )}',
+                    style: const TextStyle(
+                      color: Color(0xFF1E3A8A),
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
                   Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text(
-                        '₱${product.price.toStringAsFixed(2).replaceAllMapped(
-                              RegExp(r'(\d)(?=(\d{3})+\.)'),
-                              (Match m) => '${m[1]},',
-                            )}',
-                        style: const TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFFFDB022),
-                        ),
+                      const Icon(
+                        Icons.star,
+                        color: Color(0xFFFDB022),
+                        size: 14,
                       ),
-                      Row(
-                        children: [
-                          const Icon(
-                            Icons.star,
-                            size: 14,
-                            color: Color(0xFFFDB022),
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            '${product.rating}',
-                            style: const TextStyle(
-                              fontSize: 12,
-                              color: Colors.grey,
-                            ),
-                          ),
-                        ],
+                      const SizedBox(width: 4),
+                      Text(
+                        '${product.rating}',
+                        style: const TextStyle(
+                          color: Colors.grey,
+                          fontSize: 12,
+                        ),
                       ),
                     ],
                   ),
@@ -422,6 +440,45 @@ class _PopularProductsScreenState extends State<PopularProductsScreen> {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// Authenticated image widget that fetches images from Filebase with proper auth
+class _AuthenticatedProductImage extends StatelessWidget {
+  final String imageUrl;
+
+  const _AuthenticatedProductImage({required this.imageUrl});
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<Uint8List?>(
+      future: FilebaseService().getImageBytes(imageUrl),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(
+            child: CircularProgressIndicator(
+              valueColor: AlwaysStoppedAnimation(Color(0xFFFDB022)),
+            ),
+          );
+        }
+
+        if (snapshot.hasData && snapshot.data != null) {
+          return Center(
+            child: Image.memory(
+              snapshot.data!,
+              fit: BoxFit.contain,
+              alignment: Alignment.center,
+              width: double.infinity,
+              height: double.infinity,
+            ),
+          );
+        }
+
+        return const Center(
+          child: Icon(Icons.image_outlined, color: Colors.grey, size: 48),
+        );
+      },
     );
   }
 }

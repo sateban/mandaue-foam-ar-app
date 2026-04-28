@@ -1,19 +1,20 @@
 import 'package:flutter/material.dart';
 import 'dart:async';
-import 'dart:typed_data';
 import 'package:provider/provider.dart';
 import '../../data/dummy_data.dart' show categories, categoryImageUrls;
+import 'item_category_screen.dart';
 import '../../providers/product_provider.dart';
 import '../../utils/slide_route.dart';
 import '../../services/firebase_service.dart';
 import '../../services/filebase_service.dart';
 import '../../models/product.dart';
-import 'cart_screen.dart';
+import 'wishlist_screen.dart';
 import 'orders_screen.dart';
 import 'profile_screen.dart';
 import 'product_detail_screen.dart';
 import 'shop_shell_scope.dart';
 import 'package:logger/logger.dart';
+import '../../widgets/authenticated_image.dart';
 
 var l = Logger();
 
@@ -27,13 +28,9 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  List<Map<String, dynamic>> _filteredProducts = [];
   List<Map<String, dynamic>> _allFirebaseProducts = [];
-  List<String> _selectedCategories = [];
-  double _minPrice = 0;
-  double _maxPrice = 500;
-  List<String> _selectedMaterials = [];
-  List<String> _selectedColors = [];
+  List<Product> _popularProducts = [];
+  List<Product> _newArrivalProducts = [];
   // Hero carousel
   late final PageController _heroPageController;
   int _heroCurrentIndex = 0;
@@ -55,6 +52,38 @@ class _HomeScreenState extends State<HomeScreen> {
   // Stream subscription for Firebase products
   StreamSubscription<List<Map<String, dynamic>>>? _productsSubscription;
 
+  void _onProductProviderUpdate() {
+    if (!mounted) return;
+    _deriveListsFromProvider();
+  }
+
+  void _deriveListsFromProvider() {
+    final productProvider = context.read<ProductProvider>();
+    final allProducts = productProvider.products;
+
+    setState(() {
+      _allFirebaseProducts = allProducts;
+      
+      // Update section-specific lists using Product model
+      _popularProducts = allProducts
+          .where((p) => p['isPopular'] == true)
+          .map<Product>((p) => Product.fromMap(p))
+          .toList();
+          
+      _newArrivalProducts = allProducts
+          .where((p) => p['isNewArrival'] == true)
+          .map<Product>((p) => Product.fromMap(p))
+          .toList();
+
+      _updateHeroSlidesFromProducts(allProducts);
+
+      // Refresh search results if active
+      if (_searchController.text.isNotEmpty) {
+        _searchProducts(_searchController.text);
+      }
+    });
+  }
+
   @override
   void initState() {
     super.initState();
@@ -62,35 +91,19 @@ class _HomeScreenState extends State<HomeScreen> {
     _categoriesScrollController = ScrollController();
     _categoriesScrollController.addListener(_updateCategoriesScrollState);
 
-    // Get products from ProductProvider (loaded from Firebase after sign-in)
-    final productProvider = context.read<ProductProvider>();
-    _filteredProducts = List.from(productProvider.products);
+    // Register listener for ProductProvider to sync favorites across screens
+    context.read<ProductProvider>().addListener(_onProductProviderUpdate);
 
-    // Load Firebase products
-    _loadFirebaseProducts();
+    // Initial derivation
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _deriveListsFromProvider();
+    });
 
     // Test Filebase credentials to diagnose 403 issue
     _testFilebaseConnection();
 
-    // prepare hero slides (take up to 5 product images as slides)
-    _heroSlides = _filteredProducts
-        .take(5)
-        .map<String>((p) => (p['imageUrl'] as String?) ?? '')
-        .toList();
-    _heroNames = _filteredProducts
-        .take(5)
-        .map<String>((p) => (p['name'] as String?) ?? '')
-        .toList();
-    if (_heroSlides.isEmpty) {
-      _heroSlides = List.filled(5, '');
-      _heroNames = List.filled(5, 'Astra Wood\nChair');
-    } else if (_heroSlides.length < 5) {
-      // pad to 5 slides
-      _heroSlides = List.from(_heroSlides)
-        ..addAll(List.filled(5 - _heroSlides.length, ''));
-      _heroNames = List.from(_heroNames)
-        ..addAll(List.filled(5 - _heroNames.length, 'Astra Wood\nChair'));
-    }
+    _heroSlides = List.filled(5, '');
+    _heroNames = List.filled(5, 'Astra Wood\nChair');
     _heroPageController = PageController();
     _heroTimer = Timer.periodic(const Duration(seconds: 5), (timer) {
       if (!_heroPageController.hasClients) return;
@@ -105,102 +118,25 @@ class _HomeScreenState extends State<HomeScreen> {
       }
 
       _heroCurrentIndex = (_heroCurrentIndex + 1) % _heroSlides.length;
-      _heroPageController.animateToPage(
-        _heroCurrentIndex,
-        duration: const Duration(milliseconds: 400),
-        curve: Curves.easeInOut,
-      );
+      if (_heroPageController.hasClients) {
+        _heroPageController.animateToPage(
+          _heroCurrentIndex,
+          duration: const Duration(milliseconds: 400),
+          curve: Curves.easeInOut,
+        );
+      }
     });
   }
 
-  Future<void> _loadFirebaseProducts() async {
-    try {
-      final List<Map<String, dynamic>> productsData =
-          await FirebaseService.readListData('products');
-
-      print("✅ Products loaded from Firebase: ${productsData.length}");
-
-      // Show first product path before transformation
-      if (productsData.isNotEmpty) {
-        print("📝 Sample Firebase imageUrl: ${productsData.first['imageUrl']}");
-        print("📝 Sample Firebase modelUrl: ${productsData.first['modelUrl']}");
-      }
-
-      // Transform Firebase paths to full Filebase URLs
-      final filebaseService = FilebaseService();
-      final transformedProducts = filebaseService
-          .transformProductsWithFilebaseUrls(productsData);
-
-      // Show first product path after transformation
-      if (transformedProducts.isNotEmpty) {
-        print(
-          "🔄 After transformation imageUrl: ${transformedProducts.first['imageUrl']}",
-        );
-        print(
-          "🔄 After transformation modelUrl: ${transformedProducts.first['modelUrl']}",
-        );
-      }
-
-      // Update hero slides from products with isHeroBanner == true
-      _updateHeroSlidesFromProducts(transformedProducts);
-
-      // Cancel previous subscription if it exists
-      _productsSubscription?.cancel();
-
-      // Listen to real-time updates
-      _productsSubscription = FirebaseService.streamListData('/products')
-          .listen(
-            (productsList) {
-              // ignore: avoid_print
-              print('Stream products received: ${productsList.length} items');
-              if (!mounted) return;
-
-              // Transform Firebase paths to full Filebase URLs
-              final transformedStreamProducts = filebaseService
-                  .transformProductsWithFilebaseUrls(productsList);
-
-              // Update hero slides from products with isHeroBanner == true
-              _updateHeroSlidesFromProducts(transformedStreamProducts);
-
-              setState(() {
-                _allFirebaseProducts = transformedStreamProducts;
-                _filteredProducts = List.from(_allFirebaseProducts);
-              });
-              // Re-run search if there's an active search query
-              if (_searchController.text.isNotEmpty) {
-                _searchProducts(_searchController.text);
-              }
-            },
-            onError: (error) {
-              // ignore: avoid_print
-              print('Error reading products: $error');
-            },
-          );
-
-      if (!mounted) return;
-
-      setState(() {
-        _allFirebaseProducts = transformedProducts;
-        _filteredProducts = List.from(_allFirebaseProducts);
-      });
-    } catch (e) {
-      if (!mounted) return;
-      print('Error loading Firebase products: $e');
-    }
-  }
-
-  /// Test Filebase connection and credentials
-  Future<void> _testFilebaseConnection() async {
-    final filebaseService = FilebaseService();
-    final result = await filebaseService.testCredentials();
-    print('\n🧪 Filebase Credential Test Result:');
-    print('   Status Code: ${result['statusCode']}');
-    print('   Success: ${result['success']}');
-    print('   Message: ${result['message']}');
-  }
 
   @override
+  @override
   void dispose() {
+    // Unregister ProductProvider listener
+    try {
+      context.read<ProductProvider>().removeListener(_onProductProviderUpdate);
+    } catch (_) {}
+
     _heroTimer?.cancel();
     _heroPageController.dispose();
     _searchController.dispose();
@@ -210,39 +146,18 @@ class _HomeScreenState extends State<HomeScreen> {
     super.dispose();
   }
 
-  // ignore: unused_element
-  void _applyFilters(
-    List<String> categories,
-    double minPrice,
-    double maxPrice,
-    List<String> materials,
-    List<String> colors,
-  ) {
-    setState(() {
-      _selectedCategories = categories;
-      _minPrice = minPrice;
-      _maxPrice = maxPrice;
-      _selectedMaterials = materials;
-      _selectedColors = colors;
-      _filterProducts();
-    });
-  }
-
-  void _filterProducts() {
-    _filteredProducts = _allFirebaseProducts.where((product) {
-      bool categoryMatch =
-          _selectedCategories.isEmpty ||
-          _selectedCategories.contains(product['category']);
-      bool priceMatch =
-          product['price'] >= _minPrice && product['price'] <= _maxPrice;
-      bool materialMatch =
-          _selectedMaterials.isEmpty ||
-          _selectedMaterials.contains(product['material']);
-      bool colorMatch =
-          _selectedColors.isEmpty || _selectedColors.contains(product['color']);
-
-      return categoryMatch && priceMatch && materialMatch && colorMatch;
-    }).toList();
+  /// Test Filebase connection and credentials
+  Future<void> _testFilebaseConnection() async {
+    try {
+      final filebaseService = FilebaseService();
+      final result = await filebaseService.testCredentials();
+      print('\n🧪 Filebase Credential Test Result:');
+      print('   Status Code: ${result['statusCode']}');
+      print('   Success: ${result['success']}');
+      print('   Message: ${result['message']}');
+    } catch (e) {
+      print('Error testing Filebase connection: $e');
+    }
   }
 
   /// Update categories scroll button visibility based on scroll position
@@ -434,7 +349,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             ),
                             IconButton(
                               icon: const Icon(
-                                Icons.shopping_cart_outlined,
+                                Icons.favorite_outline,
                                 color: Color(0xFF1E3A8A),
                               ),
                               onPressed: () {
@@ -443,9 +358,9 @@ class _HomeScreenState extends State<HomeScreen> {
                                   shell.setTab(1);
                                   return;
                                 }
-                                Navigator.of(
-                                  context,
-                                ).push(slideRoute(const CartScreen()));
+                                Navigator.of(context).push(
+                                  slideRoute(const WishlistScreen()),
+                                );
                               },
                             ),
                           ],
@@ -600,7 +515,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                           imageUrl: url,
                                           width: 120,
                                           height: 120,
-                                          fit: BoxFit.cover,
+                                          fit: BoxFit.contain,
                                         );
                                       },
                                     ),
@@ -680,7 +595,16 @@ class _HomeScreenState extends State<HomeScreen> {
                             return Padding(
                               padding: const EdgeInsets.only(right: 12),
                               child: GestureDetector(
-                                onTap: () {},
+                                onTap: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) => ItemCategoryScreen(
+                                        categoryName: categories[index],
+                                      ),
+                                    ),
+                                  );
+                                },
                                 child: Container(
                                   width: 80,
                                   decoration: BoxDecoration(
@@ -703,10 +627,19 @@ class _HomeScreenState extends State<HomeScreen> {
                                           borderRadius: BorderRadius.circular(
                                             8,
                                           ),
-                                          child: _AuthenticatedCategoryImage(
+                                          child: AuthenticatedImage(
                                             imageUrl:
                                                 categoryImageUrls[categories[index]] ??
                                                 '',
+                                            fit: BoxFit.contain,
+                                            placeholder: const Center(
+                                              child: CircularProgressIndicator(
+                                                valueColor:
+                                                    AlwaysStoppedAnimation(
+                                                      Color(0xFFFDB022),
+                                                    ),
+                                              ),
+                                            ),
                                           ),
                                         ),
                                       ),
@@ -866,9 +799,9 @@ class _HomeScreenState extends State<HomeScreen> {
                             crossAxisSpacing: 12,
                             mainAxisSpacing: 12,
                           ),
-                      itemCount: _filteredProducts.take(4).toList().length,
+                      itemCount: _popularProducts.take(4).toList().length,
                       itemBuilder: (context, index) {
-                        final products = _filteredProducts.take(4).toList();
+                        final products = _popularProducts.take(4).toList();
                         if (index >= products.length) {
                           return const SizedBox.shrink();
                         }
@@ -934,14 +867,45 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                    child: ListView.builder(
-                      physics: const NeverScrollableScrollPhysics(),
-                      shrinkWrap: true,
-                      itemCount: _filteredProducts.take(4).length,
-                      itemBuilder: (context, index) {
-                        final product = _filteredProducts[index];
-                        return _buildNewArrivalItem(product);
-                      },
+                    child: Column(
+                      children: [
+                        ListView.builder(
+                          physics: const NeverScrollableScrollPhysics(),
+                          shrinkWrap: true,
+                          itemCount: _newArrivalProducts.take(4).length,
+                          itemBuilder: (context, index) {
+                            final product = _newArrivalProducts[index];
+                            return _buildNewArrivalItem(product);
+                          },
+                        ),
+                        const SizedBox(height: 16),
+                        SizedBox(
+                          width: double.infinity,
+                          height: 50,
+                          child: OutlinedButton(
+                            onPressed: () {
+                              Navigator.pushNamed(context, '/all-products');
+                            },
+                            style: OutlinedButton.styleFrom(
+                              side: const BorderSide(
+                                color: Color(0xFF1E3A8A),
+                                width: 1.5,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                            child: const Text(
+                              'See All Products',
+                              style: TextStyle(
+                                color: Color(0xFF1E3A8A),
+                                fontSize: 14,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
 
@@ -1001,12 +965,12 @@ class _HomeScreenState extends State<HomeScreen> {
                                   borderRadius: BorderRadius.circular(6),
                                   child: AuthenticatedImage(
                                     imageUrl: product['imageUrl'] ?? '',
-                                    fit: BoxFit.cover,
+                                    fit: BoxFit.contain,
                                   ),
                                 ),
                               ),
                               title: Text(
-                                product['name'],
+                                product['name'] ?? 'Unknown Product',
                                 style: const TextStyle(
                                   fontSize: 13,
                                   fontWeight: FontWeight.w600,
@@ -1016,7 +980,10 @@ class _HomeScreenState extends State<HomeScreen> {
                                 overflow: TextOverflow.ellipsis,
                               ),
                               subtitle: Text(
-                                '\$${product['price'].toStringAsFixed(2)}',
+                                '₱${(product['price'] ?? 0.0).toStringAsFixed(2).replaceAllMapped(
+                                      RegExp(r'(\d)(?=(\d{3})+\.)'),
+                                      (Match m) => '${m[1]},',
+                                    )}',
                                 style: const TextStyle(
                                   fontSize: 12,
                                   color: Colors.grey,
@@ -1123,7 +1090,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                       ),
                     ),
-                    // Cart
+                    // Favorites
                     GestureDetector(
                       onTap: () {
                         final shell = ShopShellScope.maybeOf(context);
@@ -1131,9 +1098,9 @@ class _HomeScreenState extends State<HomeScreen> {
                           shell.setTab(1);
                           return;
                         }
-                        Navigator.of(
-                          context,
-                        ).push(slideRoute(const CartScreen()));
+                        Navigator.of(context).push(
+                          slideRoute(const WishlistScreen()),
+                        );
                       },
                       child: Container(
                         padding: const EdgeInsets.all(12),
@@ -1142,7 +1109,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           shape: BoxShape.circle,
                         ),
                         child: const Icon(
-                          Icons.shopping_cart,
+                          Icons.favorite,
                           color: Colors.grey,
                           size: 24,
                         ),
@@ -1173,6 +1140,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                       ),
                     ),
+                    
                     // Profile
                     GestureDetector(
                       onTap: () {
@@ -1207,35 +1175,12 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildProductCard(Map<String, dynamic> product) {
-    final imageUrl = product['imageUrl'] ?? '';
-    if (imageUrl.isNotEmpty) {
-      print('🖼️  Product: ${product['name']} | URL: $imageUrl');
-    }
+  Widget _buildProductCard(Product product) {
+    final imageUrl = product.imageUrl;
 
     return GestureDetector(
       onTap: () {
-        final selectedProduct = Product(
-          id: product['id']?.toString() ?? '',
-          name: product['name'] ?? '',
-          price: (product['price'] as num?)?.toDouble() ?? 0.0,
-          category: product['category'] ?? '',
-          material: product['material'] ?? '',
-          color: product['color'] ?? '',
-          imageUrl: product['imageUrl'] ?? '',
-          rating: (product['rating'] as num?)?.toDouble() ?? 0.0,
-          reviews: (product['reviews'] as num?)?.toInt() ?? 0,
-          isFavorite: product['isFavorite'] ?? false,
-          discount: product['discount'],
-          description: product['description'],
-          quantity: product['quantity'] as int?,
-          inStock: product['inStock'] ?? true,
-          modelUrl: product['modelUrl'],
-          modelScale: (product['modelScale'] as num?)?.toDouble(),
-        );
-        Navigator.of(
-          context,
-        ).push(slideRoute(ProductDetailScreen(product: selectedProduct)));
+        Navigator.of(context).push(slideRoute(ProductDetailScreen(product: product)));
       },
       child: Container(
         decoration: BoxDecoration(
@@ -1264,25 +1209,22 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                       child: AuthenticatedImage(
                         imageUrl: imageUrl,
-                        fit: BoxFit.cover,
+                        fit: BoxFit.contain,
                       ),
                     ),
                   ),
-                  if (product['discount'] != null)
+                  if (product.discount != null)
                     Positioned(
                       top: 8,
                       left: 8,
                       child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 4,
-                        ),
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                         decoration: BoxDecoration(
                           color: const Color(0xFFFDB022),
                           borderRadius: BorderRadius.circular(6),
                         ),
                         child: Text(
-                          product['discount'],
+                          product.discount!,
                           style: const TextStyle(
                             color: Colors.white,
                             fontSize: 10,
@@ -1291,18 +1233,40 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                       ),
                     ),
+                  // Favourite button — reads state from ProductProvider, not local Product object
                   Positioned(
                     top: 8,
                     right: 8,
-                    child: GestureDetector(
-                      onTap: () {},
-                      child: Icon(
-                        product['isFavorite']
-                            ? Icons.favorite
-                            : Icons.favorite_border,
-                        color: product['isFavorite'] ? Colors.red : Colors.grey,
-                        size: 24,
-                      ),
+                    child: Consumer<ProductProvider>(
+                      builder: (context, provider, _) {
+                        final isFav = provider.isFavorite(product.id);
+                        return GestureDetector(
+                          onTap: () {
+                            provider.toggleProductFavorite(product.id).catchError((e) {
+                              if (mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('Failed to update favorites'),
+                                    duration: Duration(seconds: 2),
+                                  ),
+                                );
+                              }
+                            });
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.all(6),
+                            decoration: const BoxDecoration(
+                              color: Colors.white,
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(
+                              isFav ? Icons.favorite : Icons.favorite_border,
+                              color: isFav ? Colors.red : Colors.grey,
+                              size: 20,
+                            ),
+                          ),
+                        );
+                      },
                     ),
                   ),
                 ],
@@ -1314,7 +1278,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    product['name'],
+                    product.name,
                     style: const TextStyle(
                       color: Color(0xFF1E3A8A),
                       fontSize: 14,
@@ -1325,7 +1289,10 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    '\$${product['price'].toStringAsFixed(2)}',
+                    '₱${product.price.toStringAsFixed(2).replaceAllMapped(
+                          RegExp(r'(\d)(?=(\d{3})+\.)'),
+                          (Match m) => '${m[1]},',
+                        )}',
                     style: const TextStyle(
                       color: Color(0xFF1E3A8A),
                       fontSize: 14,
@@ -1335,18 +1302,11 @@ class _HomeScreenState extends State<HomeScreen> {
                   const SizedBox(height: 4),
                   Row(
                     children: [
-                      const Icon(
-                        Icons.star,
-                        color: Color(0xFFFDB022),
-                        size: 14,
-                      ),
+                      const Icon(Icons.star, color: Color(0xFFFDB022), size: 14),
                       const SizedBox(width: 4),
                       Text(
-                        '${product['rating']}',
-                        style: const TextStyle(
-                          color: Colors.grey,
-                          fontSize: 12,
-                        ),
+                        '${product.rating}',
+                        style: const TextStyle(color: Colors.grey, fontSize: 12),
                       ),
                     ],
                   ),
@@ -1359,31 +1319,13 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildNewArrivalItem(Map<String, dynamic> product) {
-    final imageUrl = product['imageUrl'] ?? '';
+  Widget _buildNewArrivalItem(Product product) {
+    final imageUrl = product.imageUrl;
     return GestureDetector(
       onTap: () {
-        final selectedProduct = Product(
-          id: product['id']?.toString() ?? '',
-          name: product['name'] ?? '',
-          price: (product['price'] as num?)?.toDouble() ?? 0.0,
-          category: product['category'] ?? '',
-          material: product['material'] ?? '',
-          color: product['color'] ?? '',
-          imageUrl: product['imageUrl'] ?? '',
-          rating: (product['rating'] as num?)?.toDouble() ?? 0.0,
-          reviews: (product['reviews'] as num?)?.toInt() ?? 0,
-          isFavorite: product['isFavorite'] ?? false,
-          discount: product['discount'],
-          description: product['description'],
-          quantity: product['quantity'] as int?,
-          inStock: product['inStock'] ?? true,
-          modelUrl: product['modelUrl'],
-          modelScale: (product['modelScale'] as num?)?.toDouble(),
-        );
         Navigator.of(
           context,
-        ).push(slideRoute(ProductDetailScreen(product: selectedProduct)));
+        ).push(slideRoute(ProductDetailScreen(product: product)));
       },
       child: Container(
         margin: const EdgeInsets.only(bottom: 16),
@@ -1405,7 +1347,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 borderRadius: BorderRadius.circular(8),
                 child: AuthenticatedImage(
                   imageUrl: imageUrl,
-                  fit: BoxFit.cover,
+                  fit: BoxFit.contain,
                 ),
               ),
             ),
@@ -1415,7 +1357,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    product['name'],
+                    product.name,
                     style: const TextStyle(
                       color: Color(0xFF1E3A8A),
                       fontSize: 14,
@@ -1429,7 +1371,10 @@ class _HomeScreenState extends State<HomeScreen> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
-                        '\$${product['price'].toStringAsFixed(2)}',
+                        '₱${product.price.toStringAsFixed(2).replaceAllMapped(
+                              RegExp(r'(\d)(?=(\d{3})+\.)'),
+                              (Match m) => '${m[1]},',
+                            )}',
                         style: const TextStyle(
                           color: Color(0xFF1E3A8A),
                           fontSize: 14,
@@ -1445,7 +1390,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           ),
                           const SizedBox(width: 4),
                           Text(
-                            '${product['rating']}',
+                            '${product.rating}',
                             style: const TextStyle(
                               color: Colors.grey,
                               fontSize: 12,
@@ -1458,14 +1403,64 @@ class _HomeScreenState extends State<HomeScreen> {
                 ],
               ),
             ),
-            GestureDetector(
-              onTap: () {},
-              child: Icon(
-                product['isFavorite'] ? Icons.favorite : Icons.favorite_border,
-                color: product['isFavorite'] ? Colors.red : Colors.grey,
-                size: 20,
-              ),
-            ),
+            // FAVORITE BUTTON COMMENTED OUT ON HOME PAGE
+            // Can be uncommented to show favorite button in New Arrivals section
+            // GestureDetector(
+            //   onTap: () {
+            //     try {
+            //       final productProvider = context.read<ProductProvider>();
+            //       final wasIsFavorite = product['isFavorite'] ?? false;
+            //
+            //       // Optimistic update - update UI immediately
+            //       product['isFavorite'] = !wasIsFavorite;
+            //       setState(() {});
+            //
+            //       // Show feedback
+            //       if (mounted) {
+            //         ScaffoldMessenger.of(context).showSnackBar(
+            //           SnackBar(
+            //             content: Text(
+            //               product['isFavorite'] ? 'Added to favorites' : 'Removed from favorites',
+            //             ),
+            //             duration: const Duration(seconds: 1),
+            //           ),
+            //         );
+            //       }
+            //
+            //       // Update Firebase in background without awaiting
+            //       productProvider.toggleProductFavorite(product['id']?.toString() ?? '')
+            //         .catchError((e) {
+            //           // Rollback on error
+            //           product['isFavorite'] = wasIsFavorite;
+            //           if (mounted) {
+            //             setState(() {});
+            //             ScaffoldMessenger.of(context).showSnackBar(
+            //               const SnackBar(
+            //                 content: Text('Failed to update favorites'),
+            //                 duration: Duration(seconds: 2),
+            //               ),
+            //             );
+            //           }
+            //           print('Error toggling favorite: $e');
+            //         });
+            //     } catch (e) {
+            //       if (mounted) {
+            //         ScaffoldMessenger.of(context).showSnackBar(
+            //           const SnackBar(
+            //             content: Text('Please sign in to add favorites'),
+            //             duration: Duration(seconds: 2),
+            //           ),
+            //         );
+            //       }
+            //       print('Error toggling favorite: $e');
+            //     }
+            //   },
+            //   child: Icon(
+            //     product['isFavorite'] ? Icons.favorite : Icons.favorite_border,
+            //     color: product['isFavorite'] ? Colors.red : Colors.grey,
+            //     size: 20,
+            //   ),
+            // ),
           ],
         ),
       ),
@@ -1548,129 +1543,4 @@ Future<void> showNotificationPanel(BuildContext context) {
       );
     },
   );
-}
-
-/// Widget to load images with AWS Signature V4 authentication
-class AuthenticatedImage extends StatefulWidget {
-  final String imageUrl;
-  final BoxFit fit;
-  final double? width;
-  final double? height;
-
-  const AuthenticatedImage({
-    required this.imageUrl,
-    this.fit = BoxFit.cover,
-    this.width,
-    this.height,
-    super.key,
-  });
-
-  @override
-  State<AuthenticatedImage> createState() => _AuthenticatedImageState();
-}
-
-class _AuthenticatedImageState extends State<AuthenticatedImage> {
-  late Future<Uint8List?> _imageFuture;
-
-  @override
-  void initState() {
-    super.initState();
-    _imageFuture = FilebaseService().getImageBytes(widget.imageUrl);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return FutureBuilder<Uint8List?>(
-      future: _imageFuture,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return Center(
-            child: CircularProgressIndicator(color: Colors.grey[400]),
-          );
-        }
-
-        if (snapshot.hasError || snapshot.data == null) {
-          print('❌ Image load error: ${snapshot.error}');
-          return Center(
-            child: Icon(Icons.image_outlined, color: Colors.grey, size: 48),
-          );
-        }
-
-        return Image.memory(
-          snapshot.data!,
-          fit: widget.fit,
-          width: widget.width,
-          height: widget.height,
-        );
-      },
-    );
-  }
-}
-
-/// Authenticated image widget for categories that fetches images from Filebase
-/// Caches the fetch Future so parent rebuilds (e.g., carousel slide) won't re-trigger downloads.
-class _AuthenticatedCategoryImage extends StatefulWidget {
-  final String imageUrl;
-
-  const _AuthenticatedCategoryImage({required this.imageUrl});
-
-  @override
-  State<_AuthenticatedCategoryImage> createState() =>
-      _AuthenticatedCategoryImageState();
-}
-
-class _AuthenticatedCategoryImageState
-    extends State<_AuthenticatedCategoryImage> {
-  late Future<Uint8List?> _imageFuture;
-
-  @override
-  void initState() {
-    super.initState();
-    _imageFuture = FilebaseService().getImageBytes(widget.imageUrl);
-  }
-
-  @override
-  void didUpdateWidget(covariant _AuthenticatedCategoryImage oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.imageUrl != widget.imageUrl) {
-      _imageFuture = FilebaseService().getImageBytes(widget.imageUrl);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return FutureBuilder<Uint8List?>(
-      future: _imageFuture,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(
-            child: CircularProgressIndicator(
-              valueColor: AlwaysStoppedAnimation(Color(0xFFFDB022)),
-            ),
-          );
-        }
-
-        if (snapshot.hasData && snapshot.data != null) {
-          return Image.memory(snapshot.data!, fit: BoxFit.cover);
-        }
-
-        // Fallback: render a network image (public) or placeholder
-        if (widget.imageUrl.isNotEmpty) {
-          return Image.network(
-            widget.imageUrl,
-            fit: BoxFit.cover,
-            errorBuilder: (context, error, stackTrace) {
-              return const Center(
-                child: Icon(Icons.image_outlined, color: Colors.grey, size: 24),
-              );
-            },
-          );
-        }
-
-        return const Center(
-          child: Icon(Icons.image_outlined, color: Colors.grey, size: 24),
-        );
-      },
-    );
-  }
 }

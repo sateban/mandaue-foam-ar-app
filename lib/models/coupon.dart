@@ -6,7 +6,7 @@ class Coupon {
   final String title;
   final String description;
   final CouponType type;
-  final double value; // Percentage (0-100) or fixed amount
+  final double value; 
   final DateTime expiryDate;
   final double? minimumPurchase;
   final bool isActive;
@@ -29,7 +29,10 @@ class Coupon {
     if (type == CouponType.percentage) {
       return '${value.toInt()}% OFF';
     } else {
-      return '\$${value.toStringAsFixed(2)} OFF';
+      return '₱${value.toStringAsFixed(2).replaceAllMapped(
+            RegExp(r'(\d)(?=(\d{3})+\.)'),
+            (Match m) => '${m[1]},',
+          )} OFF';
     }
   }
 

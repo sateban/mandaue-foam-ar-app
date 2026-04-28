@@ -4,7 +4,7 @@ class PaymentMethod {
   final String id;
   final PaymentType type;
   final String displayName;
-  final String? cardNumber; // Last 4 digits for cards
+  final String? cardNumber; 
   final String? expiryDate;
   final bool isDefault;
 

@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../widgets/empty_state_widget.dart';
+import '../../widgets/authenticated_image.dart';
 import '../../providers/cart_provider.dart';
 import '../../models/cart_item.dart';
+import 'shop_shell_scope.dart';
+import 'all_products_screen.dart';
 
 class CartScreen extends StatefulWidget {
   const CartScreen({this.showBottomNav = true, super.key});
@@ -69,9 +72,55 @@ class _CartScreenState extends State<CartScreen> {
     }
   }
 
+  Future<void> _confirmRemoveItem(
+    String id,
+    String itemName,
+    CartProvider cartProvider,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text(
+          'Remove Item',
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            color: Color(0xFF1E3A8A),
+          ),
+        ),
+        content: Text(
+          'Are you sure you want to remove "$itemName" from your cart?',
+          style: const TextStyle(fontSize: 14),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+            child: const Text('Remove'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      _removeItem(id, cartProvider);
+    }
+  }
+
   void _applyPromoCode(double subtotal) {
     // Mock promo code logic
-    if (_promoController.text.toLowerCase() == 'save10') {
+    final code = _promoController.text.toUpperCase();
+    if (code == 'SAVE10') {
       setState(() {
         _discount = subtotal * 0.1;
       });
@@ -92,10 +141,12 @@ class _CartScreenState extends State<CartScreen> {
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.black),
-          onPressed: () => Navigator.pop(context),
-        ),
+        leading: Navigator.canPop(context)
+            ? IconButton(
+                icon: const Icon(Icons.arrow_back, color: Colors.black),
+                onPressed: () => Navigator.maybePop(context),
+              )
+            : null,
         title: const Text(
           'My Cart',
           style: TextStyle(
@@ -153,7 +204,12 @@ class _CartScreenState extends State<CartScreen> {
                   'Looks like you haven\'t picked anything yet. Start exploring now!',
               buttonText: 'Add Products',
               onButtonPressed: () {
-                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const AllProductsScreen(),
+                  ),
+                );
               },
             );
           }
@@ -202,10 +258,23 @@ class _CartScreenState extends State<CartScreen> {
               color: Colors.grey[100],
               borderRadius: BorderRadius.circular(8),
             ),
-            child: Icon(
-              Icons.chair_outlined,
-              size: 40,
-              color: Colors.grey[400],
+            clipBehavior: Clip.antiAlias,
+            child: AuthenticatedImage(
+              imageUrl: item.imageUrl,
+              fit: BoxFit.cover,
+              placeholder: Center(
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: const Color(0xFFFDB022),
+                ),
+              ),
+              errorWidget: Center(
+                child: Icon(
+                  Icons.broken_image_outlined,
+                  size: 30,
+                  color: Colors.grey[400],
+                ),
+              ),
             ),
           ),
           const SizedBox(width: 12),
@@ -229,7 +298,10 @@ class _CartScreenState extends State<CartScreen> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  '\$${item.price.toStringAsFixed(2)}',
+                  '₱${item.price.toStringAsFixed(2).replaceAllMapped(
+                        RegExp(r'(\d)(?=(\d{3})+\.)'),
+                        (Match m) => '${m[1]},',
+                      )}',
                   style: const TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
@@ -263,7 +335,8 @@ class _CartScreenState extends State<CartScreen> {
           ),
           // Delete button
           IconButton(
-            onPressed: () => _removeItem(item.id, cartProvider),
+            onPressed: () =>
+                _confirmRemoveItem(item.id, item.name, cartProvider),
             icon: const Icon(Icons.delete_outline),
             color: Colors.red,
           ),
@@ -308,6 +381,13 @@ class _CartScreenState extends State<CartScreen> {
                       vertical: 12,
                     ),
                   ),
+                  textCapitalization: TextCapitalization.characters,
+                  onChanged: (value) {
+                    _promoController.value = TextEditingValue(
+                      text: value.toUpperCase(),
+                      selection: _promoController.selection,
+                    );
+                  },
                 ),
               ),
               const SizedBox(width: 8),
@@ -387,8 +467,14 @@ class _CartScreenState extends State<CartScreen> {
           ),
           Text(
             isDiscount
-                ? '-\$${amount.abs().toStringAsFixed(2)}'
-                : '\$${amount.toStringAsFixed(2)}',
+                ? '-₱${amount.abs().toStringAsFixed(2).replaceAllMapped(
+                      RegExp(r'(\d)(?=(\d{3})+\.)'),
+                      (Match m) => '${m[1]},',
+                    )}'
+                : '₱${amount.toStringAsFixed(2).replaceAllMapped(
+                      RegExp(r'(\d)(?=(\d{3})+\.)'),
+                      (Match m) => '${m[1]},',
+                    )}',
             style: TextStyle(
               fontSize: isTotal ? 16 : 14,
               fontWeight: isTotal ? FontWeight.bold : FontWeight.w600,

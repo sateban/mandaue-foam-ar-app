@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../../models/product.dart';
 import '../../services/firebase_service.dart';
+import '../../services/filebase_service.dart';
+import '../../widgets/authenticated_image.dart';
 import 'product_detail_screen.dart';
 
 class SearchProductsScreen extends StatefulWidget {
@@ -43,23 +45,10 @@ class _SearchProductsScreenState extends State<SearchProductsScreen> {
       if (!mounted) return;
 
       setState(() {
-        _allProducts = productsData.map((productMap) {
-          return Product(
-            id: productMap['id'] ?? '',
-            name: productMap['name'] ?? 'Unknown',
-            price: (productMap['price'] ?? 0).toDouble(),
-            category: productMap['category'] ?? 'Other',
-            material: productMap['material'] ?? 'N/A',
-            color: productMap['color'] ?? 'N/A',
-            imageUrl: productMap['imageUrl'] ?? '',
-            rating: (productMap['rating'] ?? 0).toDouble(),
-            reviews: productMap['reviews'] ?? 0,
-            isFavorite: productMap['isFavorite'] ?? false,
-            discount: productMap['discount'],
-            description: productMap['description'],
-            quantity: productMap['quantity'],
-            inStock: productMap['inStock'] ?? true,
-          );
+        final transformedList = FilebaseService()
+            .transformProductsWithFilebaseUrls(productsData);
+        _allProducts = transformedList.map((productMap) {
+          return Product.fromMap(productMap);
         }).toList();
 
         _filteredProducts = List.from(_allProducts);
@@ -280,17 +269,9 @@ class _SearchProductsScreenState extends State<SearchProductsScreen> {
                     topLeft: Radius.circular(12),
                     bottomLeft: Radius.circular(12),
                   ),
-                  child: Image.network(
-                    product.imageUrl,
+                  child: AuthenticatedImage(
+                    imageUrl: product.imageUrl,
                     fit: BoxFit.cover,
-                    errorBuilder: (context, error, stackTrace) {
-                      return const Center(
-                        child: Icon(
-                          Icons.broken_image_outlined,
-                          color: Color(0xFFCCCCCC),
-                        ),
-                      );
-                    },
                   ),
                 ),
               ),
@@ -387,7 +368,10 @@ class _SearchProductsScreenState extends State<SearchProductsScreen> {
                       ),
                       // Price
                       Text(
-                        '\$${product.price.toStringAsFixed(2)}',
+                        '₱${product.price.toStringAsFixed(2).replaceAllMapped(
+                              RegExp(r'(\d)(?=(\d{3})+\.)'),
+                              (Match m) => '${m[1]},',
+                            )}',
                         style: const TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,

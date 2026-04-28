@@ -164,23 +164,19 @@ class ARSessionManager {
           }
           break;
         case 'onPlaneOrPointTap':
-          if (onPlaneOrPointTap != null) {
-            final rawHitTestResults = call.arguments as List<dynamic>;
-            final serializedHitTestResults = rawHitTestResults
-                .map(
-                    (hitTestResult) => Map<String, dynamic>.from(hitTestResult))
-                .toList();
-            final hitTestResults = serializedHitTestResults.map((e) {
-              return ARHitTestResult.fromJson(e);
-            }).toList();
-            onPlaneOrPointTap(hitTestResults);
-          }
+          final rawHitTestResults = call.arguments as List<dynamic>;
+          final serializedHitTestResults = rawHitTestResults
+              .map(
+                  (hitTestResult) => Map<String, dynamic>.from(hitTestResult))
+              .toList();
+          final hitTestResults = serializedHitTestResults.map((e) {
+            return ARHitTestResult.fromJson(e);
+          }).toList();
+          onPlaneOrPointTap(hitTestResults);
           break;
         case 'onPlaneDetected':
-          if (onPlaneDetected != null) {
-            final planeCountResult = call.arguments as int;
-            onPlaneDetected(planeCountResult);
-          }
+          final planeCountResult = call.arguments as int;
+          onPlaneDetected(planeCountResult);
           break;
         case 'dispose':
           _channel.invokeMethod<void>("dispose");

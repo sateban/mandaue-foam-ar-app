@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
 import 'package:ar_flutter_plugin_updated/ar_flutter_plugin.dart';
 import 'package:ar_flutter_plugin_updated/datatypes/config_planedetection.dart';
@@ -26,16 +25,22 @@ import 'screens/auth/account_setup_success_screen.dart';
 import 'screens/auth/password_reset_success_screen.dart';
 import 'screens/auth/sign_in_screen.dart';
 import 'screens/auth/sign_up_screen.dart';
+import 'screens/auth/forgot_password_screen.dart';
 import 'screens/shop/checkout/shipping_address_screen.dart';
 import 'screens/shop/checkout/address_list_screen.dart';
+import 'screens/shop/checkout/add_address_screen.dart';
 import 'screens/shop/checkout/payment_method_screen.dart';
 import 'screens/shop/checkout/payment_success_screen.dart';
+import 'screens/shop/checkout/order_receipt_screen.dart';
 import 'screens/shop/profile/edit_profile_screen.dart';
 import 'screens/shop/profile/coupons_screen.dart';
+import 'screens/shop/wishlist_screen.dart';
 import 'screens/shop/notifications_screen.dart';
 import 'screens/shop/popular_products_screen.dart';
+import 'screens/shop/all_products_screen.dart';
 import 'screens/shop/new_arrivals_screen.dart';
 import 'screens/shop/categories_screen.dart';
+import 'screens/shop/item_category_screen.dart';
 import 'screens/shop/shop_shell.dart';
 import 'screens/shop/search_products_screen.dart';
 import 'screens/shop/track_order_screen.dart';
@@ -46,8 +51,10 @@ import 'services/firebase_service.dart';
 import 'services/filebase_service.dart';
 import 'providers/product_provider.dart';
 import 'providers/cart_provider.dart';
+import 'providers/user_provider.dart';
 import 'models/order.dart';
 import 'package:provider/provider.dart';
+import 'utils/color_utils.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -76,10 +83,69 @@ void main() async {
     print('ERROR: Filebase initialization failed: $e');
   }
 
-  // Don't call readAndPrintRealtimeData() on startup - it causes issues
-  // readAndPrintRealtimeData();
+  try {
+    FirebaseService.streamData('colors').listen(
+      (data) {
+        if (data.isEmpty) {
+          print('📦 Color stream: received empty map, skipping update');
+          return;
+        }
+
+        try {
+          final mapped = <String, String>{};
+          data.forEach((key, value) {
+            if (key == null || value == null) return;
+            mapped[key.toString()] = value.toString();
+          });
+
+          if (mapped.isNotEmpty) {
+            ColorUtils.updateColorMap(mapped);
+          } else {
+            print('📦 Color stream: no valid entries after mapping');
+          }
+        } catch (e) {
+          print('⚠️ Error processing color stream data: $e');
+        }
+      },
+      onError: (error) {
+        print('⚠️ Error in color stream: $error');
+      },
+    );
+  } catch (e) {
+    print('⚠️ Failed to start color stream listener: $e');
+  }
 
   runApp(const MyApp());
+}
+
+class AuthenticationWrapper extends StatelessWidget {
+  const AuthenticationWrapper({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<User?>(
+      stream: FirebaseAuth.instance.authStateChanges(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          print('DEBUG: Checking authentication state...');
+          return const SplashScreenV1();
+        }
+
+        if (snapshot.hasError) {
+          print('DEBUG: Authentication error: ${snapshot.error}');
+          return const SplashScreenV1();
+        }
+
+        if (snapshot.hasData && snapshot.data != null) {
+          print('DEBUG: User authenticated, navigating to home');
+          return const ShopShell();
+        }
+
+        print('DEBUG: No user authenticated, showing splash screen');
+        return const SplashScreenV1();
+      },
+    );
+  }
 }
 
 class MyApp extends StatelessWidget {
@@ -89,8 +155,15 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
-        ChangeNotifierProvider(create: (context) => ProductProvider()),
-        ChangeNotifierProvider(create: (context) => CartProvider()),
+        ChangeNotifierProvider(create: (context) => UserProvider()),
+        ChangeNotifierProvider(
+          create: (context) => ProductProvider()..loadProducts(),
+        ),
+        ChangeNotifierProxyProvider<UserProvider, CartProvider>(
+          create: (context) => CartProvider(),
+          update: (context, userProvider, cartProvider) =>
+              cartProvider!..updateUser(userProvider),
+        ),
       ],
       child: MaterialApp(
         title: 'Mandaue Foam',
@@ -102,9 +175,15 @@ class MyApp extends StatelessWidget {
           ),
           useMaterial3: true,
         ),
-        home: const SplashScreenV1(),
+        builder: (context, child) {
+          return Stack(
+            children: [
+              if (child != null) child,
+            ],
+          );
+        },
+        home: const AuthenticationWrapper(),
         onGenerateRoute: (settings) {
-          // Handle routes that need arguments
           if (settings.name == '/track-order') {
             final order = settings.arguments as Order;
             return MaterialPageRoute(
@@ -114,12 +193,10 @@ class MyApp extends StatelessWidget {
           return null;
         },
         routes: {
-          // Onboarding routes
           '/welcome': (context) => const WelcomeScreen(),
           '/walkthrough': (context) => const WalkthroughScreen(),
 
-          // Authentication routes
-          // '/lets-you-in': (context) => const LetsYouInScreen(),
+          '/lets-you-in': (context) => const LetsYouInScreen(),
           '/sign-in': (context) => const SignInScreen(),
           '/sign-up': (context) => const SignUpScreen(),
           '/fill-profile': (context) => const FillProfileScreen(),
@@ -129,29 +206,35 @@ class MyApp extends StatelessWidget {
               const AccountSetupSuccessScreenStateful(),
           '/password-reset-success': (context) =>
               const PasswordResetSuccessScreen(),
+          '/forgot-password': (context) => const ForgotPasswordScreen(),
 
-          // Main app routes
           '/home': (context) => const ShopShell(),
           '/cart': (context) => const ShopShell(initialIndex: 1),
           '/orders': (context) => const ShopShell(initialIndex: 2),
           '/profile': (context) => const ShopShell(initialIndex: 3),
 
-          // Shop routes
           '/notifications': (context) => const NotificationsScreen(),
           '/popular-products': (context) => const PopularProductsScreen(),
+          '/all-products': (context) => const AllProductsScreen(),
           '/new-arrivals': (context) => const NewArrivalsScreen(),
           '/categories': (context) => const CategoriesScreen(),
+          '/item-category': (context) {
+            final categoryName =
+                ModalRoute.of(context)?.settings.arguments as String?;
+            return ItemCategoryScreen(categoryName: categoryName ?? 'Products');
+          },
           '/search-products': (context) => const SearchProductsScreen(),
 
-          // Checkout routes
           '/shipping-address': (context) => const ShippingAddressScreen(),
           '/address-list': (context) => const AddressListScreen(),
+          '/add-address': (context) => const AddAddressScreen(),
           '/payment-method': (context) => const PaymentMethodScreen(),
           '/payment-success': (context) => const PaymentSuccessScreen(),
+          '/order-receipt': (context) => const OrderReceiptScreen(),
 
-          // Profile routes
           '/edit-profile': (context) => const EditProfileScreen(),
           '/coupons': (context) => const CouponsScreen(),
+          '/wishlist': (context) => const WishlistScreen(),
         },
       ),
     );
@@ -165,16 +248,13 @@ class SplashScreen extends StatefulWidget {
   State<SplashScreen> createState() => _SplashScreenState();
 }
 
-// ignore: unused_element
 Future<void> _loadUserData() async {
-  // Your Firebase calls
 }
 
 class _SplashScreenState extends State<SplashScreen> {
   @override
   void initState() {
     super.initState();
-    // _loadUserData();
     Timer(const Duration(seconds: 5), () {
       if (mounted) {
         Navigator.of(context).pushReplacement(
@@ -191,7 +271,7 @@ class _SplashScreenState extends State<SplashScreen> {
       body: Center(
         child: Image.asset(
           'assets/images/logo.png',
-          width: 200, // Adjust size as needed
+          width: 200,
         ),
       ),
     );
@@ -263,7 +343,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            // Skip button
             Align(
               alignment: Alignment.topRight,
               child: TextButton(
@@ -275,7 +354,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               ),
             ),
 
-            // PageView
             Expanded(
               child: PageView.builder(
                 controller: _pageController,
@@ -287,7 +365,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               ),
             ),
 
-            // Page indicators
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 16.0),
               child: Row(
@@ -299,7 +376,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               ),
             ),
 
-            // Next/Get Started button
             Padding(
               padding: const EdgeInsets.all(24.0),
               child: SizedBox(
@@ -337,7 +413,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          // Image
           Expanded(
             flex: 3,
             child: Center(
@@ -347,7 +422,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
           const SizedBox(height: 40),
 
-          // Title
           Text(
             page.title,
             textAlign: TextAlign.center,
@@ -361,7 +435,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
           const SizedBox(height: 16),
 
-          // Description
           Text(
             page.description,
             textAlign: TextAlign.center,
@@ -405,279 +478,8 @@ class OnboardingPage {
   });
 }
 
-class ThreeDViewerDashboard extends StatefulWidget {
-  const ThreeDViewerDashboard({super.key});
-
-  @override
-  State<ThreeDViewerDashboard> createState() => _ThreeDViewerDashboardState();
-}
-
-class _ThreeDViewerDashboardState extends State<ThreeDViewerDashboard> {
-  ARSessionManager? arSessionManager;
-  ARObjectManager? arObjectManager;
-  ARAnchorManager? arAnchorManager;
-
-  ARNode? astronautNode;
-
-  @override
-  void dispose() {
-    super.dispose();
-    arSessionManager?.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.black,
-      appBar: AppBar(
-        title: const Text('AR Astronaut Viewer'),
-        centerTitle: true,
-        backgroundColor: Colors.black,
-        foregroundColor: Colors.white,
-      ),
-      body: Stack(
-        children: [
-          ARView(
-            onARViewCreated: onARViewCreated,
-            planeDetectionConfig: PlaneDetectionConfig.horizontalAndVertical,
-          ),
-          Positioned(
-            bottom: 0,
-            left: 0,
-            right: 0,
-            child: Padding(
-              padding: EdgeInsets.fromLTRB(
-                20,
-                0,
-                20,
-                MediaQuery.of(context).padding.bottom + 20,
-              ),
-              child: Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: 0.5),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(
-                    color: Colors.white.withValues(alpha: 0.2),
-                  ),
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Text(
-                      'Integrated AR Mode',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      astronautNode == null
-                          ? 'Looking for surfaces... Model will appear automatically.'
-                          : 'Model placed! Move around to view.',
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        color: Colors.white70,
-                        fontSize: 14,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-
-                    if (astronautNode == null)
-                      ElevatedButton.icon(
-                        onPressed: _addModel,
-                        icon: const Icon(Icons.add_a_photo),
-                        label: const Text('Try Adding Manually'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.white,
-                          foregroundColor: Colors.black,
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void onARViewCreated(
-    ARSessionManager arSessionManager,
-    ARObjectManager arObjectManager,
-    ARAnchorManager arAnchorManager,
-    ARLocationManager arLocationManager,
-  ) {
-    this.arSessionManager = arSessionManager;
-    this.arObjectManager = arObjectManager;
-    this.arAnchorManager = arAnchorManager;
-
-    this.arSessionManager!.onInitialize(
-      showFeaturePoints: false,
-      showPlanes: true,
-      showWorldOrigin: false,
-      handleTaps: true,
-    );
-    this.arObjectManager!.onInitialize();
-
-    // Set up plane tap handler for manual placement
-    this.arSessionManager!.onPlaneOrPointTap = onPlaneOrPointTapped;
-
-    // Force model placement immediately without waiting for AR detection
-    _addModel();
-
-    // Commented out: Automatically load the model after a longer delay
-    // Future.delayed(const Duration(seconds: 4), () {
-    //   if (mounted && astronautNode == null) {
-    //     _addModel();
-    //   }
-    // });
-  }
-
-  void onPlaneOrPointTapped(List<ARHitTestResult> hitTestResults) async {
-    if (astronautNode != null) return; // Already placed
-
-    var singleHitTestResult = hitTestResults.firstOrNull;
-    if (singleHitTestResult != null) {
-      var newAnchor = ARPlaneAnchor(
-        transformation: singleHitTestResult.worldTransform,
-      );
-      bool? didAddAnchor = await arAnchorManager!.addAnchor(newAnchor);
-
-      if (didAddAnchor == true) {
-        _addModelAtAnchor(newAnchor);
-      }
-    }
-  }
-
-  Future<void> _addModelAtAnchor(ARPlaneAnchor anchor) async {
-    if (astronautNode != null) return;
-
-    try {
-      var newNode = ARNode(
-        type: NodeType.fileSystemAppFolderGLB,
-        uri: 'Astronaut.glb',
-        scale: vector.Vector3(0.2, 0.2, 0.2),
-        position: vector.Vector3(0, 0, 0), // Position relative to anchor
-        rotation: vector.Vector4(1, 0, 0, 0),
-      );
-
-      bool? didAddNode = await arObjectManager!.addNode(
-        newNode,
-        planeAnchor: anchor,
-      );
-
-      if (didAddNode == true && mounted) {
-        setState(() {
-          astronautNode = newNode;
-        });
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Model placed on surface!')),
-        );
-      }
-    } catch (e) {
-      debugPrint('Error adding model at anchor: $e');
-    }
-  }
-
-  Future<void> _addModel() async {
-    if (astronautNode != null) return;
-
-    // Verify asset exists from Dart side
-    try {
-      await rootBundle.load('assets/models/Astronaut.glb');
-      debugPrint(
-        'Asset assets/models/Astronaut.glb loaded successfully from rootBundle',
-      );
-    } catch (e) {
-      debugPrint('Error loading asset from rootBundle: $e');
-      return;
-    }
-
-    bool? didAddNode;
-    ARNode? newNode;
-    try {
-      final Directory docDir = await getApplicationDocumentsDirectory();
-      final String localPath = '${docDir.path}/Astronaut.glb';
-      final File localFile = File(localPath);
-
-      if (!await localFile.exists()) {
-        debugPrint('Copying asset to local storage...');
-        final ByteData data = await rootBundle.load(
-          'assets/models/Astronaut.glb',
-        );
-        final List<int> bytes = data.buffer.asUint8List(
-          data.offsetInBytes,
-          data.lengthInBytes,
-        );
-        await localFile.writeAsBytes(bytes);
-        debugPrint('Asset copied to: $localPath');
-      } else {
-        debugPrint('Asset already exists at: $localPath');
-      }
-
-      // For fileSystemAppFolderGLB, use just the filename
-      var nodePath = 'Astronaut.glb';
-      newNode = ARNode(
-        type: NodeType.fileSystemAppFolderGLB,
-        uri: nodePath,
-        scale: vector.Vector3(1.0, 1.0, 1.0), // Much larger scale
-        position: vector.Vector3(0, 0, -2.0), // 2 meters in front
-        rotation: vector.Vector4(1, 0, 0, 0),
-      );
-
-      debugPrint('Attempting to add node from local storage: $nodePath');
-      didAddNode = await arObjectManager!.addNode(newNode);
-      debugPrint('ARNode add result (local storage): $didAddNode');
-
-      if (didAddNode != true) {
-        nodePath = 'assets/models/Astronaut.glb';
-        newNode = ARNode(
-          type: NodeType.localGLTF2,
-          uri: nodePath,
-          scale: vector.Vector3(0.5, 0.5, 0.5),
-          position: vector.Vector3(0, 0, -1.5),
-          rotation: vector.Vector4(1, 0, 0, 0),
-        );
-        didAddNode = await arObjectManager!.addNode(newNode);
-        debugPrint('ARNode add result (fallback assets): $didAddNode');
-      }
-    } catch (e) {
-      debugPrint('Exception while adding node: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Error adding model: $e')));
-      }
-    }
-
-    if (didAddNode == true) {
-      if (mounted) {
-        setState(() {
-          astronautNode = newNode;
-        });
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Model loaded successfully!')),
-        );
-      }
-    } else {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Failed to load model - check logs.')),
-        );
-      }
-    }
-  }
-}
-
-// Add this function to read and print realtime database data
 void readAndPrintRealtimeData() {
-  const String path =
-      '/'; // Replace with your actual database path, e.g., '/users'
-  print('Realtime data:');
+  const String path = '/'; 
   FirebaseService.streamData(path).listen(
     (data) {
       print('Realtime data: $data');

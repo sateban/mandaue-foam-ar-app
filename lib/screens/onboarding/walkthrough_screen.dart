@@ -15,18 +15,18 @@ class _WalkthroughScreenState extends State<WalkthroughScreen> {
     WalkthroughPage(
       title: 'We provide high quality products just for you',
       description: 'Discover premium furniture and home essentials',
-      icon: Icons.chair_outlined,
+      imagePath: '1.png',
     ),
     WalkthroughPage(
       title: 'Visualize furniture in your space with AR',
       description: 'See how products look in your home before buying',
-      icon: Icons.view_in_ar_outlined,
+      imagePath: '2.png',
     ),
-    WalkthroughPage(
-      title: 'Fast delivery to your doorstep',
-      description: 'Get your orders delivered quickly and safely',
-      icon: Icons.local_shipping_outlined,
-    ),
+    // WalkthroughPage(
+    //   title: 'Fast delivery to your doorstep',
+    //   description: 'Get your orders delivered quickly and safely',
+    //   imagePath: '3.png',
+    // ),
   ];
 
   @override
@@ -153,8 +153,9 @@ class _WalkthroughScreenState extends State<WalkthroughScreen> {
               color: Colors.grey[100],
               borderRadius: BorderRadius.circular(20),
             ),
-            child: Center(
-              child: Icon(page.icon, size: 120, color: const Color(0xFFFDB022)),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(20),
+              child: Image.asset('assets/images/${page.imagePath}', fit: BoxFit.fitHeight),
             ),
           ),
           const SizedBox(height: 48),
@@ -182,11 +183,11 @@ class _WalkthroughScreenState extends State<WalkthroughScreen> {
 class WalkthroughPage {
   final String title;
   final String description;
-  final IconData icon;
+  final String imagePath;
 
   WalkthroughPage({
     required this.title,
     required this.description,
-    required this.icon,
+    required this.imagePath,
   });
 }
