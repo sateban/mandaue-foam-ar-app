@@ -1,0 +1,29 @@
+{
+  "filebase": {
+    "api_key": "38A3D8D9D1CE176BB168",
+    "api_secret": "KsLcd4EWV4pxAzDot6bwdp5qtWY5tzOzpVppiTYP",
+    "bucket_name": "mandaue-foam-files",
+    "endpoint": "https://mandaue-foam-files.s3.filebase.com",
+    "region": "us-east-1"
+  },
+  "storage": {
+    "max_file_size_mb": 100,
+    "allowed_file_types": [
+      ".jpg",
+      ".jpeg",
+      ".png",
+      ".glb",
+      ".gltf",
+      ".obj",
+      ".fbx",
+      ".pdf",
+      ".zip"
+    ],
+    "assets_folder": "assets"
+  },
+  "metadata": {
+    "app_name": "AR 3D Viewer",
+    "version": "1.0.0",
+    "created_at": "2026-01-29"
+  }
+}
